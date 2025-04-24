@@ -1938,7 +1938,7 @@ function deleteAssignmentsInGroup(e) {
             </div>
             <div class="row align-item-center">
                 <div class="col-auto">
-                    <label class="form-label">Group ID (Only deletes assignments in this group)</label>
+                    <label class="form-label">Group ID: Only deletes assignments in this group</label>
                 </div>
                 <div class="w-100"></div>
                 <div class="col-2">
