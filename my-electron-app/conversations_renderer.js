@@ -81,7 +81,7 @@ async function deleteConvos(e) {
     }
     deleteSpecificConversationsForm.hidden = false;
 
-    const uID = eContent.querySelector('#user-id');
+    const uID = deleteSpecificConversationsForm.querySelector('#user-id');
     uID.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -99,7 +99,7 @@ async function deleteConvos(e) {
     //
     // ************************************
 
-    const searchBtn = document.querySelector('#action-btn');
+    const searchBtn = deleteSpecificConversationsForm.querySelector('#action-btn');
     searchBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -108,12 +108,12 @@ async function deleteConvos(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const apiToken = document.querySelector('#token').value.trim();
-        const convoSubject = document.querySelector('#conversation-subject');
+        const convoSubject = deleteSpecificConversationsForm.querySelector('#conversation-subject');
         const userID = uID.value.trim();
-        const responseContainer = document.querySelector('#response-container');
-        const progressDiv = eContent.querySelector('#progress-div');
-        const progressBar = eContent.querySelector('.progress-bar');
-        const progressInfo = eContent.querySelector('#progress-info');
+        const responseContainer = deleteSpecificConversationsForm.querySelector('#response-container');
+        const progressDiv = deleteSpecificConversationsForm.querySelector('#progress-div');
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        const progressInfo = deleteSpecificConversationsForm.querySelector('#progress-info');
 
         progressBar.parentElement.hidden = true;
         progressBar.style.width = '0%';
@@ -206,9 +206,9 @@ async function deleteConvos(e) {
             `;
 
 
-            const removeBtn = document.querySelector('#remove-btn');
-            const cancelBtn = document.querySelector('#cancel-btn');
-            const sendToCSV = document.querySelector('#csv-btn');
+            const removeBtn = responseContainer.querySelector('#remove-btn');
+            const cancelBtn = responseContainer.querySelector('#cancel-btn');
+            const sendToCSV = responseContainer.querySelector('#csv-btn');
 
             removeBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -367,6 +367,11 @@ function flattenMessages(conversations) {
     return flattened;
 }
 
+// ********************************
+// currently not implemented
+// ********************************
+
+// Gets the conversations between 2 users
 async function getConvos(e) {
     const domain = document.querySelector('#domain');
     const apiToken = document.querySelector('#token');

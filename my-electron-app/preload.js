@@ -97,6 +97,11 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:getAssignmentsToMove', data);
     },
+    keepAssignmentsInGroup: async (data) => {
+        console.log('preload > keepAssignmentsInGroup');
+
+        return await ipcRenderer.invoke('axios:keepAssignmentsInGroup', data);
+    },
     moveAssignmentsToSingleGroup: async (data) => {
         console.log('preload > moveAssignmentsToSingleGroup');
 
@@ -121,6 +126,11 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > getPageViews');
 
         return await ipcRenderer.invoke('axios:getPageViews', data);
+    },
+    restoreContent: async (data) => {
+        console.log('preload.js > restoreContent');
+
+        return await ipcRenderer.invoke('axios:restoreContent', data);
     },
     resetCourses: async (data) => {
         console.log('preload.js > resetCourses');

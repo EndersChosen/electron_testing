@@ -4,6 +4,26 @@ const axios = require('axios');
 const pagination = require('./pagination.js');
 const { errorCheck } = require('./utilities.js');
 
+async function restoreContent(data) {
+    const axiosConfig = {
+        url: `https://${data.domain}/courses/${data.course_id}/undelete/${data.context + data.value}`,
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        }
+        const response = await errorCheck(request);
+        return response;
+    } catch (error) {
+        throw error;
+    }
+}
+
 async function resetCourse(data) {
     console.log('inside resetCourse');
 
@@ -166,5 +186,5 @@ async function syncBPCourses(data) {
 }
 
 module.exports = {
-    resetCourse, createSupportCourse, editCourse, getCourseInfo, associateCourses, syncBPCourses
+    resetCourse, createSupportCourse, editCourse, getCourseInfo, associateCourses, syncBPCourses, restoreContent
 };

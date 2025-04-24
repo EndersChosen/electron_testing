@@ -102,7 +102,7 @@ function checkComm(e) {
     }
     checkSuppressionListForm.hidden = false;
 
-    const emailInput = eContent.querySelector('#email');
+    const emailInput = checkSuppressionListForm.querySelector('#email');
     emailInput.addEventListener('input', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -116,10 +116,10 @@ function checkComm(e) {
 
     function handleQueryType(e) {
 
-        const formMessgae = eContent.querySelector('#email-form-text')
-        const emailLabel = eContent.querySelector('#email-label')
-        const emailChbx = eContent.querySelector('#single-email-chkbx');
-        const domainChbx = eContent.querySelector('#domain-email-chkbx');
+        const formMessgae = checkSuppressionListForm.querySelector('#email-form-text')
+        const emailLabel = checkSuppressionListForm.querySelector('#email-label')
+        const emailChbx = checkSuppressionListForm.querySelector('#single-email-chkbx');
+        const domainChbx = checkSuppressionListForm.querySelector('#domain-email-chkbx');
 
         if (emailChbx.checked === false && domainChbx.checked === false) {
             emailInput.value = '';
@@ -127,11 +127,11 @@ function checkComm(e) {
             checkBtn.disabled = true;
         } else {
             if (e.target.id === 'single-email-chkbx') {
-                eContent.querySelector('#domain-email-chkbx').checked = false;
+                checkSuppressionListForm.querySelector('#domain-email-chkbx').checked = false;
                 formMessgae.innerHTML = "Enter the full email address you want to check";
                 emailLabel.innerHTML = "Email";
             } else {
-                eContent.querySelector('#single-email-chkbx').checked = false;
+                checkSuppressionListForm.querySelector('#single-email-chkbx').checked = false;
                 formMessgae.innerHTML = "Enter the domain pattern you want to check. You can use a wildcard at the beginning and end, for example *student* will match anything that has student in the email. <p><p>NOTE: This queries the entire aws region and will take some time, we're talking hours in some cases.</p></p>";
                 emailLabel.innerHTML = "Domain";
             }
@@ -142,7 +142,7 @@ function checkComm(e) {
         }
     }
 
-    const emailOptions = eContent.querySelector('#email-options');
+    const emailOptions = checkSuppressionListForm.querySelector('#email-options');
     emailOptions.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -150,7 +150,7 @@ function checkComm(e) {
         handleQueryType(e);
     })
 
-    const checkBtn = eContent.querySelector('button');
+    const checkBtn = checkSuppressionListForm.querySelector('button');
     checkBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -159,16 +159,16 @@ function checkComm(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const apiToken = document.querySelector('#token').value.trim();
-        const region = eContent.querySelector('#region').value;
-        const email = eContent.querySelector('#email').value.trim().toLowerCase();
-        const responseContainer = eContent.querySelector('#response-container');
-        const progresDiv = eContent.querySelector('#progress-div');
-        const progressBar = eContent.querySelector('.progress-bar');
-        const progressInfo = eContent.querySelector('#progress-info');
+        const region = checkSuppressionListForm.querySelector('#region').value;
+        const email = checkSuppressionListForm.querySelector('#email').value.trim().toLowerCase();
+        const responseContainer = checkSuppressionListForm.querySelector('#response-container');
+        const progresDiv = checkSuppressionListForm.querySelector('#progress-div');
+        const progressBar = progresDiv.querySelector('.progress-bar');
+        const progressInfo = checkSuppressionListForm.querySelector('#progress-info');
 
         responseContainer.innerHTML = '';
 
-        const options = eContent.querySelectorAll('input[type="checkbox"]');
+        const options = checkSuppressionListForm.querySelectorAll('input[type="checkbox"]');
         const checkedOption = Array.from(options).find(checkbox => checkbox.checked);
         const option = checkedOption ? checkedOption.id.split('-')[0] : undefined;
 
@@ -295,7 +295,7 @@ function resetComm(e) {
 
     const singleContainer = resetCommForm.querySelector('#reset-single-comm-response-container');
     const uploadContainer = resetCommForm.querySelector('#reset-upload-comm-response-container');
-    const resetSwitches = eContent.querySelector('#reset-switches');
+    const resetSwitches = resetCommForm.querySelector('#reset-switches');
     const inputs = resetSwitches.querySelectorAll('input');
     const dataInputs = resetCommForm.querySelector('#reset-data-inputs');
     const resetBtns = resetCommForm.querySelector('#reset-btns');
@@ -562,7 +562,7 @@ function unconfirmed(e) {
     }
     unconfirmedEmailForm.hidden = false;
 
-    const switchListener = eContent.querySelector('#switches');
+    const switchListener = unconfirmedEmailForm.querySelector('#switches');
     switchListener.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -578,9 +578,9 @@ function unconfirmed(e) {
 
     function handleSwitches(e) {
         const inputs = switchListener.querySelectorAll('input');
-        const patternDiv = eContent.querySelector('#email-pattern-div');
-        const fileSpan = eContent.querySelector('#confirm-file-description');
-        const confirmDiv = eContent.querySelector('#confirm-email-list-box')
+        const patternDiv = unconfirmedEmailForm.querySelector('#email-pattern-div');
+        const fileSpan = unconfirmedEmailForm.querySelector('#confirm-file-description');
+        const confirmDiv = unconfirmedEmailForm.querySelector('#confirm-email-list-box')
         // disable all other inputs inputs
         for (let input of inputs) {
             if (input.id !== e.target.id) {
@@ -627,18 +627,18 @@ function unconfirmed(e) {
     }
 
 
-    const unconfirmBtn = eContent.querySelector('#unconfirmed-check-btn');
-    const uploadBtn = eContent.querySelector('#upload-email-btn');
-    const confirmBtn = eContent.querySelector('#confirm-email-btn');
+    const unconfirmBtn = unconfirmedEmailForm.querySelector('#unconfirmed-check-btn');
+    const uploadBtn = unconfirmedEmailForm.querySelector('#upload-email-btn');
+    const confirmBtn = unconfirmedEmailForm.querySelector('#confirm-email-btn');
     unconfirmBtn.addEventListener('click', handleUnconfirmedCheck);
     confirmBtn.addEventListener('click', handleConfirmCheck);
     uploadBtn.addEventListener('click', handleUploadCheck);
 
-    const emailBox = eContent.querySelector('#email-list-box');
+    const emailBox = unconfirmedEmailForm.querySelector('#email-list-box');
     emailBox.addEventListener('input', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const inputSwitch = eContent.querySelector('#confirm-email-list-switch');
+        const inputSwitch = unconfirmedEmailForm.querySelector('#confirm-email-list-switch');
 
         confirmBtn.disabled = emailBox.value.length < 1 || !inputSwitch.checked;
     })
@@ -651,12 +651,12 @@ function unconfirmed(e) {
         console.log('Inside handleUnonfirmedCheck');
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
-        const emailPatternInput = eContent.querySelector('#unconfirmed-email-pattern');
+        const emailPatternInput = unconfirmedEmailForm.querySelector('#unconfirmed-email-pattern');
         const emailPattern = emailPatternInput.value.trim();
-        const emailWarning = eContent.querySelector('#email-warning');
-        const progresDiv = eContent.querySelector('#progress-div');
-        const responseContainer = eContent.querySelector('#response-container');
-        const responseDetails = responseContainer.querySelector('#response');
+        const emailWarning = unconfirmedEmailForm.querySelector('#email-warning');
+        const progresDiv = unconfirmedEmailForm.querySelector('#progress-div');
+        const responseContainer = unconfirmedEmailForm.querySelector('#response-container');
+        const responseDetails = unconfirmedEmailForm.querySelector('#response');
 
         if (emailPattern.length < 1) {
             emailWarning.hidden = false;
@@ -696,9 +696,9 @@ function unconfirmed(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
-        const progresDiv = eContent.querySelector('#progress-div');
-        const progressBar = eContent.querySelector('.progress-bar');
-        const progressInfo = eContent.querySelector('#progress-info');
+        const progresDiv = unconfirmedEmailForm.querySelector('#progress-div');
+        const progressBar = progresDiv.querySelector('.progress-bar');
+        const progressInfo = unconfirmedEmailForm.querySelector('#progress-info');
 
         progressInfo.innerHTML = '';
 
@@ -740,9 +740,9 @@ function unconfirmed(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
-        const progresDiv = eContent.querySelector('#progress-div');
-        const progressBar = eContent.querySelector('.progress-bar');
-        const progressInfo = eContent.querySelector('#progress-info');
+        const progresDiv = unconfirmedEmailForm.querySelector('#progress-div');
+        const progressBar = progresDiv.querySelector('.progress-bar');
+        const progressInfo = unconfirmedEmailForm.querySelector('#progress-info');
         const emails = emailBox.value.split(/\r?\n|\n|\,/)
             .map((email) => email.trim());
 

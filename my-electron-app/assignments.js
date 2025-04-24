@@ -338,86 +338,104 @@ async function getNoSubmissionAssignments(domain, courseID, token, graded) {
     //
     // **********************************************************************
 
-    // const query = `query getNoSubmissionAssignments($states: [SubmissionState!]) {
-    //     course(id: "2165") {
-    //         assignmentsConnection(filter: {gradingPeriodId: null}) {
-    //             edges {
-    //                 node {
-    //                     id
-    //                     _id
-    //                     hasSubmittedSubmissions
-    //                     submissionsConnection(filter: {states: $states}) {
-    //                         nodes {
-    //                             _id
-    //                             gradingStatus
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }`
+    const query = `query getNoSubmissionAssignments($courseID: ID, $nextPage: String) {
+        course(id: $courseID) {
+            assignmentsConnection(first: 200, after: $nextPage) {
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                edges {
+                    node {
+                        _id
+                        hasSubmittedSubmissions
+                        gradedSubmissionsExist
+                        name
+                    }
+                }
+            }
+        }
+    }`
 
-    // const variables = {
-    //     "states": ["unsubmitted", "ungraded"]
-    // }
+    const variables = {
+        "courseID": courseID,
+        "nextPage": ''
+    }
 
-    // const headers = {
-    //     'Authorization': `Bearer ${token}`,
-    //     'Content-Type': 'application/json'
-    // };
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
 
-    // const config = {
-    //     method: 'post',
-    //     url: `https://ckruger.instructure.com/api/graphql`,
-    //     headers: headers,
-    //     data: JSON.stringify({
-    //         query: query,
-    //         variables: variables
-    //     })
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${domain}/api/graphql`,
+        headers: headers,
+        data: {
+            query: query,
+            variables: variables
+        }
+    }
 
-    // }
+    let nextPage = true;
+    const assignments = [];
+    while (nextPage) {
+        try {
+            const request = async () => {
+                return await axios(axiosConfig);
+            }
+
+            const response = await errorCheck(request);
+
+            assignments.push(...response.data.data.course.assignmentsConnection.edges);
+            if (response.data.data.course.assignmentsConnection.pageInfo.hasNextPage
+            ) {
+                variables.nextPage = response.data.data.course.assignmentsConnection.pageInfo.endCursor;
+            } else {
+                nextPage = false;
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    const noSubmissionAssignments = assignments.filter(assignment => {
+        if (graded) {
+            console.log(assignment.node.hasSubmittedSubmissions)
+            return !assignment.node.hasSubmittedSubmissions;
+        } else {
+            console.log(assignment.node.hasSubmittedSubmissions)
+            console.log(assignment.node.hasSubmittedSubmissions && assignment.node.gradedSubmissionsExist)
+            return (
+                !assignment.node.hasSubmittedSubmissions &&
+                !assignment.node.gradedSubmissionsExist
+            );
+        }
+    });
+
+    return noSubmissionAssignments;
 
     // try {
-    //     const response = await axios.post(`https://ckruger.instructure.com/api/graphql`, JSON.stringify({
-    //         query: query,
-    //         variables: variables
-    //     }), {
-    //         headers: {
+    //     const assignments = await getAssignments(domain, courseID, token);
 
-    //             'Authorization': `Bearer ${token}`,
-    //             'Content-Type': 'application/json'
-
+    //     const noSubmissionAssignments = assignments.filter(assignment => {
+    //         if (graded) {
+    //             if (!assignment.has_submitted_submissions) {
+    //                 return assignment;
+    //             }
+    //         } else {
+    //             if (!assignment.has_submitted_submissions &&
+    //                 !assignment.graded_submissions_exist) {
+    //                 return assignment;
+    //             }
     //         }
     //     });
 
-    //     console.log(response.data);
-    //     return response.data.data.course.assignmentsConnection.edges;
+
+    //     return noSubmissionAssignments;
     // } catch (error) {
-    //     console.log(error)
+    //     throw error;
     // }
-
-    try {
-        const assignments = await getAssignments(domain, courseID, token);
-
-        const noSubmissionAssignments = assignments.filter(assignment => {
-            if (graded) {
-                if (!assignment.has_submitted_submissions) {
-                    return assignment;
-                }
-            } else {
-                if (!assignment.has_submitted_submissions &&
-                    !assignment.graded_submissions_exist) {
-                    return assignment;
-                }
-            }
-        });
-
-
-        return noSubmissionAssignments;
-    } catch (error) {
-        throw error;
-    }
 
 }
 
@@ -566,6 +584,79 @@ async function getUnpublishedAssignments(domain, course, token) {
     // });
 
     // return unPublishedAssignments;
+}
+
+async function getAssignmentsInOtherGroups(data) {
+    const query = `query getAssignmentsInOtherGroups($courseID: ID, $nextPage: String) {
+        course(id: $courseID) {
+            assignmentsConnection(first: 200, after: $nextPage) {
+                pageInfo {
+                    endCursor
+                    hasNextPage
+                }
+                edges {
+                    node {
+                        assignmentGroupId
+                        _id
+                    }
+                }
+            }
+        }
+    }`;
+
+    const variables = {
+        "courseID": data.courseID,
+        "nextPage": ''
+    };
+
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${data.domain}/api/graphql`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`,
+            'Content-Type': 'application/json'
+        },
+        data: {
+            query: query,
+            variables: variables
+        }
+    };
+
+    let nextPage = true;
+    const assignments = [];
+    while (nextPage) {
+        try {
+            const reqeust = async () => {
+                return await axios(axiosConfig);
+            }
+            const response = await errorCheck(reqeust);
+
+            if (response.status === 200) {
+                assignments.push(...response.data.data.course.assignmentsConnection.edges);
+                if (response.data.data.course.assignmentsConnection.pageInfo.hasNextPage) {
+                    variables.nextPage = response.data.data.course.assignmentsConnection.pageInfo.endCursor;
+                } else {
+                    nextPage = false;
+                }
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // filtering assignments not in the right group to be deleted
+    const filteredAssignments = assignments.filter(assignment => {
+        return assignment.node.assignmentGroupId !== data.groupID;
+    });
+
+    // remapping to be more uniform id values
+    const reMappedAssignments = filteredAssignments.map(assignment => {
+        return {
+            id: assignment.node._id
+        }
+    });
+
+    return reMappedAssignments;
 }
 
 async function getAssignmentsToMove(domain, courseID, token) {
@@ -744,6 +835,8 @@ async function getNonModuleAssignments(domain, courseID, token) {
                                 name
                             }
                         }
+                        gradedSubmissionsExist
+                        hasSubmittedSubmissions
                     }
                     pageInfo {
                         endCursor,
@@ -819,6 +912,9 @@ async function getNonModuleAssignments(domain, courseID, token) {
         //     //     // //
         //     //     // // *****************************************************
     }
+
+
+    // filter out assignments not in modules
     const filteredAssignments = assignments.filter((assignment) => {
         if (assignment.quiz) {
             if (assignment.quiz.modules.length < 1)
@@ -832,7 +928,12 @@ async function getNonModuleAssignments(domain, courseID, token) {
         }
     });
 
-    const updatedID = filteredAssignments.map((assignment) => {
+    // filters out any assignments which has submissions or grades
+    const noGradesOrSubmissions = filteredAssignments.filter((assignment) => {
+        return !(assignment.gradedSubmissionsExist || assignment.hasSubmittedSubmissions)
+    });
+
+    const updatedID = noGradesOrSubmissions.map((assignment) => {
         return {
             name: assignment.name,
             id: assignment._id
@@ -859,5 +960,5 @@ async function getNonModuleAssignments(domain, courseID, token) {
 // }) ();
 
 module.exports = {
-    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments
+    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups
 }

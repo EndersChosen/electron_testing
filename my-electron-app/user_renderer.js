@@ -70,7 +70,7 @@ async function getPageViews(e) {
     }
     getPageViewsForm.hidden = false;
 
-    const uID = document.querySelector('#user-id');
+    const uID = getPageViewsForm.querySelector('#user-id');
     uID.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -78,7 +78,7 @@ async function getPageViews(e) {
         checkCourseID(uID, getPageViewsForm);
     })
 
-    const searchBtn = eContent.querySelector('#action-btn');
+    const searchBtn = getPageViewsForm.querySelector('#action-btn');
     searchBtn.addEventListener('click', async function (e) {
         e.stopPropagation();
         e.preventDefault();
@@ -90,10 +90,10 @@ async function getPageViews(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const apiToken = document.querySelector('#token').value.trim();
-        const userID = parseInt(eContent.querySelector('#user-id').value.trim());
-        const startDate = eContent.querySelector('#start-date').value;
-        const endDate = eContent.querySelector('#end-date').value;
-        const responseContainer = document.querySelector('#response-container');
+        const userID = parseInt(getPageViewsForm.querySelector('#user-id').value.trim());
+        const startDate = getPageViewsForm.querySelector('#start-date').value;
+        const endDate = getPageViewsForm.querySelector('#end-date').value;
+        const responseContainer = getPageViewsForm.querySelector('#response-container');
 
         const searchData = {
             domain: domain,

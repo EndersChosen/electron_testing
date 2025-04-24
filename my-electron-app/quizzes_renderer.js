@@ -149,9 +149,9 @@ async function createQuiz(e) {
         const essay_question = createQuizForm.querySelector('#essay_question').checked;
         const num_quizzes = numOfQuizzes.value.trim();
 
-        const progressDiv = eContent.querySelector('#progress-div');
+        const progressDiv = createQuizForm.querySelector('#progress-div');
         const progressBar = progressDiv.querySelector('.progress-bar');
-        const progressInfo = eContent.querySelector('#progress-info');
+        const progressInfo = createQuizForm.querySelector('#progress-info');
 
         // clean environment
         progressDiv.hidden = false;

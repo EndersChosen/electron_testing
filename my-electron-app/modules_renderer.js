@@ -78,15 +78,15 @@ async function deleteModules(e) {
         e.stopPropagation();
 
 
-        const responseContainer = eContent.querySelector('#response-container');
+        const responseContainer = createModuleDeleteForm.querySelector('#response-container');
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
         const course_id = courseID.value.trim();
         const emptyModules = createModuleDeleteForm.querySelector('#empty-modules').checked;
 
-        const progressDiv = eContent.querySelector('#progress-div');
+        const progressDiv = createModuleDeleteForm.querySelector('#progress-div');
         const progressBar = progressDiv.querySelector('.progress-bar');
-        const progressInfo = eContent.querySelector('#progress-info');
+        const progressInfo = createModuleDeleteForm.querySelector('#progress-info');
 
         // clean environment
         responseContainer.innerHTML = '';
@@ -138,7 +138,7 @@ async function deleteModules(e) {
 
             const responseDetails = responseContainer.querySelector('#response-details');
 
-            const cancelBtn = document.querySelector('#cancel-btn');
+            const cancelBtn = responseDetails.querySelector('#cancel-btn');
             cancelBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -150,7 +150,7 @@ async function deleteModules(e) {
                 //clearData(courseID, responseContent);
             });
 
-            const removeBtn = document.querySelector('#remove-btn');
+            const removeBtn = responseDetails.querySelector('#remove-btn');
             if (courseModules.length > 0) {
                 removeBtn.disabled = false;
                 cancelBtn.disabled = false;

@@ -19,6 +19,7 @@ const { send } = require('process');
 const { deleteRequester, waitFunc } = require('./utilities');
 const { emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } = require('./comm_channels');
 const {
+    restoreContent,
     resetCourse,
     getCourseInfo,
     createSupportCourse,
@@ -409,6 +410,17 @@ app.whenReady().then(() => {
         }
     });
     
+    ipcMain.handle('axios:keepAssignmentsInGroup', async (event, data) => {
+        console.log('main.js > axios:keepAssignmentsInGroup');
+
+        try {
+            const response = await assignments.getAssignmentsInOtherGroups(data);
+            return response;
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
     ipcMain.handle('axios:getAssignmentsToMove', async (event, data) => {
         console.log('main.js > axios:getAssignmentsToMove');
 
@@ -572,6 +584,46 @@ app.whenReady().then(() => {
             console.log('no page views');
             return false;
         }
+    });
+
+    ipcMain.handle('axios:restoreContent', async (event, data) => {
+        console.log('main.js > axios:restoreContent');
+
+        const totalNumber = data.values.length;
+        let completedRequests = 0;
+
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalNumber) * 100);
+        };
+
+        const request = async (requestData) => {
+            try {
+                const response = await restoreContent(requestData);
+                return response;
+            } catch (error) {
+                throw error
+            } finally {
+                updateProgress();
+            }
+        };
+
+        const requests = [];
+        let requestID = 1;
+        data.values.forEach((value) => {
+            const requestData = {
+                domain: data.domain,
+                token: data.token,
+                course_id: data.courseID,
+                context: data.context,
+                value: value
+            };
+            requests.push({ id: requestID, request: () => request(requestData) });
+            requestID++;
+        });
+
+        const batchResponse = await batchHandler(requests);
+        return batchResponse;
     });
 
     ipcMain.handle('axios:resetCourses', async (event, data) => {

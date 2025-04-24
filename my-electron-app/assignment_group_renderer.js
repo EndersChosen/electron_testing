@@ -70,7 +70,7 @@ function emptyAssignmentGroups(e) {
     }
     deleteEmptyAssignmentGroupsForm.hidden = false;
 
-    const cID = document.querySelector('#course-id');
+    const cID = deleteEmptyAssignmentGroupsForm.querySelector('#course-id');
     cID.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -94,13 +94,13 @@ function emptyAssignmentGroups(e) {
         deagBtn.disabled = true;
         console.log('Inside renderer check');
 
-        const eagResponseContainer = eContent.querySelector('#eag-response-container');
+        const eagResponseContainer = deleteEmptyAssignmentGroupsForm.querySelector('#eag-response-container');
         const domain = document.querySelector('#domain').value.trim();
         const apiToken = document.querySelector('#token').value.trim();
         const course = cID.value.trim();
-        const eagProgressDiv = eContent.querySelector('#eag-progress-div');
+        const eagProgressDiv = deleteEmptyAssignmentGroupsForm.querySelector('#eag-progress-div');
         const eagProgressBar = eagProgressDiv.querySelector('.progress-bar');
-        const eagProgressInfo = eContent.querySelector('#eag-progress-info');
+        const eagProgressInfo = deleteEmptyAssignmentGroupsForm.querySelector('#eag-progress-info');
 
         // clean environment
         eagProgressDiv.hidden = false;
@@ -157,7 +157,7 @@ function emptyAssignmentGroups(e) {
                 e.stopPropagation();
 
                 cID.value = '';
-                responseContainer.innerHTML = '';
+                eagResponseContainer.innerHTML = '';
                 deagBtn.disabled = false;
                 eagProgressDiv.hidden = true;
                 //clearData(courseID, responseContent);
@@ -287,10 +287,10 @@ function assignmentGroupCreator(e) {
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
         const courseID = cID.value.trim();
-        const number = eContent.querySelector('#assignment-group-number').value;
-        const agcResponseContainer = eContent.querySelector('#agc-response-container');
-        const agcProgressDiv = eContent.querySelector('#agc-progress-div');
-        const agcProgressInfo = eContent.querySelector('#agc-progress-info');
+        const number = createAssignmentGroupForm.querySelector('#assignment-group-number').value;
+        const agcResponseContainer = createAssignmentGroupForm.querySelector('#agc-response-container');
+        const agcProgressDiv = createAssignmentGroupForm.querySelector('#agc-progress-div');
+        const agcProgressInfo = createAssignmentGroupForm.querySelector('#agc-progress-info');
         const agcProgressBar = agcProgressDiv.querySelector('.progress-bar');
 
 
@@ -298,10 +298,10 @@ function assignmentGroupCreator(e) {
         agcProgressInfo.innerHTML = '';
 
         const data = {
-            domain: domain,
-            token: token,
+            domain,
+            token,
             course: courseID,
-            number: number
+            number
         };
 
         window.progressAPI.onUpdateProgress((progress) => {

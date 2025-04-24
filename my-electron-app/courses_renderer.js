@@ -5,6 +5,9 @@
 // ****************************************
 function courseTemplate(e) {
     switch (e.target.id) {
+        case 'restore-content':
+            restoreContent(e);
+            break;
         case 'reset-courses':
             resetCourses(e);
             break;
@@ -17,6 +20,116 @@ function courseTemplate(e) {
         default:
             break;
     }
+}
+
+async function restoreContent(e) {
+    hideEndpoints(e);
+
+    const eContent = document.querySelector('#endpoint-content');
+    let restoreContentForm = eContent.querySelector('#restore-content-form');
+
+    if (!restoreContentForm) {
+        restoreContentForm = document.createElement('form');
+        restoreContentForm.id = 'restore-content-form';
+        restoreContentForm.innerHTML = `
+            <div>
+                <h3>Restore Content</h3>
+            </div>
+                <div class="row">
+                    <div class="col-auto">
+                        <label class="form-label">Course</label>
+                    </div>
+                    <div class="w-100"></div>
+                    <div class="col-2">
+                        <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                    </div>
+                    <div class="col-auto" >
+                        <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label" for="restore-content">Content</label>
+                        <select id="restore-context" class="form-select col-auto custom-select-width">
+                            <option value="assignment_" selected>Assignment</option>
+                            <option value="assignment_group_">Assignment Group</option>
+                            <option value="discussion_topic_">Announcement</option>
+                            <option value="discussion_topic_">Discussion</option>
+                            <option value="quiz_">Quiz</option>
+                            <option value="wiki_page_">Page</option>
+                            <option value="context_module_">Module</option>
+                            <option value="rubric_">Rubric</option>
+                            <option value="group_">Individual Group</option>
+                            <option value="group_category_">Entire Group Set</option>
+                        </select>
+                    </div>
+                    <div id="restore-ids-div" class="mt-3">
+                        <span>Enter comma separated IDs of the content you want to restore</span>
+                        <textarea class="form-control" id="restore-content-area" rows="3"></textarea>
+                    </div>
+                </div>
+            <button type="button" class="btn btn-primary mt-3" id="restore-btn" disabled>Restore</button>
+            <div id="rcf-progress-div" hidden>
+                <p id="rcf-progress-info"></p>
+                <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id='rcf-response-container'></div>`
+
+        eContent.append(restoreContentForm);
+    }
+    restoreContentForm.hidden = false;
+
+    const courseID = restoreContentForm.querySelector('#course-id');
+    courseID.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        checkCourseID(courseID, eContent);
+    });
+
+    const restoreBtn = restoreContentForm.querySelector('#restore-btn');
+    restoreBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        restoreBtn.disabled = true;
+
+        const rcfResponseContainer = restoreContentForm.querySelector('#rcf-response-container');
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const courseID = restoreContentForm.querySelector('#course-id').value.trim();
+        const restoreContext = restoreContentForm.querySelector('#restore-context').value;
+        const contextIDs = restoreContentForm.querySelector('#restore-content-area').value;
+        const rcfProgressDiv = restoreContentForm.querySelector('#rcf-progress-div');
+        const rcfProgressBar = rcfProgressDiv.querySelector('.progress-bar');
+        const rcfProgressInfo = restoreContentForm.querySelector('#rcf-progress-info');
+
+        const valueArray = contextIDs.split(',').map(value => value.trim()).filter(value => value !== '');
+
+        // clean environment
+        rcfProgressDiv.hidden = false;
+        rcfProgressBar.parentElement.hidden = true;
+        rcfProgressBar.style.width = '0%';
+        rcfProgressInfo.innerHTML = "Checking...";
+
+        const data = {
+            domain,
+            token,
+            context: restoreContext,
+            courseID,
+            values: valueArray
+        }
+
+        console.log(data);
+        try {
+            const request = await window.axios.restoreContent(data);
+            rcfResponseContainer.innerHTML = 'Successfully restored content.';
+        } catch (error) {
+            errorHandler(error, rcfProgressInfo);
+        } finally {
+            restoreBtn.disabled = false;
+        }
+    });
 }
 
 async function resetCourses(e) {
@@ -72,22 +185,22 @@ async function resetCourses(e) {
     }
     resetCourseForm.hidden = false;
 
-    const progressDiv = eContent.querySelector('#progress-div');
-    const progressBar = eContent.querySelector('.progress-bar');
-    const progressInfo = eContent.querySelector('#progress-info');
-    const resetBtn = eContent.querySelector('#resetBtn');
-    const uploadBtn = eContent.querySelector('#uploadBtn');
-    const courseTextDiv = eContent.querySelector('#course-text-div');
-    const courseTextArea = eContent.querySelector('#reset-courses-area');
+    const progressDiv = resetCourseForm.querySelector('#progress-div');
+    const progressBar = progressDiv.querySelector('.progress-bar');
+    const progressInfo = resetCourseForm.querySelector('#progress-info');
+    const resetBtn = resetCourseForm.querySelector('#resetBtn');
+    const uploadBtn = resetCourseForm.querySelector('#uploadBtn');
+    const courseTextDiv = resetCourseForm.querySelector('#course-text-div');
+    const courseTextArea = resetCourseForm.querySelector('#reset-courses-area');
     courseTextArea.addEventListener('input', (e) => {
-        const inputSwitch = eContent.querySelector('#manual-courses-reset-switch');
+        const inputSwitch = resetCourseForm.querySelector('#manual-courses-reset-switch');
         if (courseTextArea.value.length < 1 || !inputSwitch.checked) {
             resetBtn.disabled = true;
         } else {
             resetBtn.disabled = false;
         }
     });
-    const switches = eContent.querySelector('#reset-switches');
+    const switches = resetCourseForm.querySelector('#reset-switches');
     switches.addEventListener('change', (e) => {
         const inputs = switches.querySelectorAll('input');
 
@@ -184,7 +297,7 @@ async function resetCourses(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const apiToken = document.querySelector('#token').value.trim();
-        const courses = eContent.querySelector('#reset-courses-area').value.split(/[\n,]/).map(course => course.trim());
+        const courses = resetCourseForm.querySelector('#reset-courses-area').value.split(/[\n,]/).map(course => course.trim());
 
         const data = {
             domain: domain,
@@ -394,7 +507,7 @@ async function createSupportCourse(e) {
     })
 
     function courseBPToggle(e) {
-        const bpCourseDiv = eContent.querySelector('#add-ac-courses-div');
+        const bpCourseDiv = createSupportCourseForm.querySelector('#add-ac-courses-div');
         if (e.target.checked) {
             bpCourseDiv.classList.remove('hidden');
             bpCourseDiv.classList.add('visible', 'mb-3');
@@ -405,7 +518,7 @@ async function createSupportCourse(e) {
     }
 
     function courseAddUserToggle(e) {
-        const addUsersDiv = eContent.querySelector('#add-users-div');
+        const addUsersDiv = createSupportCourseForm.querySelector('#add-users-div');
         if (e.target.checked) {
             addUsersDiv.classList.remove('hidden');
             addUsersDiv.classList.add('visible', 'mb-3');
@@ -416,7 +529,7 @@ async function createSupportCourse(e) {
     }
 
     function courseAssignmentsToggle(e) {
-        const addAssignmentDiv = eContent.querySelector('#add-assignments-div');
+        const addAssignmentDiv = createSupportCourseForm.querySelector('#add-assignments-div');
         if (e.target.checked) {
             addAssignmentDiv.classList.add('visible', 'mb-3');
             addAssignmentDiv.classList.remove('hidden');
@@ -483,7 +596,7 @@ async function createSupportCourse(e) {
         const domain = document.querySelector('#domain').value;
         const apiToken = document.querySelector('#token').value;
 
-        const createCourseResponseContainer = eContent.querySelector('#csc-response-container');
+        const createCourseResponseContainer = createSupportCourseForm.querySelector('#csc-response-container');
         createCourseResponseContainer.innerHTML = '';
 
         // basic course stuff
