@@ -60,6 +60,7 @@ const endpointSelect = document.querySelector('#endpoints');
 endpointSelect.addEventListener('click', (e) => {
 
     const parentEl = e.target.parentElement.id;
+    console.log('Selected ', parentEl);
     switch (parentEl) {
         case 'assignment-endpoints':
             assignmentTemplate(e);
