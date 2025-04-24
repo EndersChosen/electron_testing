@@ -8,7 +8,19 @@
     "start": "electron-forge start",
     "test": "electron ./index_bs_example.html",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.canvatools.canvascripter",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.icns"
+    }
   },
   "author": "Caleb Kruger",
   "license": "MIT",
@@ -19,7 +31,8 @@
     "@electron-forge/maker-squirrel": "^6.4.2",
     "@electron-forge/maker-zip": "^6.4.2",
     "@electron-forge/plugin-auto-unpack-natives": "^6.4.2",
-    "electron": "^23.1.1"
+    "electron": "^35.2.1",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "axios": "^1.4.0",
