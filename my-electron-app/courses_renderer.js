@@ -465,45 +465,62 @@ async function createSupportCourse(e) {
     // eResponse.classList.add('mt-5');
     // eContent.append(eResponse);
 
+    const courseEventHandlers = {
+        'course-blueprint': courseBPToggle,
+        'course-add-users': courseAddUserToggle,
+        'course-assignments': courseAssignmentsToggle,
+        'course-add-cq': courseAddClassicToggle, // TODO
+        'course-add-nq': courseAddNewQToggle,   // TODO
+        'course-add-discussions': courseAddDiscussionsToggle, // TODO
+        'course-add-pages': courseAddPagesToggle, // TODO
+        'course-add-modules': courseAddModulesToggle, // TODO
+        'course-add-sections': courseAddSectionsToggle, // TODO
+        'course-submissions': courseCreateSubmissionsToggle // TODO
+    };
+
     const courseOptions = createSupportCourseForm.querySelector('#course-options');
     courseOptions.addEventListener('change', (e) => {
         e.preventDefault();
         e.stopPropagation();
 
-        switch (e.target.id) {
-            case 'course-blueprint':
-                courseBPToggle(e);
-                break;
-            case 'course-add-users':
-                courseAddUserToggle(e);
-                break;
-            case 'course-assignments':
-                courseAssignmentsToggle(e); // TODO
-                break;
-            case 'course-add-cq':
-                courseAddClassicToggle(e); // TODO
-                break;
-            case 'course-add-nq':
-                courseAddNewQToggle(e); // TODO
-                break;
-            case 'course-add-discussions':
-                courseAddDiscussionsToggle(e); // TODO
-                break;
-            case 'course-add-pages':
-                courseAddPagesToggle(e); // TODO
-                break;
-            case 'course-add-modules':
-                courseAddModulesToggle(e); // TODO
-                break;
-            case 'course-add-sections':
-                courseAddSectionsToggle(e); // TODO
-                break;
-            case 'course-submissions':
-                courseCreateSubmissionsToggle(e); // TODO
-                break;
-            default:
-                break;
+        const handler = courseEventHandlers[e.target.id];
+        if (handler) {
+            handler(e);
         }
+        // switch (e.target.id) {
+        //     case 'course-blueprint':
+        //         courseBPToggle(e);
+        //         break;
+        //     case 'course-add-users':
+        //         courseAddUserToggle(e);
+        //         break;
+        //     case 'course-assignments':
+        //         courseAssignmentsToggle(e);
+        //         break;
+        //     case 'course-add-cq':
+        //         courseAddClassicToggle(e); // TODO
+        //         break;
+        //     case 'course-add-nq':
+        //         courseAddNewQToggle(e); // TODO
+        //         break;
+        //     case 'course-add-discussions':
+        //         courseAddDiscussionsToggle(e); // TODO
+        //         break;
+        //     case 'course-add-pages':
+        //         courseAddPagesToggle(e); // TODO
+        //         break;
+        //     case 'course-add-modules':
+        //         courseAddModulesToggle(e); // TODO
+        //         break;
+        //     case 'course-add-sections':
+        //         courseAddSectionsToggle(e); // TODO
+        //         break;
+        //     case 'course-submissions':
+        //         courseCreateSubmissionsToggle(e); // TODO
+        //         break;
+        //     default:
+        //         break;
+        // }
     })
 
     function courseBPToggle(e) {

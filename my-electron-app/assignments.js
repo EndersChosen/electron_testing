@@ -231,14 +231,19 @@ async function getAssignments(domain, courseID, token) {
 
 async function getOldAssignmentsGraphQL(data) {
     let url = `https://${data.domain}/api/graphql`;
+    const dateFilter = data.date_filter;
+    const dateType = data.date_type;
 
     const query = `
         query MyQuery($courseID: ID, $nextPage: String) {
             course(id: $courseID) {
-                assignmentsConnection(after: $nextPage, first: 200) {
+                assignmentsConnection(after: $nextPage, first: 200, filter: {gradingPeriodId: null}) {
                     nodes {
+                        createdAt
                         dueAt
                         _id
+                        hasSubmittedSubmissions
+                        gradedSubmissionsExist
                     }
                     pageInfo {
                         hasNextPage
@@ -284,17 +289,25 @@ async function getOldAssignmentsGraphQL(data) {
             throw error
         }
     }
+
+    // filtering out the ones before the date
     const filteredAssignments = assignments.filter(assignment => {
-        if (assignment.dueAt) {
-            const date1 = new Date(data.due_Date);
-            const date2 = new Date(assignment.dueAt.split('T')[0]);
+        if (assignment[dateType]) {
+            const date1 = new Date(dateFilter);
+            const date2 = new Date(assignment[dateType].split('T')[0]);
 
             if (date2.getTime() <= date1.getTime()) {
                 return assignment;
             }
         }
     });
-    return filteredAssignments;
+
+    // checking to make sure the assignments don't have grades or submissions
+    const hasGradesOrSubmissions = filteredAssignments.filter(assignment => {
+        return !(assignment.hasSubmittedSubmissions || assignment.gradedSubmissionsExist)
+    })
+
+    return hasGradesOrSubmissions;
 }
 
 async function getImportedAssignments(data) {
@@ -340,7 +353,7 @@ async function getNoSubmissionAssignments(domain, courseID, token, graded) {
 
     const query = `query getNoSubmissionAssignments($courseID: ID, $nextPage: String) {
         course(id: $courseID) {
-            assignmentsConnection(first: 200, after: $nextPage) {
+            assignmentsConnection(first: 200, after: $nextPage, filter: {gradingPeriodId: null}) {
                 pageInfo {
                     hasNextPage
                     endCursor
@@ -506,11 +519,12 @@ async function getUnpublishedAssignments(domain, course, token) {
 
     let query = `query getUnpublishedAssignments($courseId: ID, $nextPage: String) { 
         course(id: $courseId) {
-            assignmentsConnection(first: 500, after: $nextPage) {
+            assignmentsConnection(first: 500, after: $nextPage, filter: {gradingPeriodId: null}) {
                 nodes {
                     name
                     _id
                     published
+                    gradedSubmissionsExist
                 },
                 pageInfo {
                     endCursor,
@@ -568,11 +582,10 @@ async function getUnpublishedAssignments(domain, course, token) {
         }
     }
     let unPublishedAssignments = assignments.filter(assignment => {
-        if (!assignment.published) {
-            return assignment;
-        }
+        return !assignment.published && !assignment.gradedSubmissionsExist;
     });
 
+    // let ungradedUnpublished = unPublishedAssignments.filter(assignment => assignment.gradedSubmissionsExist);
     return unPublishedAssignments;
 
     // const assignments = await getAssignments(domain, courseID, token);
@@ -589,7 +602,7 @@ async function getUnpublishedAssignments(domain, course, token) {
 async function getAssignmentsInOtherGroups(data) {
     const query = `query getAssignmentsInOtherGroups($courseID: ID, $nextPage: String) {
         course(id: $courseID) {
-            assignmentsConnection(first: 200, after: $nextPage) {
+            assignmentsConnection(first: 200, after: $nextPage, filter: {gradingPeriodId: null}) {
                 pageInfo {
                     endCursor
                     hasNextPage
@@ -663,7 +676,7 @@ async function getAssignmentsToMove(domain, courseID, token) {
     console.log('Getting assignments to move to single group');
     let query = `query GetAssignmentsToMove($courseId: ID!, $nextPage: String) {
                     course(id: $courseId) {
-                        assignmentsConnection(after: $nextPage, first: 500) {
+                        assignmentsConnection(after: $nextPage, first: 500, filter: {gradingPeriodId: null}) {
                             nodes {
                                 _id
                                 assignmentGroupId
@@ -818,7 +831,7 @@ async function getNonModuleAssignments(domain, courseID, token) {
     let query = `
         query myQuery($courseId: ID,$nextPage: String)  {
             course(id: $courseId) {
-                assignmentsConnection(first:500, after: $nextPage) {
+                assignmentsConnection(first:500, after: $nextPage, filter: {gradingPeriodId: null}) {
                     nodes {
                         name
                         _id

@@ -187,6 +187,17 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:createQuiz', data)
     },
+    createClassicQuestions: async (data) => {
+        console.log('preload.js > createClassicQuestions');
+
+        return await ipcRenderer.invoke('axios:createClassicQuestions', data);
+    },
+    createNQQuestions: async (data) => {
+        console.log('preload.js > createNQQuestions');
+
+        return await ipcRenderer.invoke('axios:createNQQuestions', data);
+    },
+
     getModules: async (data) => {
         console.log('preload.js > getModules');
 

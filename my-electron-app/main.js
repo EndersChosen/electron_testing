@@ -14,7 +14,7 @@ const convos = require('./conversations');
 const csvExporter = require('./csvExporter');
 const assignmentGroups = require('./assignment_groups');
 const assignments = require('./assignments');
-const { getPageViews, createUsers, enrollUser,addUsers } = require('./users');
+const { getPageViews, createUsers, enrollUser, addUsers } = require('./users');
 const { send } = require('process');
 const { deleteRequester, waitFunc } = require('./utilities');
 const { emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } = require('./comm_channels');
@@ -136,15 +136,15 @@ app.whenReady().then(() => {
         };
 
         let requests = [];
-        for (let i = 0; i < data.messages.length; i++){
+        for (let i = 0; i < data.messages.length; i++) {
             const requestData = {
-                    domain: data.domain,
-                    token: data.token,
-                    message: data.messages[i].id
+                domain: data.domain,
+                token: data.token,
+                message: data.messages[i].id
             }
             requests.push({ id: i + 1, request: () => request(requestData) });
         };
-        
+
         // data.messages.forEach((message) => {
         //     const requestData = {
         //         domain: data.domain,
@@ -264,7 +264,7 @@ app.whenReady().then(() => {
                 domain: data.domain,
                 token: data.token,
                 course_id: data.course_id,
-                id: data.assignments[i]?.id || data.assignments[i] 
+                id: data.assignments[i]?.id || data.assignments[i]
             };
             requests.push({ id: i + 1, request: () => request(requestData) });
         }
@@ -321,7 +321,7 @@ app.whenReady().then(() => {
                 groupID: group._id,
                 id: requestCounter
             }
-            requests.push(() => request(requestData) );
+            requests.push(() => request(requestData));
             requestCounter++;
         });
 
@@ -336,10 +336,10 @@ app.whenReady().then(() => {
         const formattedResponses = {
             successful: [], failed: []
         };
-        
+
         formattedResponses.successful = responses.filter(response => !isNaN(response));
         formattedResponses.failed = responses.filter(response => isNaN(response));
-        
+
         console.log('Finished Deleting Empty Assignment groups.');
         return formattedResponses;
     });
@@ -409,7 +409,7 @@ app.whenReady().then(() => {
             throw error.message;
         }
     });
-    
+
     ipcMain.handle('axios:keepAssignmentsInGroup', async (event, data) => {
         console.log('main.js > axios:keepAssignmentsInGroup');
 
@@ -487,7 +487,7 @@ app.whenReady().then(() => {
 
         // try to delete the assignment group and all assignments
         const request = async (requestData) => {
-                return await assignments.deleteAssignmentGroupWithAssignments(requestData)
+            return await assignments.deleteAssignmentGroupWithAssignments(requestData)
         }
         try {
             const response = await request(data);
@@ -538,7 +538,7 @@ app.whenReady().then(() => {
 
         const requests = [];
         for (let i = 0; i < totalRequests; i++) {
-            requests.push({ id: i+1, request: () => request(data) });
+            requests.push({ id: i + 1, request: () => request(data) });
         }
 
         const batchResponse = await batchHandler(requests);
@@ -680,17 +680,17 @@ app.whenReady().then(() => {
 
         data.course_id = response.id;
         let totalUsers = null;
-        
+
         // check other options 
         try {
             if (data.course.blueprint.state) { // do we need to make it a blueprint course 
                 console.log('Enabling blueprint...');
                 await enableBlueprint(data);
                 const associatedCourses = data.course.blueprint.associated_courses;
-                
+
                 // loop through and create basic courses to be associated to the blueprint
                 const requests = [];
-                for (let i = 0; i < associatedCourses; i++){
+                for (let i = 0; i < associatedCourses; i++) {
                     const courseData = {
                         ...data,
                         course: { ...data.course }
@@ -719,14 +719,14 @@ app.whenReady().then(() => {
                     bpCourseID: data.course_id,
                     associated_course_ids: newCourseIDS
                 };
-                
+
                 console.log('Linking associated courses to blueprint...')
                 const associateRequest = await associateCourses(acCourseData); // associate the courses to the BP
                 // await waitFunc(2000);
                 const migrationRequest = await syncBPCourses(acCourseData);
                 console.log('Finished associating courses.');
             }
-            
+
             if (data.course.addUsers.state) { // do we need to add users
                 const usersToEnroll = {
                     domain: data.domain,
@@ -765,12 +765,12 @@ app.whenReady().then(() => {
                 };
 
                 const requests = [];
-                for (let i = 0; i < data.course.addAssignments.number; i++){
+                for (let i = 0; i < data.course.addAssignments.number; i++) {
                     const requestData = {
                         domain: data.domain,
                         token: data.token,
                         course: data.course_id,
-                        name: `Assignment ${i+1}`,
+                        name: `Assignment ${i + 1}`,
                         submissionTypes: "online_upload",
                         grade_type: "points",
                         points: 10,
@@ -785,13 +785,13 @@ app.whenReady().then(() => {
                 console.log('finished creating assignments.');
             }
         } catch (error) {
-            throw error;   
+            throw error;
         }
-       
 
-        return {course_id: data.course_id, status: 200, totalUsersEnrolled: totalUsers};
+
+        return { course_id: data.course_id, status: 200, totalUsersEnrolled: totalUsers };
     });
-    
+
     ipcMain.handle('axios:createBasicCourse', async (event, data) => {
         console.log('main.js > axios:createBasicCourse');
 
@@ -836,7 +836,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('axios:getCourseInfo', async (event, data) => {
         console.log('getting course info');
-        
+
         try {
             return await getCourseInfo(data);
         } catch (error) {
@@ -867,7 +867,7 @@ app.whenReady().then(() => {
         };
 
         const requests = [];
-        for (let i = 0; i < totalRequests; i++){
+        for (let i = 0; i < totalRequests; i++) {
             const requestData = {
                 domain: data.domain,
                 token: data.token,
@@ -998,7 +998,7 @@ app.whenReady().then(() => {
             };
 
             const requests = [];
-            for (let i = 0; i < emails.length; i++){
+            for (let i = 0; i < emails.length; i++) {
                 const requestData = {
                     domain: data.domain,
                     token: data.token,
@@ -1009,10 +1009,10 @@ app.whenReady().then(() => {
             }
 
 
-            
+
             // const batchResponse = await batchHandler(requests);
             console.log('Finished processing emails.');
-            return {successful,failed};
+            return { successful, failed };
         } else {
             throw new Error('Cancelled');
         }
@@ -1021,60 +1021,97 @@ app.whenReady().then(() => {
     ipcMain.handle('axios:createQuiz', async (event, data) => {
         console.log('main.js > axios:createQuiz');
 
-        console.log('The data: ', data);
-        
-        const totalRequests = data.num_quizzes;
-        let completedRequests = 0;
+        try {
+            const quizzes = await createClassicQuizzes(data);
+            // get the IDs of the successfully created quizzes to then create questions in
+            const quizIDs = quizzes.successful.map(quiz => quiz.value.id);
+            return quizIDs;
+        } catch (error) {
+            throw error
+        }
+    })
+
+    ipcMain.handle('axios: createClassicQuestions', async (event, data) => {
+        console.log('main.js > axios:createClassicQuestions');
+
+        const totalNumber = data.quizzes.length;
+        const completedRequests = 0;
 
         const updateProgress = () => {
             completedRequests++;
-            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
-        };
+            mainWindow.webContents.send('update-progress', (completedRequests / totalNumber) * 100);
+        }
 
         const request = async (requestData) => {
             try {
-                return await quizzes.createQuiz(requestData)
+                return await quizzes.createQuestions(requestData);
             } catch (error) {
-                throw error;
+                throw error
             } finally {
                 updateProgress();
             }
         };
 
         const requests = [];
-        for (let i = 0; i < totalRequests; i++){
+        for (let i = 0; i < totalNumber; i++) {
             const requestData = {
                 domain: data.domain,
                 token: data.token,
                 course_id: data.course_id,
-                quiz_type: data.quiz_type,
-                publish: data.publish,
-                essay_question: data.essay_question,
-                file_upload_question: data.file_upload_question,
-                fill_in_multiple_blanks_question: data.fill_in_multiple_blanks_question,
-                matching_question: data.matching_question,
-                multiple_answers_question: data.multiple_answers_question,
-                multiple_choice_question: data.multiple_choice_question,
-                multiple_dropdowns_question: data.multiple_dropdowns_question,
-                numerical_question: data.numerical_question,
-                num_quizzes: data.num_quizzes,
-                quiz_title: `Quiz ${i + 1}`
+                quiz_id: data.quizzes[i].id,
+                question_data: data.questionTypes
             };
-            requests.push({ id: i + 1, request: () => request(requestData) })
+            requests.push({ id: i + 1, request: () => request(requestData) });
         }
 
         const batchResponse = await batchHandler(requests);
-        const quizIDs = batchResponse.successful.map(quiz => quiz.value.id);
+        return batchResponse;
 
-        // Use the created quiz ids to add questions
-        addQuizQuestions(quizIDs, data);
+    });
+
+    ipcMain.handle('axios:createNQQuestions', async (event, data) => {
+        console.log('main.js > axios:createNQQuestions');
+
+        let completedRequests = 0;
+        const totalRequests = data.num_questions;
+
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        }
+
+
+        const request = async (requestData) => {
+            try {
+                return await quizzes.createNQQuestions(requestData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        }
+
+        const requests = [];
+        for (let i = 0; i < totalRequests; i++) {
+            const requestData = {
+                domain: data.domain,
+                token: data.token,
+                course_id: data.course_id,
+                quiz_id: data.quiz_id,
+                question_type: data.question_type
+            }
+            requests.push({ id: i + 1, request: () => request(requestData) });
+        }
+
+        const batchResponse = await batchHandler(requests);
+
         return batchResponse;
     })
-    
+
     ipcMain.handle('axios:getModules', async (event, data) => {
         console.log('main.js > axios:getModules');
 
-        try{
+        try {
             const courseModules = await modules.getModules(data);
             return courseModules;
         } catch (error) {
@@ -1084,7 +1121,7 @@ app.whenReady().then(() => {
 
     ipcMain.handle('axios:deleteModules', async (event, data) => {
         console.log('main.js > axios:deleteModules');
-        
+
         let completedRequests = 0;
         let totalRequests = data.number;
 
@@ -1121,7 +1158,7 @@ app.whenReady().then(() => {
         console.log('Finished deleting assignments.');
         return batchResponse;
     })
-    
+
     ipcMain.handle('fileUpload:confirmEmails', async (event, data) => {
 
         let emails = [];
@@ -1254,7 +1291,7 @@ app.whenReady().then(() => {
         console.log('main.js > shell:openExternal');
         shell.openExternal(data);
     })
-    
+
     ipcMain.on('write-text', (event, data) => {
         clipboard.writeText(data);
     });
@@ -1274,8 +1311,49 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 })
 
+async function createClassicQuizzes(data) {
+    console.log('The data: ', data);
+
+    // first create the quizzes
+    const totalRequests = data.num_quizzes;
+    let completedRequests = 0;
+
+    const updateProgress = () => {
+        completedRequests++;
+        mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+    };
+
+    const request = async (requestData) => {
+        try {
+            return await quizzes.createQuiz(requestData)
+        } catch (error) {
+            throw error;
+        } finally {
+            updateProgress();
+        }
+
+    };
+
+    const requests = [];
+    for (let i = 0; i < totalRequests; i++) {
+        const requestData = {
+            domain: data.domain,
+            token: data.token,
+            course_id: data.course_id,
+            quiz_type: data.quiz_type,
+            publish: data.publish,
+            num_quizzes: data.num_quizzes,
+            quiz_title: `Quiz ${i + 1}`
+        };
+        requests.push({ id: i + 1, request: () => request(requestData) })
+    }
+
+    const batchResponse = await batchHandler(requests);
+    return batchResponse;
+}
+
 async function addQuizQuestions(quizIDs, data) {
-    
+
 }
 
 async function enableBlueprint(data) {
@@ -1302,12 +1380,12 @@ async function addUsersToCanvas(data) {
     const requests = [];
 
     // add student users to the requests
-    for (let i = 0; i < data.students.length; i++){
+    for (let i = 0; i < data.students.length; i++) {
         requests.push({ id: i + 1, request: () => request({ domain: data.domain, token: data.token, user: data.students[i] }) });
     }
 
     // add teachers users to the requests
-    for (let i = 0; i < data.teachers.length; i++){
+    for (let i = 0; i < data.teachers.length; i++) {
         requests.push({ id: i + data.students.length, request: () => request({ domain: data.domain, token: data.token, user: data.teachers[i] }) });
     }
 
@@ -1332,9 +1410,9 @@ async function enrollUsers(data, userIds) {
 
     const requests = [];
     // loop through the total users to be added
-    for (let i = 0; i < totalUsers; i++){
-        let enrollType = i < totalStudents ? 'StudentEnrollment': 'TeacherEnrollment';
-       
+    for (let i = 0; i < totalUsers; i++) {
+        let enrollType = i < totalStudents ? 'StudentEnrollment' : 'TeacherEnrollment';
+
         const userData = {
             domain: data.domain,
             token: data.token,
@@ -1342,9 +1420,9 @@ async function enrollUsers(data, userIds) {
             course_id: data.course_id,
             user_id: userIds[i]
         }
-        requests.push({ id: i+1, request: () => request(userData) });
+        requests.push({ id: i + 1, request: () => request(userData) });
     }
-    
+
     // loop through all the teaches to be added
     // for (let t = 0; t < totalTeachers; t++){
     //     const teacherData = {
@@ -1494,7 +1572,7 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
         }
 
         // return results;
-        
+
         function handleSuccess(response, request) {
             return {
                 id: request.id,
@@ -1502,7 +1580,7 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
                 value: response
             };
         }
-    
+
         function handleError(error, request) {
             return {
                 id: request.id,
@@ -1511,7 +1589,7 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
             };
         }
     }
-    
+
     const filterStatus = [
         404, 401, 422
     ];
@@ -1524,77 +1602,11 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
             await processBatchRequests(myRequests);
             retryRequests = failed.filter(request => !filterStatus.includes(request.status)); // don't retry for 401, 404 or 422 errors
         } else {
-            await processBatchRequests(myRequests); 
+            await processBatchRequests(myRequests);
             retryRequests = failed.filter(request => !filterStatus.includes(request.status)); // don't retry for 401, 404 or 422 errors
         }
     }
     while (counter < 3 && retryRequests.length > 0) // loop through if there are failed requests until the counter is ove 3
 
-    return {successful, failed};
+    return { successful, failed };
 }
-
-    // let counter = 0;
-    // const finalResults = {
-    //     successful: [],
-    //     failed: []
-    // }
-
-    // do {
-    //     const response = await processBatchRequests(myRequests);
-
-    //     // checking for successful requests and mapping them to a new array
-    //     successful = response.filter((result) => {
-    //         if (result.status === 'fulfilled') {
-    //             return result;
-    //         }
-    //     }).map((result) => {
-    //         return {
-    //             status: result.status,
-    //             id: result.value
-    //         }
-    //     });
-    //     finalResults.successful.push(...successful);
-
-    //     // checking for failed requests and mapping them to a new array
-    //     failed = response.filter((result) => {
-    //         if (result.status === 'rejected') {
-    //             return result
-    //         }
-    //     }).map((result) => {
-    //         const failedResult = {
-    //             status: result.status,
-    //             reason: result.reason.message
-    //         }
-    //         if (result.reason?.config?.url) {
-    //             failedResult.id = result.reason.config.url.split('/').pop();
-    //         }
-    //         return failedResult;
-    //     });
-    //     finalResults.failed.push(...failed);
-
-    //     // removing successful requests from the failed requests
-    //     finalResults.successful.forEach((success) => {
-    //         finalResults.failed = finalResults.failed.filter((fail) => {
-    //             return fail.id != success.id;
-    //         });
-    //     });
-
-    //     // filters results to attempt a retry for any which may have been throttled
-    //     // const toRetry = failed.filter((fail) => {
-    //     //     if (fail.reason.match(/4[0-9]{2}/)) {
-    //     //         return fail;
-    //     //     }
-    //     // });
-    //     // myRequests = toRetry;
-
-    //     myRequests = failed;
-    //     // if there are failed requests wait before retrying
-    //     if (failed.length > 0) {
-    //         console.log('Retring the failed requests....');
-    //         await waitFunc(5000) //wait 5 seconds 
-    //     }
-    //     counter++;
-    // } while (myRequests.length > 0 && counter < 3);
-
-    // return finalResults;
-// }

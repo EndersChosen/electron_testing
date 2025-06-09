@@ -456,9 +456,9 @@ function noSubmissionAssignments(e) {
             //const eContent = document.querySelector('#endpoint-content');
             let gradedText = gradedSubmissions ? 'no submissions.' : 'no submissions or grades.';
             nsaResponseContainer.innerHTML = `
-                        <div>
+                        <div id="nsa-response-details">
                             <div class="row align-items-center">
-                                <div id="nsa-response-details" class="col-auto">
+                                <div  class="col-auto">
                                     <span>Found ${assignments.length} assignments with ${gradedText}</span>
                                 </div>
 
@@ -586,6 +586,7 @@ function unpublishedAssignments(e) {
         deleteUnpublishedAssignmentsForm.innerHTML = `
             <div>
                 <h3>Delete All Unpublished Assignments</h3>
+                <div>Deletes all unpublished assignments without grades</div>
             </div>
             <div class="row align-items-center">
                 <div class="col-auto">
@@ -633,7 +634,7 @@ function unpublishedAssignments(e) {
         checkBtn.disabled = true;
         const domain = document.querySelector('#domain').value.trim();
         const apiToken = document.querySelector('#token').value.trim();
-        const duaResponseContainer = deleteUnpublishedAssignmentsForm.queryselector('#dua-response-container');
+        const duaResponseContainer = deleteUnpublishedAssignmentsForm.querySelector('#dua-response-container');
         const duaProgressDiv = deleteUnpublishedAssignmentsForm.querySelector('#dua-progress-div');
         const duaProgressBar = duaProgressDiv.querySelector('.progress-bar');
         const duaProgressInfo = deleteUnpublishedAssignmentsForm.querySelector('#dua-progress-info');
@@ -667,9 +668,9 @@ function unpublishedAssignments(e) {
 
             //const eContent = document.querySelector('#endpoint-content');
             duaResponseContainer.innerHTML = `
-                <div>
+                <div id="dua-response-details">
                     <div class="row align-items-center">
-                        <div id="dua-response-details" class="col-auto">
+                        <div  class="col-auto">
                             <span>Found ${assignments.length} unpublished assignments.</span>
                         </div>
 
@@ -720,8 +721,9 @@ function unpublishedAssignments(e) {
                 });
 
                 const messageData = {
-                    url: `https://${domain}/api/v1/courses/${courseID.value.trim()}/assignments`,
+                    domain,
                     token: apiToken,
+                    course_id: courseID.value.trim(),
                     number: assignmentIDs.length,
                     assignments: assignmentIDs
                 }
@@ -1057,6 +1059,7 @@ function deleteOldAssignments(e) {
         deleteOldAssignmentsForm.innerHTML = `
             <div>
                 <h3>Delete Old Assignments</h3>
+                <p>Deletes assignments before the specified date filter. Ignores assignments with grades or submissions.</p>
             </div>
             <div class="row align-items-center">
                 <div class="col-auto">
@@ -1070,15 +1073,22 @@ function deleteOldAssignments(e) {
                     <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
                 </div>
                 <div class="w-100"></div>
-                <div class="col-auto mt-3" >
-                    <label class="form-label">Delete assignments with a due date on or before this date</label>
-                </di>
-                <div class="col-4">
+                <div class="col-auto mt-3">
                     <input class="form-control" id="due-date-input" type="date">
                 </div>
-                <div class="col-auto">
-                    <button id="check-old-assignments-btn" class="btn btn-primary mt-3" disabled>Check</button>
+            </div>
+            <div id="date-switches" class="mt-3">
+                <div class=" form-check form-switch" >
+                    <input id="created-at-switch" class="form-check-input" type="checkbox" data-id="createdAt" role="switch">
+                    <label for="created-at-switch" class="form-check-label">Created At</label>
                 </div>
+                <div class=" form-check form-switch" >
+                    <input id="due-at-switch" class="form-check-input" type="checkbox" data-id="dueAt" role="switch"
+                    <label for="due-at-switch" class="form-check-label">Due At</label>
+                </div>               
+            </div>
+            <div >
+                <button id="check-old-assignments-btn" class="btn btn-primary mt-3" disabled>Check</button>
             </div>
             <div hidden id="doa-progress-div">
                 <p id="doa-progress-info"></p>
@@ -1095,7 +1105,20 @@ function deleteOldAssignments(e) {
     deleteOldAssignmentsForm.hidden = false;
 
     const courseID = deleteOldAssignmentsForm.querySelector('#course-id');
-    const dueDate = deleteOldAssignmentsForm.querySelector('#due-date-input');
+    // const dueDate = deleteOldAssignmentsForm.querySelector('#due-date-input');
+    const dateSwitches = deleteOldAssignmentsForm.querySelector('#date-switches');
+
+    // disables all switches except the one checked
+    dateSwitches.addEventListener('change', (e) => {
+        e.stopPropagation();
+
+        const switches = dateSwitches.querySelectorAll('input[type="checkbox"]');
+        switches.forEach(switchInput => {
+            if (switchInput.id !== e.target.id) {
+                switchInput.checked = false;
+            }
+        })
+    })
 
     courseID.addEventListener('change', (e) => {
         e.preventDefault();
@@ -1110,17 +1133,26 @@ function deleteOldAssignments(e) {
         e.stopPropagation();
         deleteOldAssignmentsBtn.disabled = true;
 
-        const doaResponseContainer = deleteOldAssignmentsForm.queryselector('#doa-response-container');
+        let dateType = '';
+        const switches = dateSwitches.querySelectorAll('input[type="checkbox"]');
+        switches.forEach(switchInput => {
+            if (switchInput.checked) {
+                dateType = switchInput.dataset.id;
+            }
+        });
+
+        const dateFilter = deleteOldAssignmentsForm.querySelector('#due-date-input').value;
+
+        const doaResponseContainer = deleteOldAssignmentsForm.querySelector('#doa-response-container');
         const doaProgressDiv = deleteOldAssignmentsForm.querySelector('#doa-progress-div');
         const doaProgressBar = doaProgressDiv.querySelector('.progress-bar');
         const doaProgressInfo = deleteOldAssignmentsForm.querySelector('#doa-progress-info');
 
-        if (dueDate.value !== '') {
+        if (dateFilter !== '') {
 
             const domain = document.querySelector('#domain').value.trim();
             const token = document.querySelector('#token').value.trim();
             const course_id = courseID.value.trim();
-            const due_Date = deleteOldAssignmentsForm.querySelector('#due-date-input').value;
 
             // clean environment
             doaResponseContainer.innerHTML = '';
@@ -1133,7 +1165,8 @@ function deleteOldAssignments(e) {
                 domain,
                 token,
                 course_id,
-                due_Date
+                date_filter: dateFilter,
+                date_type: dateType
             };
             console.log('The data is ', requestData);
 
@@ -1165,9 +1198,9 @@ function deleteOldAssignments(e) {
 
                     //const eContent = document.querySelector('#endpoint-content');
                     doaResponseContainer.innerHTML = `
-                    <div>
+                    <div id="doa-response-details">
                         <div class="row align-items-center">
-                            <div id="doa-response-details" class="col-auto">
+                            <div  class="col-auto">
                                 <span>Found ${assignments.length} old assignments.</span>
                             </div>
     
@@ -1375,9 +1408,9 @@ function deleteAssignmentsFromImport(e) {
 
             //const eContent = document.querySelector('#endpoint-content');
             dafiResponseContainer.innerHTML = `
-                <div>
+                <div id="dafi-response-details">
                     <div class="row align-items-center">
-                        <div id="dafi-response-details" class="col-auto">
+                        <div  class="col-auto">
                             <span>Found ${importedAssignments.length} assignments in the import.</span>
                         </div>
 
@@ -1618,9 +1651,9 @@ function keepAssignmentsInGroup(e) {
 
             //const eContent = document.querySelector('#endpoint-content');
             kaigResponseContainer.innerHTML = `
-                <div>
+                <div id="kaig-response-details"
                     <div class="row align-items-center">
-                        <div id="kaig-response-details" class="col-auto">
+                        <div  class="col-auto">
                             <span>Found ${assignmentsNotInGroup.length} assignments not in the group.</span>
                         </div>
 
@@ -1779,7 +1812,7 @@ function moveAssignmentsToSingleGroup(e) {
         checkBtn.disabled = true;
         console.log('Inside renderer check');
 
-        const magResponseContainer = moveAssignmentsForm.queryselector('#mag-response-container');
+        const magResponseContainer = moveAssignmentsForm.querySelector('#mag-response-container');
         const domain = moveAssignmentsForm.querySelector('#domain').value.trim();
         const apiToken = moveAssignmentsForm.querySelector('#token').value.trim();
         const magProgressDiv = moveAssignmentsForm.querySelector('#mag-progress-div');

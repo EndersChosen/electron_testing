@@ -3,6 +3,9 @@ function moduleTemplate(e) {
         case 'delete-modules':
             deleteModules(e);
             break;
+        case 'relock-modules':
+            reLockModules(e);
+            break;
         default:
             break;
     }
@@ -203,4 +206,50 @@ async function deleteModules(e) {
             });
         }
     })
+}
+
+async function reLockModules(e) {
+    hideEndpoints(e)
+
+    const eContent = document.querySelector('#endpoint-content');
+    let reLockModulesForm = eContent.querySelector('#relock-modules-form');
+
+    if (!reLockModulesForm) {
+        reLockModulesForm = document.createElement('form');
+        reLockModulesForm.id = 'relock-modules-form';
+        reLockModulesForm.innerHTML = `
+            <div>
+                <h3>Re-lock Modules</h3>
+                <p>Relocks all modules in a course</p>
+            </div>
+            <div class="row">
+                <div class="row align-items-center">
+                        <div class="col-2">
+                            <label class="form-label">Course</label>
+                            <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                        </div>
+                </div>
+                <div class="col-auto" >
+                    <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                </div>
+                <hr class="mt-2">
+                <div class="w-100"></div>
+                <div class="col-auto">
+                    <button id="check-modules-btn" class="btn btn-primary mt-3" disabled>Check</button>
+                </div>
+            </div>
+            <div hidden id="relock-progress-div">
+                <p id="relock-progress-info"></p>
+                <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="relock-response-container" class="mt-3">
+            </div>
+        `;
+
+        eContent.append(createModuleDeleteForm);
+    }
+    createModuleDeleteForm.hidden = false;
 }
