@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 // const axios = require('axios');
 
 // contextBridge.exposeInMainWorld('eAPI', {

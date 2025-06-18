@@ -1,6 +1,6 @@
 // csvExporter.js
-import { createWriteStream } from 'fs';
-import path from 'path';
+const fs = require('fs');
+const path = require('path');
 
 async function exportToCSV(data, filePath = 'MyCSV') {
     console.log('writing to file');
@@ -9,7 +9,7 @@ async function exportToCSV(data, filePath = 'MyCSV') {
     const csvRows = [];
 
     // const wStream = fs.createWriteStream(`${path.join(__dirname, fileName)}.csv`);
-    const wStream = createWriteStream(filePath, { flag: 'a' });
+    const wStream = fs.createWriteStream(filePath, { flag: 'a' });
 
     const headers = getHeaders(data[0]);
     //console.log(headers);
@@ -186,7 +186,7 @@ async function exportToCSV(data, filePath = 'MyCSV') {
 function exportToTxt(data, filePath = 'MyTXT') {
     console.log('Inside exportToTxt');
 
-    const wStream = createWriteStream(filePath);
+    const wStream = fs.createWriteStream(filePath);
     try {
         wStream.write(data.join('\n'));
         return true;
@@ -201,6 +201,6 @@ function exportToTxt(data, filePath = 'MyTXT') {
 //     exportToCSV(response.data);
 // })();
 
-export default {
+module.exports = {
     exportToCSV, exportToTxt
 };

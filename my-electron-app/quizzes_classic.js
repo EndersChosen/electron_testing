@@ -1,8 +1,8 @@
 // quizzes.js
 
-import axios from 'axios';
-import pagination from './pagination.js';
-import { errorCheck } from './utilities.js';
+const axios = require('axios');
+const pagination = require('./pagination.js');
+const { errorCheck } = require('./utilities.js');
 
 
 async function createQuiz(data) {
@@ -612,6 +612,6 @@ async function addTrueFalseQuestion(data) {
     };
 }
 
-export default {
+module.exports = {
     createQuiz
 }

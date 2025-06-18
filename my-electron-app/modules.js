@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { errorCheck } from "./utilities";
+const axios = require('axios');
+const { errorCheck } = require("./utilities");
 
 async function getModules(data) {
     const courseModules = [];
@@ -117,6 +117,6 @@ async function deleteModule(data) {
     }
 }
 
-export default {
+module.exports = {
     getModules, deleteModule, createModule
 }

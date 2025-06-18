@@ -1,7 +1,7 @@
 // enrollments.js
 // const config = require('./config');
 // const users = require('./users');
-import { getAPIData } from './utilities';
+const { getAPIData } = require('./utilities');
 // const questionAsker = require('../questionAsker');
 // const pagination = require('../pagination');
 
@@ -138,6 +138,6 @@ async function apiRunner(url) {
 
 // })();
 
-export default {
+module.exports = {
     enrollUser, getEnrollments
 };

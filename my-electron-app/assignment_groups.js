@@ -7,10 +7,10 @@
 // deleteEmptyAssignmentGroups(course)
 // -------------------------------------
 
-import { getNextPage } from './pagination.js';
+const pagination = require('./pagination.js');
 //const questionAsker = require('./questionAsker');
-import { deleteRequester, errorCheck } from './utilities';
-import axios, { get } from 'axios';
+const { deleteRequester, errorCheck } = require('./utilities');
+const axios = require('axios');
 
 
 // const axios = config.instance;
@@ -80,13 +80,13 @@ async function getAssignmentGroups(domain, course, token) {
     //console.log(nextPage);
     while (nextPage) {
         try {
-            const response = await get(nextPage, {
+            const response = await axios.get(nextPage, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
             if (response.headers.get('link')) {
-                nextPage = getNextPage(response.headers.get('link'));
+                nextPage = pagination.getNextPage(response.headers.get('link'));
                 console.log(nextPage);
             } else {
                 nextPage = false;
@@ -302,6 +302,6 @@ async function deleteEmptyAssignmentGroup(data) {
 //     console.log('Done.');
 // })();
 
-export default {
+module.exports = {
     createAssignmentGroups, getAssignmentGroups, getEmptyAssignmentGroups, deleteEmptyAssignmentGroup
 }

@@ -1,8 +1,8 @@
 // courses.js
 
-import axios, { post } from 'axios';
-import pagination from './pagination.js';
-import { errorCheck } from './utilities.js';
+const axios = require('axios');
+const pagination = require('./pagination.js');
+const { errorCheck } = require('./utilities.js');
 
 async function restoreContent(data) {
     const axiosConfig = {
@@ -31,7 +31,7 @@ async function resetCourse(data) {
 
     try {
         const request = async () => {
-            return await post(url, {}, {
+            return await axios.post(url, {}, {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + data.token
@@ -185,6 +185,6 @@ async function syncBPCourses(data) {
     }
 }
 
-export default {
+module.exports = {
     resetCourse, createSupportCourse, editCourse, getCourseInfo, associateCourses, syncBPCourses, restoreContent
 };

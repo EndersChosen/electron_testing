@@ -1,10 +1,10 @@
 // conversations.js
-import { getNextPage } from './pagination';
-import { exportToCSV } from './csvExporter';
+const pagination = require('./pagination');
+const csvExporter = require('./csvExporter');
 //const questionAsker = require('./questionAsker');
-import { deleteRequester, errorCheck } from './utilities';
+const { deleteRequester, errorCheck } = require('./utilities');
 
-import axios, { get } from 'axios';
+const axios = require('axios');
 
 async function getConversations(user, url, scope, token) {
     console.log('Getting conversations: ');
@@ -35,7 +35,7 @@ async function getConversations(user, url, scope, token) {
     while (nextPage) {
         console.log('Page: ', pageCounter);
         try {
-            const response = await get(nextPage, {
+            const response = await axios.get(nextPage, {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -44,7 +44,7 @@ async function getConversations(user, url, scope, token) {
             for (let message of response.data) {
                 myConversations.push(message);
             }
-            nextPage = getNextPage(response.headers.get('link'));
+            nextPage = pagination.getNextPage(response.headers.get('link'));
             if (nextPage !== false) {
                 pageCounter++;
                 // myConversations = await getConversations(user, nextPage, null, myConversations, pageCount);
@@ -289,7 +289,7 @@ async function bulkDelete(userID, messageFilter) {
             } else
                 break;
         }
-        exportToCSV(filteredConversations, `${myFilter}`);
+        csvExporter.exportToCSV(filteredConversations, `${myFilter}`);
 
         // let loops = Math.floor(filteredConversations.length / 40);
         // let requests = [];
@@ -488,6 +488,6 @@ async function bulkDeleteNew(messages, url, token) {
 // })();
 
 
-export default {
+module.exports = {
     getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll
 };

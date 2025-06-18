@@ -1,13 +1,13 @@
 // users.js
 // const config = require('./config.js');
-import { getNextPage } from './pagination.js';
+const pagination = require('./pagination.js');
 // const random_user = require('../random_user');
 // const error_check = require('../error_check');
 // const questionAsker = require('../questionAsker');
 // const csvExporter = require('../csvExporter');
 
-import axios, { get } from 'axios';
-import { errorCheck } from './utilities.js';
+const axios = require('axios');
+const { errorCheck } = require('./utilities.js');
 
 // let userData = {
 //     user: {
@@ -269,7 +269,7 @@ async function getPageViews(data) {
         // });
         try {
             const request = async () => {
-                return await get(nextPage, {
+                return await axios.get(nextPage, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -281,7 +281,7 @@ async function getPageViews(data) {
             pageViews.push(...response.data);
 
             if (response.headers.get('link')) {
-                nextPage = getNextPage(response.headers.get('link'));
+                nextPage = pagination.getNextPage(response.headers.get('link'));
             } else {
                 nextPage = false;
             }
@@ -366,6 +366,6 @@ async function getPageViews(data) {
 //     console.log('done');
 // })();
 
-export default {
+module.exports = {
     addUsers, createUsers, enrollUser, getPageViews
 };
