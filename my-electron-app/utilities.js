@@ -1,8 +1,8 @@
 // utilities.js
 // const { instance, getMyRegion } = require('./Canvas/config');
 
-const axios = require('axios');
-const { getNextPage } = require('./pagination');
+import axios from 'axios';
+import { getNextPage } from './pagination';
 // add utilities here
 
 async function createRequester(method, url, params, num, endpoint) {
@@ -373,6 +373,6 @@ function getUTCTime(date) {
     return `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}T${this.getTimeZoneOffset()}:00:00.00Z`;
 }
 
-module.exports = {
+export default {
     createRequester, deleteRequester, waitFunc, getRegion, errorCheck, getAPIData, getUTCTime
 };

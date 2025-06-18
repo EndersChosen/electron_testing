@@ -1,5 +1,5 @@
-const axios = require('axios');
-const { errorCheck } = require("./utilities");
+import axios from 'axios';
+import { errorCheck } from "./utilities";
 
 async function getModules(data) {
     const courseModules = [];
@@ -68,6 +68,33 @@ async function getModules(data) {
 
 }
 
+async function createModule(data) {
+    let url = `https://${data.domain}/api/v1/courses/${data.course_id}/modules`;
+
+    const axiosConfig = {
+        method: 'post',
+        url: url,
+        headers: {
+            'Authorization': `Bearer ${data.token}`,
+            'Content-Type': 'application/json'
+        },
+        data: {
+            module: {
+                name: data.module_name
+            }
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        }
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
 async function deleteModule(data) {
     let url = `https://${data.domain}/api/v1/courses/${data.course_id}/modules/${data.module_id}`;
 
@@ -90,6 +117,6 @@ async function deleteModule(data) {
     }
 }
 
-module.exports = {
-    getModules, deleteModule
+export default {
+    getModules, deleteModule, createModule
 }

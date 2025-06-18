@@ -1,10 +1,10 @@
 // console.log('comm_channels.js');
 
-const pagination = require('./pagination.js');
+import pagination from './pagination.js';
 //const questionAsker = require('./questionAsker');
 // const { deleteRequester } = require('./utilities');
-const axios = require('axios');
-const { waitFunc, errorCheck } = require('./utilities.js');
+import axios from 'axios';
+import { waitFunc, errorCheck } from './utilities.js';
 
 const REGION = {
     "dub_fra": "https://e5d4doray3ypvpqy7unlaoqzdi0mcwrb.lambda-url.eu-west-1.on.aws/emails/",
@@ -301,6 +301,6 @@ async function confirmEmail(data) {
     }
 }
 
-module.exports = {
+export default {
     emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail
 }

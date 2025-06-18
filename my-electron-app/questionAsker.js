@@ -1,7 +1,7 @@
 // questionAsker.js
-const readline = require('readline');
+import { createInterface } from 'readline';
 
-const rl = readline.createInterface({
+const rl = createInterface({
     input: process.stdin,
     output: process.stdout
 });
@@ -24,6 +24,6 @@ async function questionDetails(myQuestion) {
 function close() {
     rl.close();
 }
-module.exports = {
+export default {
     questionDetails, close
 };

@@ -29,11 +29,11 @@ async function createQuiz(e) {
                 <div class="row align-items-center">
                         <div class="col-2">
                             <label class="form-label">Course</label>
-                            <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                            <input id="course-id" type="number" class="form-control" aria-describedby="input-checker" />
                         </div>
                     <div class="col-2">
                         <label class="form-label">How many</label>
-                        <input id="quiz-number" type="text" class="form-control" value="1">
+                        <input id="quiz-number" type="number" class="form-control" value="1">
                     </div>
                 </div>
                 <div class="col-auto" >
@@ -297,7 +297,8 @@ async function createQuiz(e) {
                 progressBar.style.width = `${progress}%`;
             });
 
-            const createQuizzesResponse = await window.axios.createQuiz(data);
+            // returns the IDs of the quizzes created
+            const createQuizzesResponse = await window.axios.createClassicQuizzes(data);
             if (createQuizzesResponse.successful.length > 0) {
                 progressInfo.innerHTML = `Successfully created ${createQuizzesResponse.successful.length} quizzes.`;
                 responseContainer.innerHTML = '<p>Creating questions in the new quizzes...</p>';

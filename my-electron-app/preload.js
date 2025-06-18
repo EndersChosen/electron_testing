@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+import { contextBridge, ipcRenderer } from 'electron';
 // const axios = require('axios');
 
 // contextBridge.exposeInMainWorld('eAPI', {
@@ -182,10 +182,10 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:associateCourses', data);
     },
-    createQuiz: async (data) => {
-        console.log('preload.js > createQuiz');
+    createClassicQuizzes: async (data) => {
+        console.log('preload.js > createClassicQuizzes');
 
-        return await ipcRenderer.invoke('axios:createQuiz', data)
+        return await ipcRenderer.invoke('axios:createClassicQuizzes', data)
     },
     createClassicQuestions: async (data) => {
         console.log('preload.js > createClassicQuestions');
@@ -207,6 +207,11 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > deleteModules');
 
         return await ipcRenderer.invoke('axios:deleteModules', data);
+    },
+    createModules: async (data) => {
+        console.log('preload.js > createModules');
+
+        return await ipcRenderer.invoke('axios:createModules', data);
     }
 });
 

@@ -1,9 +1,9 @@
 // observer.js
-const axios = require('axios');
-const { getAPIData } = require('./utilities');
-const { getEnrollments } = require('./enrollments');
+import axios from 'axios';
+import { getAPIData } from './utilities';
+import { getEnrollments } from './enrollments';
 
-const questionAsker = require('./questionAsker_electron');
+import { questionDetails } from './questionAsker_electron';
 
 console.log('Inside observer.js');
 
@@ -27,10 +27,10 @@ async function getAlerts(data) {
         state: 'active'
     }
 
-    data.domain = await questionAsker.questionDetails('What domain: ');
-    data.token = await questionAsker.questionDetails('Enter your token: ');
-    data.observee = await questionAsker.questionDetails('Student ID you\'re observing: ');
-    data.observer = await questionAsker.questionDetails('Observer ID: ');
+    data.domain = await questionDetails('What domain: ');
+    data.token = await questionDetails('Enter your token: ');
+    data.observee = await questionDetails('Student ID you\'re observing: ');
+    data.observer = await questionDetails('Observer ID: ');
 
     const alerts = await getAlerts(data)
     console.log('Total alerts: ', alerts.length);

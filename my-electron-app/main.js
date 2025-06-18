@@ -1,34 +1,18 @@
-const path = require('path');
-const fs = require('fs');
-const {
-    app,
-    BrowserWindow,
-    ipcMain,
-    dialog,
-    clipboard,
-    shell,
-    Menu
-} = require('electron');
+import { join } from 'path';
+import { createWriteStream, promises } from 'fs';
+import { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Menu } from 'electron';
 //const axios = require('axios');
-const convos = require('./conversations');
-const csvExporter = require('./csvExporter');
-const assignmentGroups = require('./assignment_groups');
-const assignments = require('./assignments');
-const { getPageViews, createUsers, enrollUser, addUsers } = require('./users');
-const { send } = require('process');
-const { deleteRequester, waitFunc } = require('./utilities');
-const { emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } = require('./comm_channels');
-const {
-    restoreContent,
-    resetCourse,
-    getCourseInfo,
-    createSupportCourse,
-    editCourse,
-    associateCourses,
-    syncBPCourses
-} = require('./courses');
-const quizzes = require('./quizzes');
-const modules = require('./modules');
+import { getConversationsGraphQL, deleteForAll } from './conversations';
+import { exportToCSV, exportToTxt } from './csvExporter';
+import { getEmptyAssignmentGroups, deleteEmptyAssignmentGroup, createAssignmentGroups } from './assignment_groups';
+import { createAssignments, deleteAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, getNonModuleAssignments, getOldAssignmentsGraphQL, getImportedAssignments, getAssignmentsInOtherGroups, getAssignmentsToMove, moveAssignmentToGroup, deleteAssignmentGroupWithAssignments } from './assignments';
+import { getPageViews, createUsers, enrollUser, addUsers } from './users';
+import { send } from 'process';
+import { deleteRequester, waitFunc } from './utilities';
+import { emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } from './comm_channels';
+import { restoreContent, resetCourse, getCourseInfo, createSupportCourse, editCourse, associateCourses, syncBPCourses } from './courses';
+import quizzes_classic from './quizzes_classic';
+import modules from './modules';
 
 let mainWindow;
 let suppressedEmails = [];
@@ -40,7 +24,7 @@ const createWindow = () => {
         height: 900,
         webPreferences: {
             nodeIntegration: false,
-            preload: path.join(__dirname, './preload.js')
+            preload: join(__dirname, './preload.js')
         }
     })
 
@@ -86,7 +70,7 @@ app.whenReady().then(() => {
 
         let sentMessages;
         try {
-            sentMessages = await convos.getConversationsGraphQL(data);
+            sentMessages = await getConversationsGraphQL(data);
             return sentMessages;
         } catch (error) {
             throw error.message;
@@ -126,7 +110,7 @@ app.whenReady().then(() => {
 
         const request = async (requestData) => {
             try {
-                const response = await convos.deleteForAll(requestData);
+                const response = await deleteForAll(requestData);
                 return response;
             } catch (error) {
                 throw error;
@@ -197,7 +181,7 @@ app.whenReady().then(() => {
                 return false;
             }
         } catch (error) {
-            throw error;
+            throw error.message;
         }
     });
 
@@ -215,7 +199,7 @@ app.whenReady().then(() => {
         const request = async (data) => {
             try {
                 // const response = await window.axios.deleteTheThings(messageData);
-                const response = await assignments.createAssignments(data);
+                const response = await createAssignments(data);
                 return response;
             } catch (error) {
                 //console.error('Error: ', error);
@@ -248,7 +232,7 @@ app.whenReady().then(() => {
         const request = async (requestData) => {
             try {
                 // const response = await window.axios.deleteTheThings(messageData);
-                const response = await assignments.deleteAssignments(requestData);
+                const response = await deleteAssignments(requestData);
                 return response;
             } catch (error) {
                 // console.error('Error: ', error);
@@ -278,7 +262,7 @@ app.whenReady().then(() => {
         console.log('Inside axios:getEmptyAssignmentGroups')
 
         try {
-            const aGroups = await assignmentGroups.getEmptyAssignmentGroups(data);
+            const aGroups = await getEmptyAssignmentGroups(data);
 
             return aGroups;
         } catch (error) {
@@ -303,7 +287,7 @@ app.whenReady().then(() => {
 
         const request = async (data) => {
             try {
-                const response = await assignmentGroups.deleteEmptyAssignmentGroup(data);
+                const response = await deleteEmptyAssignmentGroup(data);
                 return response;
             } catch (error) {
                 throw error;
@@ -348,7 +332,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:getNoSubmissionAssignments');
 
         try {
-            const result = await assignments.getNoSubmissionAssignments(data.domain, data.course_id, data.token, data.graded);
+            const result = await getNoSubmissionAssignments(data.domain, data.course_id, data.token, data.graded);
 
             return result;
         } catch (error) {
@@ -362,7 +346,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:getUnpublishedAssignments');
 
         try {
-            const results = await assignments.getUnpublishedAssignments(data.domain, data.course, data.token);
+            const results = await getUnpublishedAssignments(data.domain, data.course, data.token);
 
             return results;
         } catch (error) {
@@ -374,7 +358,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:getNonModuleAssignments');
 
         try {
-            const results = await assignments.getNonModuleAssignments(data.domain, data.course, data.token);
+            const results = await getNonModuleAssignments(data.domain, data.course, data.token);
             return results;
         } catch (error) {
             throw error.message;
@@ -385,7 +369,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:getOldAssignments');
 
         try {
-            const response = await assignments.getOldAssignmentsGraphQL(data);
+            const response = await getOldAssignmentsGraphQL(data);
             return response;
         } catch (error) {
             throw error.message
@@ -403,7 +387,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:getImportedAssignments');
 
         try {
-            const importedAssignments = await assignments.getImportedAssignments(data);
+            const importedAssignments = await getImportedAssignments(data);
             return importedAssignments;
         } catch (error) {
             throw error.message;
@@ -414,7 +398,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:keepAssignmentsInGroup');
 
         try {
-            const response = await assignments.getAssignmentsInOtherGroups(data);
+            const response = await getAssignmentsInOtherGroups(data);
             return response;
         } catch (error) {
             throw error.message;
@@ -429,7 +413,7 @@ app.whenReady().then(() => {
         // 3. Move all assignments to that group
 
         try {
-            const results = await assignments.getAssignmentsToMove(data.domain, data.course, data.token);
+            const results = await getAssignmentsToMove(data.domain, data.course, data.token);
             return results;
         } catch (error) {
             throw error.message;
@@ -449,7 +433,7 @@ app.whenReady().then(() => {
 
         const request = async (data) => {
             try {
-                const response = await assignments.moveAssignmentToGroup(data)
+                const response = await moveAssignmentToGroup(data)
                 return response;
             } catch (error) {
                 throw `status code ${error.status} - ${error.message}`;
@@ -487,13 +471,14 @@ app.whenReady().then(() => {
 
         // try to delete the assignment group and all assignments
         const request = async (requestData) => {
-            return await assignments.deleteAssignmentGroupWithAssignments(requestData)
+            return await deleteAssignmentGroupWithAssignments(requestData)
         }
         try {
             const response = await request(data);
             return response.data;
         } catch (error) {
             console.log(error);
+            throw error.message;
         }
 
         // const requests = [];
@@ -527,7 +512,7 @@ app.whenReady().then(() => {
 
         const request = async (data) => {
             try {
-                const response = await assignmentGroups.createAssignmentGroups(data);
+                const response = await createAssignmentGroups(data);
                 return response;
             } catch (error) {
                 throw error
@@ -575,7 +560,7 @@ app.whenReady().then(() => {
             const filename = `${data.user}_page_views.csv`;
             const fileDetails = getFileLocation(filename);
             if (fileDetails) {
-                await csvExporter.exportToCSV(response, fileDetails);
+                await exportToCSV(response, fileDetails);
             } else {
                 return 'cancelled';
             }
@@ -758,7 +743,7 @@ app.whenReady().then(() => {
 
                 const request = async (requestData) => {
                     try {
-                        return await assignments.createAssignments(requestData);
+                        return await createAssignments(requestData);
                     } catch (error) {
                         throw error;
                     }
@@ -785,7 +770,7 @@ app.whenReady().then(() => {
                 console.log('finished creating assignments.');
             }
         } catch (error) {
-            throw error;
+            throw error.message;
         }
 
 
@@ -830,7 +815,7 @@ app.whenReady().then(() => {
             const migrationRequest = await syncBPCourses(data);
             return migrationRequest.workflow_state;
         } catch (error) {
-            throw error
+            throw error.message;
         }
     });
 
@@ -840,7 +825,7 @@ app.whenReady().then(() => {
         try {
             return await getCourseInfo(data);
         } catch (error) {
-            throw error;
+            throw error.message;
         }
     });
 
@@ -882,7 +867,7 @@ app.whenReady().then(() => {
             const response = await resetEmail(data);
             return response;
         } catch (error) {
-            throw error;
+            throw error.message;
         }
     });
 
@@ -890,7 +875,7 @@ app.whenReady().then(() => {
         try {
             const response = await checkUnconfirmedEmails(data); //returns a data stream to write to file
             const filePath = getFileLocation('unconfirmed_emails.csv')
-            const wStream = fs.createWriteStream(filePath);
+            const wStream = createWriteStream(filePath);
 
             response.pipe(wStream);
 
@@ -906,7 +891,7 @@ app.whenReady().then(() => {
                 throw new Error('File write failed: ', error.message);
             });
         } catch (error) {
-            throw error;
+            throw error.message;
         }
     });
 
@@ -1018,8 +1003,8 @@ app.whenReady().then(() => {
         }
     });
 
-    ipcMain.handle('axios:createQuiz', async (event, data) => {
-        console.log('main.js > axios:createQuiz');
+    ipcMain.handle('axios:createClassicQuizzes', async (event, data) => {
+        console.log('main.js > axios:createClassicQuizzes');
 
         try {
             const quizzes = await createClassicQuizzes(data);
@@ -1027,11 +1012,11 @@ app.whenReady().then(() => {
             const quizIDs = quizzes.successful.map(quiz => quiz.value.id);
             return quizIDs;
         } catch (error) {
-            throw error
+            throw error.message;
         }
     })
 
-    ipcMain.handle('axios: createClassicQuestions', async (event, data) => {
+    ipcMain.handle('axios:createClassicQuestions', async (event, data) => {
         console.log('main.js > axios:createClassicQuestions');
 
         const totalNumber = data.quizzes.length;
@@ -1044,7 +1029,7 @@ app.whenReady().then(() => {
 
         const request = async (requestData) => {
             try {
-                return await quizzes.createQuestions(requestData);
+                return await quizzes_classic.createQuestions(requestData);
             } catch (error) {
                 throw error
             } finally {
@@ -1115,7 +1100,7 @@ app.whenReady().then(() => {
             const courseModules = await modules.getModules(data);
             return courseModules;
         } catch (error) {
-            throw error;
+            throw error.message;
         }
     });
 
@@ -1157,6 +1142,48 @@ app.whenReady().then(() => {
         const batchResponse = await batchHandler(requests);
         console.log('Finished deleting assignments.');
         return batchResponse;
+    })
+
+    ipcMain.handle('axios:createModules', async (event, data) => {
+        console.log('main.js > axios:createModules');
+
+        let completedRequests = 0;
+        const totalRequests = data.number;
+
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        }
+
+        const request = async (requestData) => {
+            try {
+                return await modules.createModule(requestData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        }
+
+        try {
+            // check if the course has modules  
+            const currentModules = await modules.getModules(data);
+            const requests = [];
+            for (let i = 0; i < totalRequests; i++) {
+                const requestData = {
+                    domain: data.domain,
+                    token: data.token,
+                    course_id: data.course_id,
+                    module_name: "Module " + (currentModules.length + i + 1)
+                };
+                requests.push({ id: i + 1, request: () => request(requestData) });
+            }
+
+            const batchResponse = await batchHandler(requests);
+            return batchResponse;
+        } catch (error) {
+            throw error.message;
+        }
     })
 
     ipcMain.handle('fileUpload:confirmEmails', async (event, data) => {
@@ -1312,7 +1339,7 @@ app.on('window-all-closed', () => {
 })
 
 async function createClassicQuizzes(data) {
-    console.log('The data: ', data);
+    // console.log('The data: ', data);
 
     // first create the quizzes
     const totalRequests = data.num_quizzes;
@@ -1452,7 +1479,7 @@ async function getFileContents(ext) {
     } else {
         console.log(result.filePaths);
         const filePath = result.filePaths[0];
-        const fileContent = await fs.promises.readFile(filePath, 'utf8');
+        const fileContent = await promises.readFile(filePath, 'utf8');
         // const emails = removeBlanks(fileContent.split(/\r?\n|\r|,/));
         return fileContent;
     }
@@ -1468,7 +1495,7 @@ function sendToCSV(data) {
 
     const fileDetails = getFileLocation(data.fileName)
     if (fileDetails) {
-        csvExporter.exportToCSV(data.data, fileDetails);
+        exportToCSV(data.data, fileDetails);
     } else {
         return false;
     }
@@ -1479,7 +1506,7 @@ function sendToTxt(data) {
 
     const fileDetails = getFileLocation('suppressed_emails.txt');
     if (fileDetails) {
-        csvExporter.exportToTxt(data, fileDetails)
+        exportToTxt(data, fileDetails)
     } else {
         throw new Error('Failed to write file.');
     }

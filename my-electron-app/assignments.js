@@ -8,10 +8,10 @@
 // ----------------------------------
 
 // const config = require('./config.js');
-const pagination = require('./pagination.js');
-const csvExporter = require('./csvExporter');
-const axios = require('axios');
-const { deleteRequester, errorCheck } = require('./utilities.js');
+import { getNextPage } from './pagination.js';
+import csvExporter from './csvExporter';
+import axios from 'axios';
+import { deleteRequester, errorCheck } from './utilities.js';
 // const questionAsker = require('../questionAsker');
 // const readline = require('readline');
 
@@ -191,7 +191,7 @@ async function getAssignments(domain, courseID, token) {
             const response = await errorCheck(request);
 
             if (response.headers.get('link')) {
-                myURL = pagination.getNextPage(response.headers.get('link'));
+                myURL = getNextPage(response.headers.get('link'));
             } else {
                 myURL = false;
             }
@@ -972,6 +972,6 @@ async function getNonModuleAssignments(domain, courseID, token) {
 //     console.log('Done');
 // }) ();
 
-module.exports = {
+export default {
     createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups
 }

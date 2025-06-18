@@ -1,7 +1,7 @@
 console.log('inside accounts.js')
 
-const axios = require('axios');
-const { errorCheck } = require('./utilities');
+import axios from 'axios';
+import { errorCheck } from './utilities';
 
 // const accounts = [
 //     215

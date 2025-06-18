@@ -3,6 +3,9 @@ function moduleTemplate(e) {
         case 'delete-modules':
             deleteModules(e);
             break;
+        case 'create-modules':
+            createModules(e);
+            break;
         case 'relock-modules':
             reLockModules(e);
             break;
@@ -208,8 +211,133 @@ async function deleteModules(e) {
     })
 }
 
-async function reLockModules(e) {
+async function createModules(e) {
     hideEndpoints(e)
+
+    const eContent = document.querySelector('#endpoint-content');
+    let createModuleForm = eContent.querySelector('#create-module-form');
+
+    if (!createModuleForm) {
+        createModuleForm = document.createElement('form');
+        createModuleForm.id = 'create-module-form';
+        createModuleForm.innerHTML = `
+            <div>
+                <h3>Create Modules</h3>
+            </div>
+            <div class="row">
+                <div class="row align-items-center">
+                        <div class="col-2">
+                            <label class="form-label">Course</label>
+                            <input id="course-id" type="number" class="form-control" aria-describedby="input-checker" />
+                        </div>
+                </div>
+                <div class="col-auto" >
+                    <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                </div>
+                <div class="row align-items-center">
+                    <div class="col-2 mt-3">
+                        <label class="form-label">How many</label>
+                        <input id="module-number" type="number" class="form-control" value="1" min="1" max="1000" />
+                    </div>
+                </div>
+                <hr class="mt-2">
+                <div class="w-100"></div>
+                <div class="col-auto">
+                    <button id="create-modules-btn" class="btn btn-primary mt-3" disabled>Create</button>
+                </div>
+            </div>
+            <div hidden id="create-progress-div">
+                <p id="create-progress-info"></p>
+                <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="create-response-container" class="mt-3">
+            </div>
+        `;
+
+        eContent.append(createModuleForm);
+    }
+    createModuleForm.hidden = false;
+
+    // disable the button until the course id and how many modules are entered
+    const courseID = createModuleForm.querySelector('#course-id');
+    const moduleNumber = createModuleForm.querySelector('#module-number');
+    const createModulesBtn = createModuleForm.querySelector('#create-modules-btn');
+
+    const toggleCreateModulesBtn = () => {
+        createModulesBtn.disabled = !(courseID.value && moduleNumber.value);
+    };
+
+    courseID.addEventListener('input', toggleCreateModulesBtn);
+    moduleNumber.addEventListener('input', toggleCreateModulesBtn);
+
+    createModulesBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const responseContainer = createModuleForm.querySelector('#create-response-container');
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const course_id = courseID.value.trim();
+        const number = moduleNumber.value.trim();
+
+        const progressDiv = createModuleForm.querySelector('#create-progress-div');
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        const progressInfo = createModuleForm.querySelector('#create-progress-info');
+
+        // clean environment
+        responseContainer.innerHTML = '';
+        progressDiv.hidden = false;
+        progressBar.parentElement.hidden = true;
+        progressBar.style.width = '0%';
+        progressInfo.innerHTML = 'Creating...';
+
+        const requestData = {
+            domain,
+            token,
+            course_id,
+            number
+        };
+
+        window.progressAPI.onUpdateProgress((progress) => {
+            progressBar.style.width = `${progress}%`;
+        });
+
+        try {
+            const createdModules = await window.axios.createModules(requestData);
+            progressInfo.innerHTML = 'Done';
+            progressBar.style.width = '100%';
+
+            if (createdModules.successful.length === 0 && createdModules.failed.length === 0) {
+                responseContainer.innerHTML = `
+                    <div>
+                        <p>No modules were created. Please check the course ID and try again.</p>
+                    </div>
+                `;
+                return;
+            } else if (createdModules.successful.length > 0) {
+                responseContainer.innerHTML = `
+                    <div>
+                        <p>Successfully created ${createdModules.successful.length} modules.</p>
+                    </div>
+                `;
+            }
+            if (createdModules.failed.length > 0) {
+                throw new Error(`Failed to create modules: ${createdModules.failed[0].reason}`);
+            }
+        } catch (error) {
+            console.error('Error creating modules:', error);
+            errorHandler(error, progressInfo);
+        } finally {
+            progressBar.parentElement.hidden = false;
+        }
+    });
+}
+
+async function reLockModules(e) {
+    hideEndpoints(e);
 
     const eContent = document.querySelector('#endpoint-content');
     let reLockModulesForm = eContent.querySelector('#relock-modules-form');
