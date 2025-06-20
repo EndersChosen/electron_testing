@@ -289,6 +289,7 @@ async function createQuiz(e) {
             course_id,
             quiz_type,
             publish,
+            num_quizzes,
             questionTypes
         };
 
@@ -305,12 +306,25 @@ async function createQuiz(e) {
                 // resetting progress bar
                 progressBar.style.width = '0%';
 
+                // get the quiz ids from teh createQuizzesResponse.successful
+                const quizIDs = createQuizzesResponse.successful.map(quiz => quiz.value.id);
+
                 const quizQuestionData = {
                     domain,
                     token,
                     course_id,
                     questionTypes,
-                    quizzes: createQuizzesResponse
+                    quizzes: quizIDs
+                }
+
+                const createQuestionsResponse = await window.axios.createClassicQuestions(quizQuestionData);
+                if (createQuestionsResponse.successful.length > 0) {
+                    progressInfo.innerHTML += ` Successfully created ${createQuestionsResponse.successful.length} questions.`;
+                    progressBar.style.width = '100%';
+                } else {
+                    progressInfo.innerHTML += ` Failed to create questions for ${quizIDs.length} quizzes.`;
+                    progressBar.parentElement.hidden = true;
+                    errorHandler({ message: `${createQuestionsResponse.failed[0].reason}` }, progressInfo);
                 }
             }
             if (createQuizzesResponse.failed.length > 0) {

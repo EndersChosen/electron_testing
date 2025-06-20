@@ -1025,8 +1025,7 @@ app.whenReady().then(() => {
         try {
             const quizzes = await createClassicQuizzes(data);
             // get the IDs of the successfully created quizzes to then create questions in
-            const quizIDs = quizzes.successful.map(quiz => quiz.value.id);
-            return quizIDs;
+            return quizzes;
         } catch (error) {
             throw error.message;
         }
@@ -1036,7 +1035,7 @@ app.whenReady().then(() => {
         console.log('main.js > axios:createClassicQuestions');
 
         const totalNumber = data.quizzes.length;
-        const completedRequests = 0;
+        let completedRequests = 0;
 
         const updateProgress = () => {
             completedRequests++;
@@ -1368,7 +1367,7 @@ async function createClassicQuizzes(data) {
 
     const request = async (requestData) => {
         try {
-            return await quizzes.createQuiz(requestData)
+            return await quizzes_classic.createQuiz(requestData)
         } catch (error) {
             throw error;
         } finally {

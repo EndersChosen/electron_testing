@@ -1,4 +1,4 @@
-// quizzes.js
+// quizzes_classic.js
 
 const axios = require('axios');
 const pagination = require('./pagination.js');
@@ -36,6 +36,7 @@ async function createQuiz(data) {
 }
 
 async function createQuestions(data) {
+    console.log("Creating Questions");
     const axiosConfig = {
         method: 'POST',
         url: `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes/${data.quiz_id}/questions`,
@@ -44,71 +45,65 @@ async function createQuestions(data) {
         }
     };
 
-    // const data = {
-    //     question: {}
-    // };
-    // loop through all the 
+    // loop through all the question types
+    // and add the number of questions specified for each type
     for (let qData of data.questionTypes) {
         if (qData.enabled) {
             // loop through the number of question to add of the specific type
             for (let qNum = 0; qNum < qData.number; qNum++) {
                 switch (qData.name) {
                     case "calculated_question":
-                        await addCalculatedQuestion(data);
+                        await addCalculatedQuestion(axiosConfig);
                         break;
                     case "essay_question":
-                        await addEssayQuestion(data);
+                        await addEssayQuestion(axiosConfig);
                         break;
                     case "file_upload_question":
-                        await addFileUploadQuestion(data)
+                        await addFileUploadQuestion(axiosConfig);
                         break;
                     case "fill_in_multiple_blanks_question":
-                        await addFillInMultipleBlanksQuestion(data);
+                        await addFillInMultipleBlanksQuestion(axiosConfig);
                         break;
                     case "matching_question":
-                        await addMatchingQuestion(data);
+                        await addMatchingQuestion(axiosConfig);
                         break;
                     case "multiple_answers_question":
-                        await addMultipleAnswerQuestion(data);
+                        await addMultipleAnswerQuestion(axiosConfig);
                         break;
                     case "multiple_choice_question":
-                        await addMultipleChoiceQuestion(data);
+                        await addMultipleChoiceQuestion(axiosConfig);
                         break;
                     case "multiple_dropdowns_question":
-                        await addMultipleDropdownsQuestion(data);
+                        await addMultipleDropdownsQuestion(axiosConfig);
                         break;
                     case "numerical_question":
-                        await addNumericalQuestion(data);
+                        await addNumericalQuestion(axiosConfig);
                         break;
                     case "short_answer_question":
-                        await addShortAnswerQuestion(data);
+                        await addShortAnswerQuestion(axiosConfig);
                         break;
                     case "text_only_question":
-                        await addTextOnlyQuestion(data);
+                        await addTextOnlyQuestion(axiosConfig);
                         break;
                     case "true_false_question":
-                        await addTrueFalseQuestion(data);
+                        await addTrueFalseQuestion(axiosConfig);
                         break;
                     default:
                         break;
                 }
             }
-
-            // loop through total number of questions to add of this type
-            for (let i = 0; i < qData.number; i++) {
-
-            }
         }
     }
-    try {
-        const request = async () => {
-            return await axios(axiosConfig);
-        }
-        const response = await errorCheck(request);
-        return response.data;
-    } catch (error) {
-        throw error
-    }
+
+    // try {
+    //     const request = async () => {
+    //         return await axios(axiosConfig);
+    //     }
+    //     const response = await errorCheck(request);
+    //     return response.data;
+    // } catch (error) {
+    //     throw error
+    // }
 
 }
 
@@ -351,7 +346,8 @@ async function addMultipleAnswerQuestion(data) {
     };
 }
 
-async function addMultipleChoiceQuestion(data) {
+async function addMultipleChoiceQuestion(requestConfig) {
+    console.log("Adding Multiple Choice Question");
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -428,6 +424,21 @@ async function addMultipleChoiceQuestion(data) {
             }
         ]
     };
+
+    requestConfig.data = {
+        "quiz_question": questionData
+    };
+
+    try {
+        const request = async () => {
+            return await axios(requestConfig);
+        }
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error
+    }
+
 }
 async function addMultipleDropdownsQuestion(data) {
     const questionData = {
@@ -613,5 +624,5 @@ async function addTrueFalseQuestion(data) {
 }
 
 module.exports = {
-    createQuiz
+    createQuiz, createQuestions
 }
