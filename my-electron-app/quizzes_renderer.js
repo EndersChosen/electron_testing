@@ -3,6 +3,9 @@ function quizTemplate(e) {
         case 'create-classic-quiz':
             createQuiz(e);
             break;
+        case 'delete-classic-quizzes':
+            deleteAllClassicQuizzes(e);
+            break;
         case 'add-nq-questions':
             addQuestionsNQ(e);
             break;
@@ -146,14 +149,14 @@ async function createQuiz(e) {
                     <button id="action-btn" class="btn btn-primary mt-3" disabled>Create</button>
                 </div>
             </div>
-            <div hidden id="progress-div">
-                <p id="progress-info"></p>
+            <div hidden id="create-cq-progress-div">
+                <p id="create-cq-progress-info"></p>
                 <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                     
                     <div class="progress-bar" style="width: 0%"></div>
                 </div>
             </div>
-            <div id="response-container" class="mt-3">
+            <div id="create-cq-response-container" class="mt-3">
             </div>
         `;
 
@@ -212,7 +215,7 @@ async function createQuiz(e) {
         e.preventDefault();
         e.stopPropagation();
 
-        const responseContainer = createQuizForm.querySelector('#response-container');
+        const responseContainer = createQuizForm.querySelector('#create-cq-response-container');
 
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
@@ -274,9 +277,9 @@ async function createQuiz(e) {
         // const file_upload_question = createQuizForm.querySelector('#file_upload_question').checked;
         // const essay_question = createQuizForm.querySelector('#essay_question').checked;
 
-        const progressDiv = createQuizForm.querySelector('#progress-div');
+        const progressDiv = createQuizForm.querySelector('#create-cq-progress-div');
         const progressBar = progressDiv.querySelector('.progress-bar');
-        const progressInfo = createQuizForm.querySelector('#progress-info');
+        const progressInfo = createQuizForm.querySelector('#create-cq-progress-info');
 
         // clean environment
         progressDiv.hidden = false;
@@ -339,6 +342,148 @@ async function createQuiz(e) {
             errorHandler(error, progressInfo);
         } finally {
             createBtn.disabled = false;
+        }
+    });
+}
+
+async function deleteAllClassicQuizzes(e) {
+    hideEndpoints(e);
+    const eContent = document.querySelector('#endpoint-content');
+    let deleteQuizForm = eContent.querySelector('#delete-quiz-form');
+    if (!deleteQuizForm) {
+        deleteQuizForm = document.createElement('form');
+        deleteQuizForm.id = 'delete-quiz-form';
+        deleteQuizForm.innerHTML = `
+            <div class="row">
+                <div class="col-2 mb-3">
+                    <label for="course-id" class="form-label">Course ID</label>
+                    <input type="number" class="form-control" id="course-id" required>
+                </div>
+            </div>
+            <button id="check-quiz-btn" type="button" class="btn btn-danger" disabled>Check</button>
+            <div hidden id="delete-quiz-progress-div">
+                <p id="delete-quiz-progress-info"></p>
+                <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="delete-quiz-response-container" class="mt-3">
+            </div>
+        `;
+
+        eContent.append(deleteQuizForm);
+    }
+    deleteQuizForm.hidden = false;
+
+    const checkQuizBtn = deleteQuizForm.querySelector('#check-quiz-btn');
+    // check the see if the course ID is valid
+    const courseIDInput = deleteQuizForm.querySelector('#course-id');
+    const toggleCheckQuizzesBtn = () => {
+        checkQuizBtn.disabled = !(courseIDInput.value && courseIDInput.value.trim() !== '');
+
+    };
+
+    courseIDInput.addEventListener('input', toggleCheckQuizzesBtn);
+
+    checkQuizBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        checkQuizBtn.disabled = true;
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const courseID = deleteQuizForm.querySelector('#course-id').value;
+        const responseContainer = deleteQuizForm.querySelector('#delete-quiz-response-container');
+
+        const progressDiv = deleteQuizForm.querySelector('#delete-quiz-progress-div');
+        const progressInfo = deleteQuizForm.querySelector('#delete-quiz-progress-info');
+        const progressBar = deleteQuizForm.querySelector('.progress-bar');
+
+        progressBar.style.width = '0%';
+        progressDiv.hidden = false;
+        progressInfo.innerHTML = '';
+
+        window.progressAPI.onUpdateProgress((progress) => {
+            progressBar.style.width = `${progress}%`;
+        });
+
+        let quizzes = '';
+        let hasError = false;
+        try {
+            quizzes = await window.axios.getClassicQuizzes({ domain, token, courseID });
+            if (quizzes.length === 0) {
+                progressInfo.innerHTML = 'No quizzes found to delete.';
+                return;
+            }
+            progressInfo.innerHTML = `Found ${quizzes.length} quizzes to delete.`;
+
+        } catch (error) {
+            // Handle error (e.g., show an error message)
+            hasError = true;
+            errorHandler(error, progressInfo);
+        } finally {
+            checkQuizBtn.disabled = false;
+        }
+
+        if (!hasError) {
+            responseContainer.innerHTML = `<div>
+                    <div class="col-auto">
+                        <div id="dcq-response-details" class="row align-items-center">
+                            <div class="col-2">
+                                <button id="delete-btn" type="button" class="btn btn-danger">Delete</button>
+                            </div>
+                            <div class="col-2">
+                                <button id="cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+
+            const dcqResponseDetails = responseContainer.querySelector('#dcq-response-details');
+            const deleteBtn = dcqResponseDetails.querySelector('#delete-btn');
+            const cancelBtn = dcqResponseDetails.querySelector('#cancel-btn');
+
+            deleteBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                deleteBtn.disabled = true;
+                cancelBtn.disabled = true;
+
+                progressInfo.innerHTML = 'Deleting quizzes...';
+                progressBar.style.width = '0%';
+
+                try {
+                    const deleteResponse = await window.axios.deleteClassicQuizzes({ domain, token, courseID, quizzes });
+                    if (deleteResponse.successful.length > 0) {
+                        progressInfo.innerHTML = `Successfully deleted ${deleteResponse.successful.length} quizzes.`;
+                        progressBar.style.width = '100%';
+                    } else {
+                        progressInfo.innerHTML = `Failed to delete quizzes`;
+                        errorHandler({ message: deleteResponse.failed[0].reason }, progressInfo);
+                    }
+                } catch (error) {
+                    errorHandler(error, progressInfo);
+                } finally {
+                    deleteBtn.hidden = true;
+                    deleteBtn.disabled = true
+                    cancelBtn.hidden = true;
+                    cancelBtn.disabled = true;
+                }
+            });
+
+            cancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                deleteQuizForm.querySelector('#course-id').value = '';
+                checkQuizBtn.disabled = true;
+                responseContainer.innerHTML = '';
+                progressDiv.hidden = true;
+            });
         }
     });
 }

@@ -1019,6 +1019,16 @@ app.whenReady().then(() => {
         }
     });
 
+    ipcMain.handle('axios:getClassicQuizzes', async (event, data) => {
+        console.log('main.js > axios:getClassicQuizzes');
+        try {
+            const quizzes = await quizzes_classic.getClassicQuizzes(data);
+            return quizzes;
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
     ipcMain.handle('axios:createClassicQuizzes', async (event, data) => {
         console.log('main.js > axios:createClassicQuizzes');
 
@@ -1058,7 +1068,7 @@ app.whenReady().then(() => {
                 domain: data.domain,
                 token: data.token,
                 course_id: data.course_id,
-                quiz_id: data.quizzes[i].id,
+                quiz_id: data.quizzes[i],
                 question_data: data.questionTypes
             };
             requests.push({ id: i + 1, request: () => request(requestData) });
@@ -1067,6 +1077,44 @@ app.whenReady().then(() => {
         const batchResponse = await batchHandler(requests);
         return batchResponse;
 
+    });
+
+    ipcMain.handle('axios:deleteClassicQuizzes', async (event, data) => {
+        console.log('main.js > axios:deleteClassicQuizzes');
+
+        try {
+            const totalNumber = data.quizzes.length;
+            let completedRequests = 0;
+
+            const updateProgress = () => {
+                completedRequests++;
+                mainWindow.webContents.send('update-progress', (completedRequests / totalNumber) * 100);
+            }
+
+            const request = async (requestData) => {
+                try {
+                    return await quizzes_classic.deleteClassicQuiz(requestData);
+                } catch (error) {
+                    throw error;
+                } finally {
+                    updateProgress();
+                }
+            };
+            const requests = [];
+            for (let i = 0; i < totalNumber; i++) {
+                const requestData = {
+                    domain: data.domain,
+                    token: data.token,
+                    course_id: data.courseID,
+                    quiz_id: data.quizzes[i]._id
+                };
+                requests.push({ id: i + 1, request: () => request(requestData) });
+            }
+            const batchResponse = await batchHandler(requests);
+            return batchResponse;
+        } catch (error) {
+            throw error.message;
+        }
     });
 
     ipcMain.handle('axios:createNQQuestions', async (event, data) => {

@@ -182,6 +182,16 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:associateCourses', data);
     },
+    getClassicQuizzes: async (data) => {
+        console.log('preload.js > getClassicQuizzes');
+
+        const result = await ipcRenderer.invoke('axios:getClassicQuizzes', data);
+        if (!result) {
+            return false;
+        }
+        console.log('in preload total classic quizzes result ', result.length);
+        return result;
+    },
     createClassicQuizzes: async (data) => {
         console.log('preload.js > createClassicQuizzes');
 
@@ -191,6 +201,11 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > createClassicQuestions');
 
         return await ipcRenderer.invoke('axios:createClassicQuestions', data);
+    },
+    deleteClassicQuizzes: async (data) => {
+        console.log('preload.js > deleteClassicQuizzes');
+
+        return await ipcRenderer.invoke('axios:deleteClassicQuizzes', data);
     },
     createNQQuestions: async (data) => {
         console.log('preload.js > createNQQuestions');

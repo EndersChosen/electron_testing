@@ -5,6 +5,88 @@ const pagination = require('./pagination.js');
 const { errorCheck } = require('./utilities.js');
 
 
+async function getClassicQuizzes(data) {
+    console.log("Getting Classic Quizzes");
+
+    const queryParams = `query MyQuery($courseID: ID, $nextPage: String) {
+        course(id: $courseID) {
+            quizzesConnection(first: 100, after: $nextPage) {
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+            edges {
+                node {
+                _id
+                type
+                title
+                }
+            }
+            
+            }
+        }
+    }`;
+
+    const variables = {
+        courseID: data.courseID,
+        nextPage: ""
+    };
+
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${data.domain}/api/graphql`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        },
+        data: {
+            query: queryParams,
+            variables: variables
+        }
+    }
+
+    const quizzes = [];
+    let nextPage = true;
+    while (nextPage) {
+        try {
+            const request = async () => {
+                return await axios(axiosConfig);
+            }
+            const response = await errorCheck(request);
+            const data = response.data.data.course.quizzesConnection;
+            quizzes.push(...data.edges.map(edge => edge.node));
+            nextPage = data.pageInfo.hasNextPage;
+            if (nextPage) {
+                variables.nextPage = data.pageInfo.endCursor;
+                axiosConfig.data.variables = variables; // Update the next page cursor
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+    return quizzes;
+}
+
+async function deleteClassicQuiz(data) {
+    console.log("Deleting Classic Quiz");
+    const axiosConfig = {
+        method: 'delete',
+        url: `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes/${data.quiz_id}`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        }
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error
+    }
+}
+
 async function createQuiz(data) {
     let url = `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes`;
 
@@ -47,11 +129,11 @@ async function createQuestions(data) {
 
     // loop through all the question types
     // and add the number of questions specified for each type
-    for (let qData of data.questionTypes) {
-        if (qData.enabled) {
+    for (let qData of Object.keys(data.question_data)) {
+        if (data.question_data[qData].enabled) {
             // loop through the number of question to add of the specific type
-            for (let qNum = 0; qNum < qData.number; qNum++) {
-                switch (qData.name) {
+            for (let qNum = 0; qNum < data.question_data[qData].number; qNum++) {
+                switch (data.question_data[qData].name) {
                     case "calculated_question":
                         await addCalculatedQuestion(axiosConfig);
                         break;
@@ -107,7 +189,7 @@ async function createQuestions(data) {
 
 }
 
-async function addCalculatedQuestion(data) {
+async function addCalculatedQuestion(requestConfig) {
     const questionData = {
         "question_name": "Question",
         "assessment_question_id": null,
@@ -147,7 +229,7 @@ async function addCalculatedQuestion(data) {
     };
 }
 
-async function addEssayQuestion(data) {
+async function addEssayQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -164,7 +246,7 @@ async function addEssayQuestion(data) {
     };
 }
 
-async function addFileUploadQuestion(data) {
+async function addFileUploadQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -181,7 +263,7 @@ async function addFileUploadQuestion(data) {
     };
 }
 
-async function addFillInMultipleBlanksQuestion(data) {
+async function addFillInMultipleBlanksQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -232,7 +314,7 @@ async function addFillInMultipleBlanksQuestion(data) {
     };
 }
 
-async function addMatchingQuestion(data) {
+async function addMatchingQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -267,7 +349,7 @@ async function addMatchingQuestion(data) {
 
 }
 
-async function addMultipleAnswerQuestion(data) {
+async function addMultipleAnswerQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -440,7 +522,7 @@ async function addMultipleChoiceQuestion(requestConfig) {
     }
 
 }
-async function addMultipleDropdownsQuestion(data) {
+async function addMultipleDropdownsQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -523,7 +605,7 @@ async function addMultipleDropdownsQuestion(data) {
     };
 }
 
-async function addNumericalQuestion(data) {
+async function addNumericalQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -562,9 +644,9 @@ async function addNumericalQuestion(data) {
     };
 }
 
-async function addShortAnswerQuestion(data) { }
-async function addTextOnlyQuestion(data) { }
-async function addTrueFalseQuestion(data) {
+async function addShortAnswerQuestion(requestConfig) { }
+async function addTextOnlyQuestion(requestConfig) { }
+async function addTrueFalseQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
         assessment_question_id: null,
@@ -624,5 +706,5 @@ async function addTrueFalseQuestion(data) {
 }
 
 module.exports = {
-    createQuiz, createQuestions
+    createQuiz, createQuestions, getClassicQuizzes, deleteClassicQuiz
 }
