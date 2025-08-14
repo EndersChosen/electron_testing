@@ -107,6 +107,15 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:moveAssignmentsToSingleGroup', data);
     },
+    getAssignmentsInGroup: async (data) => {
+        console.log('preload > getAssignmentsInGroup');
+        return await ipcRenderer.invoke('axios:getAssignmentsInGroup', data);
+    },
+    deleteAssignmentsInGroup: async (data) => {
+        console.log('preload > deleteAssignmentsInGroup');
+
+        return await ipcRenderer.invoke('axios:deleteAssignmentsInGroup', data);
+    },
     deleteAssignmentGroupAssignments: async (data) => {
         console.log('preload > deleteAssignmentGroupAssignments');
 

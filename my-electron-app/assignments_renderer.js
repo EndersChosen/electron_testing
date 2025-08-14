@@ -1554,7 +1554,7 @@ function keepAssignmentsInGroup(e) {
         e.preventDefault();
         e.stopPropagation();
 
-        const daigCheckBtn = keepAssignmentsInGroupForm.querySelector('#kaig-btn');
+        const kaigCheckBtn = keepAssignmentsInGroupForm.querySelector('#kaig-btn');
         const courseChecker = keepAssignmentsInGroupForm.querySelector('#course-checker')
         const courseID = keepAssignmentsInGroupForm.querySelector('#course-id')
         const groupChecker = keepAssignmentsInGroupForm.querySelector('#group-checker')
@@ -1580,12 +1580,12 @@ function keepAssignmentsInGroup(e) {
             }
 
             if (groupChecker.style.display === 'inline' || courseChecker.style.display === 'inline') {
-                daigCheckBtn.disabled = true;
+                kaigCheckBtn.disabled = true;
             } else {
-                daigCheckBtn.disabled = false;
+                kaigCheckBtn.disabled = false;
             }
         } else {
-            daigCheckBtn.disabled = true;
+            kaigCheckBtn.disabled = true;
         }
     })
 
@@ -1957,19 +1957,19 @@ function deleteAssignmentsInGroup(e) {
             <div>
                 <h3>Delete Assignments in a Single Group</h3>
             </div>
-            <div class="row align-items-center">
-                <div class="col-auto">
-                    <label class="form-label">Course</label>
-                </div>
-                <div class="w-100"></div>
-                <div class="col-2">
-                    <input id="course-id" type="text" class="form-control" aria-describedby="course-checker" />
-                </div>
-                <div class="col-auto" >
-                    <span id="course-checker" class="form-text" style="display: none;">Must only contain numbers</span>
-                </div>
-            </div>
             <div class="row align-item-center">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <label class="form-label">Course</label>
+                    </div>
+                    <div class="w-100"></div>
+                    <div class="col-2">
+                        <input id="course-id" type="text" class="form-control" aria-describedby="course-checker" />
+                    </div>
+                    <div class="col-auto" >
+                        <span id="course-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                    </div>
+                </div>
                 <div class="col-auto">
                     <label class="form-label">Group ID: Only deletes assignments in this group</label>
                 </div>
@@ -1983,7 +1983,7 @@ function deleteAssignmentsInGroup(e) {
                 <div class="w-100"></div>
             </div>
                 <div class="col-auto">
-                    <button id="daig-btn" class="btn btn-primary mt-3" disabled>Check</button>
+                    <button id="daig-btn" class="btn btn-primary mt-3">Check</button>
                 </div>
             <div hidden id="daig-progress-div">
                 <p id="daig-progress-info"></p>
@@ -2041,39 +2041,39 @@ function deleteAssignmentsInGroup(e) {
         e.preventDefault();
         e.stopPropagation();
 
-        const daigCheckBtn = deleteAssignmentsInGroupForm.querySelector('#daig-btn');
-        const courseChecker = deleteAssignmentsInGroupForm.querySelector('#course-checker')
-        const courseID = deleteAssignmentsInGroupForm.querySelector('#course-id')
-        const groupChecker = deleteAssignmentsInGroupForm.querySelector('#group-checker')
-        const groupID = deleteAssignmentsInGroupForm.querySelector('#group-id')
-        const input = e.target.value;
+        // const daigCheckBtn = deleteAssignmentsInGroupForm.querySelector('#daig-btn');
+        // const courseChecker = deleteAssignmentsInGroupForm.querySelector('#course-checker')
+        // const courseID = deleteAssignmentsInGroupForm.querySelector('#course-id')
+        // const groupChecker = deleteAssignmentsInGroupForm.querySelector('#group-checker')
+        // const groupID = deleteAssignmentsInGroupForm.querySelector('#group-id')
+        // const input = e.target.value;
 
-        console.log(e.target);
+        // console.log(e.target);
 
-        if (courseID.value.trim() !== '' && groupID.value.trim() !== '') {
-            if (isNaN(Number(input))) {
-                if (e.target.id === 'group-id') {
-                    groupChecker.style.display = 'inline';
-                } else {
-                    courseChecker.style.display = 'inline';
-                }
-                // daigCheckBtn.disabled = true;
-            } else {
-                if (e.target.id === 'group-id') {
-                    groupChecker.style.display = 'none';
-                } else {
-                    courseChecker.style.display = 'none';
-                }
-            }
+        // if (groupID.value.trim() !== '') {
+        //     if (isNaN(Number(input))) {
+        //         if (e.target.id === 'group-id') {
+        //             groupChecker.style.display = 'inline';
+        //         } else {
+        //             courseChecker.style.display = 'inline';
+        //         }
+        //         // daigCheckBtn.disabled = true;
+        //     } else {
+        //         if (e.target.id === 'group-id') {
+        //             groupChecker.style.display = 'none';
+        //         } else {
+        //             courseChecker.style.display = 'none';
+        //         }
+        //     }
 
-            if (groupChecker.style.display === 'inline' || courseChecker.style.display === 'inline') {
-                daigCheckBtn.disabled = true;
-            } else {
-                daigCheckBtn.disabled = false;
-            }
-        } else {
-            daigCheckBtn.disabled = true;
-        }
+        //     if (groupChecker.style.display === 'inline' || courseChecker.style.display === 'inline') {
+        //         daigCheckBtn.disabled = true;
+        //     } else {
+        //         daigCheckBtn.disabled = false;
+        //     }
+        // } else {
+        //     daigCheckBtn.disabled = true;
+        // }
     })
 
     const daigCheckBtn = deleteAssignmentsInGroupForm.querySelector('#daig-btn');
@@ -2082,6 +2082,15 @@ function deleteAssignmentsInGroup(e) {
         e.stopPropagation();
 
         daigCheckBtn.disabled = true;
+
+        const daigProgressDiv = deleteAssignmentsInGroupForm.querySelector('#daig-progress-div');
+        const daigProgressBar = daigProgressDiv.querySelector('.progress-bar');
+        daigProgressBar.style.width = '0%';
+        const daigProgressInfo = deleteAssignmentsInGroupForm.querySelector('#daig-progress-info');
+        const daigResponseContainer = deleteAssignmentsInGroupForm.querySelector('#daig-response-container');
+        // clean environment
+        daigProgressDiv.hidden = false;
+        daigProgressInfo.innerHTML = "Checking...";
 
         // get domain, token, course, and group ID info
         const domain = document.querySelector('#domain').value.trim();
@@ -2092,11 +2101,91 @@ function deleteAssignmentsInGroup(e) {
         const requestData = {
             domain,
             token,
-            course_id,
             group_id
         }
 
-        const deleteAssignmentGroupAssignments = await window.axios.deleteAssignmentGroupAssignments(requestData);
-        console.log(deleteAssignmentGroupAssignments);
-    })
+        let hasError = false;
+        let assignments = [];
+        try {
+            assignments = await window.axios.getAssignmentsInGroup(requestData);
+            daigProgressInfo.innerHTML = 'Done';
+        } catch (error) {
+            errorHandler(error, daigProgressInfo);
+            hasError = true;
+        } finally {
+            daigCheckBtn.disabled = false;
+        }
+
+        if (!hasError) {
+            console.log('found assignments', assignments.length);
+            daigResponseContainer.innerHTML = `
+               <div>
+                    <div class="row align-items-center">
+                        <div id="daig-response-details" class="col-auto">
+                            <span>Found ${assignments.length} assignments, without submissions or grades.</span>
+                        </div>
+
+                        <div class="w-100"></div>
+
+                        <div class="col-2">
+                            <button id="remove-btn" type="button" class="btn btn-danger">Remove</button>
+                        </div>
+                        <div class="col-2">
+                            <button id="cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>`;
+
+            const cancelBtn = daigResponseContainer.querySelector('#cancel-btn');
+            cancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                course_id.value = '';
+                daigResponseContainer.innerHTML = '';
+                daigCheckBtn.disabled = false;
+                //clearData(courseID, responseContent);
+            });
+
+            const removeBtn = daigResponseContainer.querySelector('#remove-btn');
+            removeBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                console.log('inside remove');
+
+                const daigResponseDetails = daigResponseContainer.querySelector('#daig-response-details');
+                daigResponseDetails.innerHTML = ``;
+
+                daigProgressBar.parentElement.hidden = false;
+                daigProgressInfo.innerHTML = `Removing ${assignments.length} assignments...`;
+
+                const messageData = {
+                    domain,
+                    token,
+                    course_id,
+                    number: assignments.length,
+                    assignments
+                }
+
+                window.progressAPI.onUpdateProgress((progress) => {
+                    daigProgressBar.style.width = `${progress}%`;
+                });
+
+                try {
+                    const deletedAssignments = await window.axios.deleteAssignments(messageData);
+                    if (deletedAssignments.successful.length > 0) {
+                        daigProgressInfo.innerHTML = `Successfully removed ${deletedAssignments.successful.length} assignments.`;
+                    }
+                    if (deletedAssignments.failed.length > 0) {
+                        daigProgressInfo.innerHTML = `Failed to remove ${deletedAssignments.failed.length} assignments.`;
+                    }
+                } catch (error) {
+                    errorHandler(error, daigProgressInfo);
+                } finally {
+                    daigCheckBtn.disabled = false;
+                }
+            });
+        }
+    });
 }

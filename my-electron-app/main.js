@@ -212,10 +212,10 @@ app.whenReady().then(() => {
             mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
         }
 
-        const request = async (data) => {
+        const request = async (requestData) => {
             try {
                 // const response = await window.axios.deleteTheThings(messageData);
-                const response = await assignments.createAssignments(data);
+                const response = await assignments.createAssignments(requestData);
                 return response;
             } catch (error) {
                 //console.error('Error: ', error);
@@ -227,7 +227,13 @@ app.whenReady().then(() => {
 
         let requests = [];
         for (let i = 0; i < data.number; i++) {
-            requests.push({ id: i + 1, request: () => request(data) });
+            const requestData = {
+                domain: data.domain,
+                token: data.token,
+                course_id: data.course_id,
+                id: data.assignments[i]
+            };
+            requests.push({ id: i + 1, request: () => request(requestData) });
         }
 
         const batchResponse = await batchHandler(requests);
@@ -474,6 +480,18 @@ app.whenReady().then(() => {
         const batchResponse = await batchHandler(requests);
         return batchResponse;
     });
+
+    ipcMain.handle('axios:getAssignmentsInGroup', async (event, data) => {
+        console.log('main.js > axios:getAssignmentsInGroup');
+
+        try {
+            const assignmentsInGroup = await assignments.getAssignmentsInGroup(data.domain, data.token, data.group_id);
+            return assignmentsInGroup;
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
     ipcMain.handle('axios:deleteAssignmentGroupAssignments', async (event, data) => {
         console.log('main.js > axios:deleteAssignmentGroupAssignments');
 

@@ -672,6 +672,74 @@ async function getAssignmentsInOtherGroups(data) {
     return reMappedAssignments;
 }
 
+async function getAssignmentsInGroup(domain, token, groupID) {
+    console.log('Getting assignments in group');
+    const query = `query getAssignmentsInGroup($groupID: ID, $nextPage: String) {
+        assignmentGroup(id: $groupID) {
+            assignmentsConnection(first: 100, after: $nextPage, filter: {gradingPeriodId: null}) {
+                pageInfo {
+                    endCursor
+                    hasNextPage
+                }
+                nodes {
+                    _id
+                    hasSubmittedSubmissions
+                    gradedSubmissionsExist
+                }
+            }
+        }
+    }`;
+    const variables = {
+        "groupID": groupID,
+        "nextPage": ''
+    };
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${domain}/api/graphql`,
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        data: {
+            query: query,
+            variables: variables
+        }
+    };
+    let nextPage = true;
+    const assignments = [];
+    while (nextPage) {
+        try {
+            const request = async () => {
+                return await axios(axiosConfig);
+            }
+            const response = await errorCheck(request);
+            if (response.status === 200) {
+                assignments.push(...response.data.data.assignmentGroup.assignmentsConnection.nodes);
+                if (response.data.data.assignmentGroup.assignmentsConnection.pageInfo.hasNextPage) {
+                    variables.nextPage = response.data.data.assignmentGroup.assignmentsConnection.pageInfo.endCursor;
+                } else {
+                    nextPage = false;
+                }
+            }
+        }
+        catch (error) {
+            throw error;
+        }
+    }
+    // filtering assignments that have submissions or graded submissions
+    const noGradesOrSubmissions = assignments.filter((assignment) => {
+        return !(assignment.gradedSubmissionsExist || assignment.hasSubmittedSubmissions)
+    });
+
+    // remapping to be more uniform id values
+    const reMappedAssignments = noGradesOrSubmissions.map(assignment => {
+        return {
+            id: assignment._id,
+        }
+    });
+    return reMappedAssignments;
+}
+
 async function getAssignmentsToMove(domain, courseID, token) {
     console.log('Getting assignments to move to single group');
     let query = `query GetAssignmentsToMove($courseId: ID!, $nextPage: String) {
@@ -973,5 +1041,5 @@ async function getNonModuleAssignments(domain, courseID, token) {
 // }) ();
 
 module.exports = {
-    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups
+    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups, getAssignmentsInGroup
 }

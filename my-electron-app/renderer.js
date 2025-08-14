@@ -1,6 +1,10 @@
 window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    window.menus.rightclick();
+    if (window.menus && window.menus.rightclick) {
+        window.menus.rightclick();
+    } else {
+        console.warn('window.menus API not available for context menu');
+    }
 });
 
 // formatting the domain 
@@ -28,32 +32,46 @@ document.addEventListener('focusin', (e) => {
 })
 
 // cut, copy, paste
-window.menus.onMenuCommand(async (data) => {
-    console.log('Returned from context Menu. The command is: ', data.command);
+function setupMenuHandlers() {
+    if (window.menus && window.menus.onMenuCommand) {
+        window.menus.onMenuCommand(async (data) => {
+            console.log('Returned from context Menu. The command is: ', data.command);
 
-    switch (data.command) {
-        case 'copy':
-            getSelectedText();
-            break;
-        case 'cut':
-            const selectedText = window.getSelection();
-            window.menus.writeText(selectedText.toString());
-            selectedText.deleteFromDocument();
-            break;
-        case 'paste':
-            console.log('The clipboard is ', data.text);
-            if (focusedTextBox) {
-                focusedTextBox.value += data.text;
+            switch (data.command) {
+                case 'copy':
+                    getSelectedText();
+                    break;
+                case 'cut':
+                    const selectedText = window.getSelection();
+                    window.menus.writeText(selectedText.toString());
+                    selectedText.deleteFromDocument();
+                    break;
+                case 'paste':
+                    console.log('The clipboard is ', data.text);
+                    if (focusedTextBox) {
+                        focusedTextBox.value += data.text;
+                    }
+                    break;
+                default:
+                    console.log('failed to paste');
             }
-            break;
-        default:
-            console.log('failed to paste');
+        });
+    } else {
+        console.warn('window.menus API not available, retrying...');
+        setTimeout(setupMenuHandlers, 100);
     }
-});
+}
+
+// Initialize menu handlers when DOM is loaded
+document.addEventListener('DOMContentLoaded', setupMenuHandlers);
 
 function getSelectedText() {
     const selectedText = window.getSelection();
-    window.menus.writeText(selectedText.toString());
+    if (window.menus && window.menus.writeText) {
+        window.menus.writeText(selectedText.toString());
+    } else {
+        console.warn('window.menus.writeText not available');
+    }
 }
 
 const endpointSelect = document.querySelector('#endpoints');
