@@ -424,6 +424,16 @@ app.whenReady().then(() => {
         }
     })
 
+    ipcMain.handle('axios:getNoDueDateAssignments', async (event, data) => {
+        console.log('main.js > axios:getNoDueDateAssignments');
+        try {
+            const results = await assignments.getNoDueDateAssignments(data.domain, data.course_id, data.token);
+            return results;
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
     ipcMain.handle('axios:deleteOldAssignments', async (event, data) => {
         console.log('main.js > axios:deleteOldAssignments');
 
@@ -1206,6 +1216,16 @@ app.whenReady().then(() => {
         try {
             const courseModules = await modules.getModules(data);
             return courseModules;
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
+    ipcMain.handle('axios:getAssignmentsInModules', async (event, data) => {
+        console.log('main.js > axios:getAssignmentsInModules');
+        try {
+            const result = await assignments.getAssignmentsInModules(data);
+            return result;
         } catch (error) {
             throw error.message;
         }

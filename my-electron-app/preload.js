@@ -86,6 +86,10 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:getOldAssignments', data);
     },
+    getNoDueDateAssignments: async (data) => {
+        console.log('preload > getNoDueDateAssignments');
+        return await ipcRenderer.invoke('axios:getNoDueDateAssignments', data);
+    },
     deleteOldAssignments: async (data) => {
         console.log('preload > deleteOldAssignments');
 
@@ -230,6 +234,10 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > getModules');
 
         return await ipcRenderer.invoke('axios:getModules', data);
+    },
+    getAssignmentsInModules: async (data) => {
+        console.log('preload.js > getAssignmentsInModules');
+        return await ipcRenderer.invoke('axios:getAssignmentsInModules', data);
     },
     deleteModules: async (data) => {
         console.log('preload.js > deleteModules');

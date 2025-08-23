@@ -15,6 +15,9 @@ function assignmentTemplate(e) {
         case 'delete-nosubmission-assignments':
             noSubmissionAssignments(e);
             break;
+        case 'delete-no-due-date-assignments':
+            deleteNoDueDateAssignments(e);
+            break;
         case 'delete-unpublished-assignments':
             unpublishedAssignments(e);
             break;
@@ -154,180 +157,114 @@ function assignmentCreator(e) {
         if (progressBar) {
             enhanceProgressBarWithPercent(progressBar);
         }
-    }
-    assignmentCreatorForm.hidden = false;
 
-    const submissionTypes = assignmentCreatorForm.querySelector('#submission-types');
+        // Wire up listeners ONCE when the form is created
+        const submissionTypes = assignmentCreatorForm.querySelector('#submission-types');
 
-    function uncheckAllSubmissions() {
-        submissionTypes.querySelector('#submission-none').checked = false;
-        submissionTypes.querySelector('#submission-on_paper').checked = false;
-        submissionTypes.querySelector('#submission-online_upload').checked = false;
-        submissionTypes.querySelector('#submission-online_text_entry').checked = false;
-        submissionTypes.querySelector('#submission-online_url').checked = false;
-        submissionTypes.querySelector('#submission-media_recording').checked = false;
-    }
-
-    function handleSubmissionTypes(e) {
-        if (e.target.id === 'submission-none' || e.target.id === 'submission-on_paper') {
-            uncheckAllSubmissions();
-            e.target.checked = true;
-        } else {
+        function uncheckAllSubmissions() {
             submissionTypes.querySelector('#submission-none').checked = false;
             submissionTypes.querySelector('#submission-on_paper').checked = false;
-        }
-    }
-    submissionTypes.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        handleSubmissionTypes(e);
-    });
-
-    const courseID = document.querySelector('#course-id');
-    courseID.addEventListener('change', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        checkCourseID(courseID, eContent);
-    });
-
-    const assignmentCreateBtn = assignmentCreatorForm.querySelector('#action-btn');
-    assignmentCreateBtn.addEventListener('click', async function (e) {
-        e.stopPropagation();
-        e.preventDefault();
-
-        assignmentCreateBtn.disabled = true;
-
-        // get values and inputs
-        const assigmentCreatorResponseContainer = assignmentCreatorForm.querySelector('#assignment-creator-response-container');
-        const domain = document.querySelector('#domain');
-        const apiToken = document.querySelector('#token');
-        const checkedSubTypes = submissionTypes.querySelectorAll('input[type="checkbox"]:checked');
-        const checkedSubmissionTypes = Array.from(checkedSubTypes).map((subType) => {
-            return subType.id.split('-')[1];
-        });
-        const assignmentNumber = assignmentCreatorForm.querySelector('#assignment-number').value.trim();
-        const assignmentPoints = assignmentCreatorForm.querySelector('#assignment-points');
-        const publish = assignmentCreatorForm.querySelector('#assignment-publish').checked;
-        const peerReviews = assignmentCreatorForm.querySelector('#assignment-peer').checked;
-        const anonymous = assignmentCreatorForm.querySelector('#assignment-anonymous').checked;
-        const gradeType = assignmentCreatorForm.querySelector('#assignment-grade-type').value;
-
-        const assignmentCreatorProgressDiv = assignmentCreatorForm.querySelector('#assignment-creator-progress-div');
-        const assignmentCreatorProgressBar = assignmentCreatorProgressDiv.querySelector('.progress-bar');
-        const assignmentCreatorProgressInfo = assignmentCreatorForm.querySelector('#assignment-creator-progress-info');
-
-        // clean environment
-        assignmentCreatorProgressDiv.hidden = false;
-        updateProgressWithPercent(assignmentCreatorProgressBar, 0);
-        enhanceProgressBarWithPercent(assignmentCreatorProgressBar);
-        assignmentCreatorProgressInfo.innerHTML = '';
-
-        // data to be used to create assignments
-        const requestData = {
-            domain: domain.value.trim(),
-            token: apiToken.value.trim(),
-            course_id: courseID.value.trim(),
-            number: parseInt(assignmentNumber),
-            name: 'Assignment',
-            points: parseInt(assignmentPoints.value.trim()),
-            publish: publish ? 'published' : 'unpublished',
-            peer_reviews: peerReviews,
-            anonymous: anonymous,
-            grade_type: gradeType,
-            submissionTypes: checkedSubmissionTypes
+            submissionTypes.querySelector('#submission-online_upload').checked = false;
+            submissionTypes.querySelector('#submission-online_text_entry').checked = false;
+            submissionTypes.querySelector('#submission-online_url').checked = false;
+            submissionTypes.querySelector('#submission-media_recording').checked = false;
         }
 
-
-        window.progressAPI.onUpdateProgress((progress) => {
-            updateProgressWithPercent(assignmentCreatorProgressBar, progress);
-        });
-
-        try {
-            const createAssignmentResponse = await window.axios.createAssignments(requestData);
-            if (createAssignmentResponse.successful.length > 0) {
-                assignmentCreatorProgressInfo.innerHTML = `Successfully created ${createAssignmentResponse.successful.length} assignments.`;
+        function handleSubmissionTypes(ev) {
+            if (ev.target.id === 'submission-none' || ev.target.id === 'submission-on_paper') {
+                uncheckAllSubmissions();
+                ev.target.checked = true;
+            } else {
+                submissionTypes.querySelector('#submission-none').checked = false;
+                submissionTypes.querySelector('#submission-on_paper').checked = false;
             }
-            if (createAssignmentResponse.failed.length > 0) {
-                assignmentCreatorProgressInfo.innerHTML += `Failed to create ${createAssignmentResponse.failed.length} assignments.`;
+        }
+        submissionTypes.addEventListener('change', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            handleSubmissionTypes(ev);
+        });
+
+        const courseID = assignmentCreatorForm.querySelector('#course-id');
+        courseID.addEventListener('change', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            checkCourseID(courseID, assignmentCreatorForm);
+        });
+
+        const assignmentCreateBtn = assignmentCreatorForm.querySelector('#action-btn');
+        assignmentCreateBtn.addEventListener('click', async function (ev) {
+            ev.stopPropagation();
+            ev.preventDefault();
+
+            assignmentCreateBtn.disabled = true;
+
+            // get values and inputs
+            const assigmentCreatorResponseContainer = assignmentCreatorForm.querySelector('#assignment-creator-response-container');
+            const domain = document.querySelector('#domain');
+            const apiToken = document.querySelector('#token');
+            const checkedSubTypes = submissionTypes.querySelectorAll('input[type="checkbox"]:checked');
+            const checkedSubmissionTypes = Array.from(checkedSubTypes).map((subType) => {
+                return subType.id.split('-')[1];
+            });
+            const assignmentNumber = assignmentCreatorForm.querySelector('#assignment-number').value.trim();
+            const assignmentPoints = assignmentCreatorForm.querySelector('#assignment-points');
+            const publish = assignmentCreatorForm.querySelector('#assignment-publish').checked;
+            const peerReviews = assignmentCreatorForm.querySelector('#assignment-peer').checked;
+            const anonymous = assignmentCreatorForm.querySelector('#assignment-anonymous').checked;
+            const gradeType = assignmentCreatorForm.querySelector('#assignment-grade-type').value;
+
+            const assignmentCreatorProgressDiv = assignmentCreatorForm.querySelector('#assignment-creator-progress-div');
+            const assignmentCreatorProgressBar = assignmentCreatorProgressDiv.querySelector('.progress-bar');
+            const assignmentCreatorProgressInfo = assignmentCreatorForm.querySelector('#assignment-creator-progress-info');
+
+            // clean environment
+            assignmentCreatorProgressDiv.hidden = false;
+            updateProgressWithPercent(assignmentCreatorProgressBar, 0);
+            enhanceProgressBarWithPercent(assignmentCreatorProgressBar);
+            assignmentCreatorProgressInfo.innerHTML = '';
+
+            // data to be used to create assignments
+            const requestData = {
+                domain: domain.value.trim(),
+                token: apiToken.value.trim(),
+                course_id: courseID.value.trim(),
+                number: parseInt(assignmentNumber),
+                name: 'Assignment',
+                points: parseInt(assignmentPoints.value.trim()),
+                publish: publish ? 'published' : 'unpublished',
+                peer_reviews: peerReviews,
+                anonymous: anonymous,
+                grade_type: gradeType,
+                submissionTypes: checkedSubmissionTypes
+            }
+
+
+            window.progressAPI.onUpdateProgress((progress) => {
+                updateProgressWithPercent(assignmentCreatorProgressBar, progress);
+            });
+
+            try {
+                const createAssignmentResponse = await window.axios.createAssignments(requestData);
+                if (createAssignmentResponse.successful.length > 0) {
+                    assignmentCreatorProgressInfo.innerHTML = `Successfully created ${createAssignmentResponse.successful.length} assignments.`;
+                }
+                if (createAssignmentResponse.failed.length > 0) {
+                    assignmentCreatorProgressInfo.innerHTML += `Failed to create ${createAssignmentResponse.failed.length} assignments.`;
+                    assignmentCreatorProgressBar.parentElement.hidden = true;
+                    errorHandler({ message: `${createAssignmentResponse.failed[0].reason}` }, assignmentCreatorProgressInfo);
+                }
+            } catch (error) {
                 assignmentCreatorProgressBar.parentElement.hidden = true;
-                errorHandler({ message: `${createAssignmentResponse.failed[0].reason}` }, assignmentCreatorProgressInfo);
-                // for (let failure of createAssignmentResponse.failed) {
-                //     errorHandler({ message: `${failure.reason}` }, progressInfo);
-                // }
-                // <span class='error'>${createAssignmentResponse.failed[0].reason}.</span>;
+                errorHandler(error, assignmentCreatorProgressInfo);
+            } finally {
+                assignmentCreateBtn.disabled = false;
             }
-        } catch (error) {
-            assignmentCreatorProgressBar.parentElement.hidden = true;
-            errorHandler(error, assignmentCreatorProgressInfo);
-        } finally {
-            assignmentCreateBtn.disabled = false;
-        }
-
-
-        // const assignments = { success: 0, failed: 0 };
-
-        // const createAssignment = async () => {
-        //     try {
-        //         // create assignments and returns true if successful and false if failed
-        //         const result = await window.axios.createAssignments(requestData);
-        //         if (result) {
-        //             assignments.success++;
-        //         } else {
-        //             assignments.failed++;
-        //         }
-        //     } catch (error) {
-        //         console.error('Error creating assignments', error);
-        //         assignments.failed++;
-        //     } finally {
-        //         updateProgress();
-        //     }
-        // }
-
-        // const totalRequests = parseInt(assignmentNumber);
-        // let completedRequests = 0;
-
-        // const updateProgress = () => {
-        //     completedRequests++;
-        //     progressBar.style.width = `${(completedRequests / totalRequests) * 100}%`;
-        // }
-
-        // const requests = [];
-        // for (let i = 0; i < totalRequests; i++) {
-        //     requests.push(createAssignment());
-        // }
-
-        // await Promise.allSettled(requests);
-        // console.log('All requests completed');
-        // progressBar.style.width = '100%'; // if for some reason the progress bar doesn't reach 100%
-
-        // // for (let i = 0; i < assignmentNumber; i++) {
-        // //     try {
-        // //         const result = await window.axios.createAssignments(requestData);
-        // //         if (result) {
-        // //             assignments.success++;
-        // //         } else {
-        // //             assignments.failed++;
-        // //         }
-        // //         progressBar.style.width = `${(i / assignmentNumber) * 100}%`;
-        // //     } catch (error) {
-        // //         console.error('Error creating assignments', error);
-        // //         assignments.failed++;
-        // //     }
-        // // }
-        // // progressBar.style.width = '100%';
-
-        // const progressInfo = eContent.querySelector('#progress-div p:first-of-type');
-        // if (assignments.success > 0) {
-        //     progressInfo.innerHTML = `Successfully created ${assignments.success} assignments.`;
-
-        // }
-        // if (assignments.failed > 0) {
-        //     responseContainer.innerHTML += `Failed to create ${assignments.failed} assignments.`;
-
-        // }
-    });
+        });
+    }
+    assignmentCreatorForm.hidden = false;
 }
 
 function noSubmissionAssignments(e) {
@@ -905,6 +842,36 @@ function nonModuleAssignments(e) {
                     <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
                 </div>
                 <div class="w-100"></div>
+                <div class="col-auto mt-3">
+                    <label class="form-label">Mode</label>
+                </div>
+                <div class="w-100"></div>
+                <div class="col-auto form-check form-check-inline mt-1">
+                    <input class="form-check-input" type="radio" name="danim-mode" id="danim-mode-all" value="all" checked>
+                    <label class="form-check-label" for="danim-mode-all">All assignments not in modules</label>
+                </div>
+                <div class="col-auto form-check form-check-inline mt-1">
+                    <input class="form-check-input" type="radio" name="danim-mode" id="danim-mode-specific" value="specific">
+                    <label class="form-check-label" for="danim-mode-specific">Specific modules</label>
+                </div>
+                <div class="w-100"></div>
+                <div id="danim-modules-picker" class="mt-2" hidden>
+                    <div class="mb-2">Enter module IDs (comma-separated) or fetch and select from the list.</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label" for="danim-module-ids">Module IDs</label>
+                            <input id="danim-module-ids" type="text" class="form-control" placeholder="e.g. 123,456" />
+                        </div>
+                        <div class="col-auto">
+                            <button id="danim-fetch-mods" type="button" class="btn btn-outline-secondary">Fetch course modules</button>
+                        </div>
+                    </div>
+                    <div class="mt-2" id="danim-modules-list-container" hidden>
+                        <div class="mb-1">Select one or more modules:</div>
+                        <div id="danim-modules-list" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+                <div class="w-100"></div>
                 <div class="col-auto">
                     <button id="action-btn" class="btn btn-primary mt-3">Check</button>
                 </div>
@@ -933,6 +900,67 @@ function nonModuleAssignments(e) {
         checkCourseID(courseID, eContent);
 
     })
+
+    // Mode toggle and module picker loading
+    const modeAll = deleteAssignmentsNotInModulesForm.querySelector('#danim-mode-all');
+    const modeSpecific = deleteAssignmentsNotInModulesForm.querySelector('#danim-mode-specific');
+    const modulesPicker = deleteAssignmentsNotInModulesForm.querySelector('#danim-modules-picker');
+    const modulesList = deleteAssignmentsNotInModulesForm.querySelector('#danim-modules-list');
+    const modulesListContainer = deleteAssignmentsNotInModulesForm.querySelector('#danim-modules-list-container');
+    const fetchModsBtn = deleteAssignmentsNotInModulesForm.querySelector('#danim-fetch-mods');
+    const moduleIdsInput = deleteAssignmentsNotInModulesForm.querySelector('#danim-module-ids');
+
+    async function fetchModules() {
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const cid = courseID.value.trim();
+        if (!cid || isNaN(Number(cid))) {
+            modulesListContainer.hidden = false;
+            modulesList.innerHTML = '<div class="text-danger">Enter a valid numeric Course ID first.</div>';
+            return;
+        }
+        fetchModsBtn.disabled = true;
+        modulesList.innerHTML = '<div class="text-muted">Loading modules…</div>';
+        modulesListContainer.hidden = false;
+        try {
+            const mods = await window.axios.getModules({ domain, token, course_id: cid });
+            modulesList.innerHTML = '';
+            if (!mods || mods.length === 0) {
+                modulesList.innerHTML = '<div class="text-muted">No modules found.</div>';
+                return;
+            }
+            mods.forEach(edge => {
+                const id = edge.node._id;
+                const name = edge.node.name;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'form-check';
+                wrapper.innerHTML = `
+                    <input class="form-check-input" type="checkbox" data-id="${id}" id="mod-${id}">
+                    <label class="form-check-label" for="mod-${id}">${name} <span class="text-muted">(${id})</span></label>
+                `;
+                modulesList.appendChild(wrapper);
+            });
+        } catch (err) {
+            modulesList.innerHTML = `<div class="text-danger">Failed to load modules: ${err}</div>`;
+        } finally {
+            fetchModsBtn.disabled = false;
+        }
+    }
+
+    function toggleModeUI() {
+        if (modeSpecific.checked) {
+            modulesPicker.hidden = false;
+        } else {
+            modulesPicker.hidden = true;
+        }
+    }
+    modeAll.addEventListener('change', toggleModeUI);
+    modeSpecific.addEventListener('change', toggleModeUI);
+    fetchModsBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        fetchModules();
+    });
 
     const checkBtn = deleteAssignmentsNotInModulesForm.querySelector('#action-btn');
     checkBtn.addEventListener('click', async function (e) {
@@ -963,8 +991,26 @@ function nonModuleAssignments(e) {
 
         let hasError = false;
         try {
-            assignments = await window.axios.getNonModuleAssignments(requestData);
-            danimProgressInfo.innerHTML = 'Done';
+            if (modeSpecific.checked) {
+                // Gather selected module IDs from manual input and fetched list
+                const manualIds = (moduleIdsInput.value || '')
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0 && !isNaN(Number(s)));
+                const selectedIds = Array.from(modulesList.querySelectorAll('input[type="checkbox"]:checked'))
+                    .map(cb => cb.getAttribute('data-id'));
+                const allIds = Array.from(new Set([...manualIds, ...selectedIds]));
+                if (allIds.length === 0) {
+                    danimProgressInfo.innerHTML = '<span style="color: red;">Enter or select at least one module.</span>';
+                    hasError = true;
+                } else {
+                    assignments = await window.axios.getAssignmentsInModules({ domain, token, course_id: courseID.value.trim(), module_ids: allIds });
+                    danimProgressInfo.innerHTML = 'Done';
+                }
+            } else {
+                assignments = await window.axios.getNonModuleAssignments(requestData);
+                danimProgressInfo.innerHTML = 'Done';
+            }
         } catch (error) {
             errorHandler(error, danimProgressInfo);
             hasError = true;
@@ -980,7 +1026,7 @@ function nonModuleAssignments(e) {
                 <div>
                     <div class="row align-items-center">
                         <div id="danim-response-details" class="col-auto">
-                            <span>Found ${assignments.length} assignments, without submissions or grades, not in modules.</span>
+                            <span>Found ${assignments.length} assignments, without submissions or grades, ${modeSpecific.checked ? 'in selected modules' : 'not in modules'}.</span>
                         </div>
 
                         <div class="w-100"></div>
@@ -1025,12 +1071,13 @@ function nonModuleAssignments(e) {
                 //     content: assignments
                 // }
 
+                const remapped = assignments.map(a => ({ id: a.id || a._id || a.node?._id }));
                 const messageData = {
                     domain,
                     token,
                     course_id: courseID.value.trim(),
-                    number: assignments.length,
-                    assignments: assignments
+                    number: remapped.length,
+                    assignments: remapped
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
@@ -1767,7 +1814,7 @@ function moveAssignmentsToSingleGroup(e) {
         moveAssignmentsForm.innerHTML = `
             <div>
                 <h3>Move Assignments to a Single Group</h3>
-                <div class="mt-3">Moves all assignments to the assignment group in position 1</div>
+                <div class="mt-3">Move all assignments to a specific assignment group. If no group is entered, the first assignment's group will be used.</div>
             </div>
             <div class="row align-items-center">
                 <div class="col-auto mt-3">
@@ -1779,6 +1826,17 @@ function moveAssignmentsToSingleGroup(e) {
                 </div>
                 <div class="col-auto" >
                     <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                </div>
+                <div class="w-100"></div>
+                <div class="col-auto mt-3">
+                    <label class="form-label">Assignment Group ID (optional)</label>
+                </div>
+                <div class="w-100"></div>
+                <div class="col-3">
+                    <input id="move-group-id" type="text" class="form-control" aria-describedby="group-checker" placeholder="e.g. 12345" />
+                </div>
+                <div class="col-auto">
+                    <span id="group-checker" class="form-text" style="display: none;">Must only contain numbers</span>
                 </div>
                 <div class="w-100"></div>
                 <div class="col-auto">
@@ -1813,6 +1871,23 @@ function moveAssignmentsToSingleGroup(e) {
         checkCourseID(courseID, eContent);
     });
 
+    // Simple numeric validation for optional group input
+    const groupIdInput = moveAssignmentsForm.querySelector('#move-group-id');
+    const groupChecker = moveAssignmentsForm.querySelector('#group-checker');
+    const moveBtnRef = moveAssignmentsForm.querySelector('#action-btn');
+    groupIdInput.addEventListener('input', (ev) => {
+        const val = groupIdInput.value.trim();
+        const hasVal = val !== '';
+        const isNum = !isNaN(Number(val));
+        if (hasVal && !isNum) {
+            groupChecker.style.display = 'inline';
+            moveBtnRef.disabled = true;
+        } else {
+            groupChecker.style.display = 'none';
+            moveBtnRef.disabled = false;
+        }
+    });
+
     const checkBtn = moveAssignmentsForm.querySelector('#action-btn');
     checkBtn.addEventListener('click', async function (e) {
         e.stopPropagation();
@@ -1821,9 +1896,9 @@ function moveAssignmentsToSingleGroup(e) {
         checkBtn.disabled = true;
         console.log('Inside renderer check');
 
-        const magResponseContainer = moveAssignmentsForm.querySelector('#mag-response-container');
-        const domain = moveAssignmentsForm.querySelector('#domain').value.trim();
-        const apiToken = moveAssignmentsForm.querySelector('#token').value.trim();
+    const magResponseContainer = moveAssignmentsForm.querySelector('#mag-response-container');
+    const domain = document.querySelector('#domain').value.trim();
+    const apiToken = document.querySelector('#token').value.trim();
         const magProgressDiv = moveAssignmentsForm.querySelector('#mag-progress-div');
         const magProgressBar = magProgressDiv.querySelector('.progress-bar');
         const magProgressInfo = moveAssignmentsForm.querySelector('#mag-progress-info');
@@ -1854,7 +1929,18 @@ function moveAssignmentsToSingleGroup(e) {
         }
 
         if (!hasError) {
-            let assignmentGroup = assignments[0].assignmentGroupId;
+            if (!assignments || assignments.length === 0) {
+                magResponseContainer.innerHTML = `
+                    <div class="alert alert-info mt-3">No assignments found for this course.</div>
+                `;
+                return;
+            }
+
+            // Use manual group id if provided and numeric, otherwise default to first assignment's group
+            const manualGroup = groupIdInput.value.trim();
+            let assignmentGroup = (!isNaN(Number(manualGroup)) && manualGroup !== '')
+                ? manualGroup
+                : assignments[0].assignmentGroupId;
 
             console.log('found assignments', assignments.length);
 
@@ -1863,7 +1949,8 @@ function moveAssignmentsToSingleGroup(e) {
                 <div>
                     <div class="row align-items-center">
                         <div id="mag-response-details" class="col-auto">
-                            <span>Found ${assignments.length} assignments in the course. Do you want to move them all to a since assignment group?</span>
+                            <span>Found ${assignments.length} assignments in the course. Do you want to move them all to a single assignment group?</span>
+                            <div class="form-text">Target group: ${(!isNaN(Number(manualGroup)) && manualGroup !== '') ? manualGroup : assignmentGroup} ${(!isNaN(Number(manualGroup)) && manualGroup !== '') ? '(manual)' : '(auto)'} </div>
                         </div>
 
                         <div class="w-100"></div>
@@ -1880,7 +1967,7 @@ function moveAssignmentsToSingleGroup(e) {
 
             const magResponseDetails = magResponseContainer.querySelector('#mag-response-details');
 
-            const cancelBtn = magResponseDetails.querySelector('#cancel-btn');
+            const cancelBtn = magResponseContainer.querySelector('#cancel-btn');
             cancelBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1891,7 +1978,7 @@ function moveAssignmentsToSingleGroup(e) {
                 //clearData(courseID, responseContent);
             });
 
-            const moveBtn = magResponseDetails.querySelector('#move-btn');
+            const moveBtn = magResponseContainer.querySelector('#move-btn');
             moveBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1924,10 +2011,10 @@ function moveAssignmentsToSingleGroup(e) {
                     const moveAssignmentsToSingleGroup = await window.axios.moveAssignmentsToSingleGroup(messageData);
 
                     if (moveAssignmentsToSingleGroup.successful.length > 0) {
-                        magProgressInfo.innerHTML = `Successfully removed ${moveAssignmentsToSingleGroup.successful.length} assignments.`;
+                        magProgressInfo.innerHTML = `Successfully moved ${moveAssignmentsToSingleGroup.successful.length} assignments.`;
                     }
                     if (moveAssignmentsToSingleGroup.failed.length > 0) {
-                        magProgressInfo.innerHTML = `Failed to remove ${moveAssignmentsToSingleGroup.failed.length} assignments.`;
+                        magProgressInfo.innerHTML = `Failed to move ${moveAssignmentsToSingleGroup.failed.length} assignments.`;
                     }
                     checkBtn.disabled = false;
                 } catch (error) {
@@ -2195,6 +2282,167 @@ function deleteAssignmentsInGroup(e) {
                     daigCheckBtn.disabled = false;
                 }
             });
+        }
+    });
+}
+function deleteNoDueDateAssignments(e) {
+    hideEndpoints(e);
+    console.log('renderer > deleteNoDueDateAssignments');
+
+    const eContent = document.querySelector('#endpoint-content');
+    let form = eContent.querySelector('#delete-no-due-date-assignments-form');
+
+    if (!form) {
+        form = document.createElement('form');
+        form.id = 'delete-no-due-date-assignments-form';
+        form.innerHTML = `
+            <div>
+                <h3>Delete Assignments Without a Due Date</h3>
+                <div>Finds assignments with no due date and without grades/submissions, then deletes them.</div>
+            </div>
+            <div class="row align-items-center">
+                <div class="col-auto mt-3">
+                    <label class="form-label">Course</label>
+                </div>
+                <div class="w-100"></div>
+                <div class="col-2">
+                    <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                </div>
+                <div class="col-auto">
+                    <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                </div>
+                <div class="w-100"></div>
+                <div class="col-auto">
+                    <button id="action-btn" class="btn btn-primary mt-3">Check</button>
+                </div>
+            </div>
+            <div hidden id="ndd-progress-div">
+                <p id="ndd-progress-info"></p>
+                <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="ndd-response-container" class="mt-5"></div>
+        `;
+        eContent.append(form);
+    }
+    form.hidden = false;
+
+    const courseID = form.querySelector('#course-id');
+    courseID.addEventListener('change', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        checkCourseID(courseID, eContent);
+    });
+
+    const checkBtn = form.querySelector('#action-btn');
+    checkBtn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        checkBtn.disabled = true;
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const nddResponseContainer = form.querySelector('#ndd-response-container');
+        const nddProgressDiv = form.querySelector('#ndd-progress-div');
+        const nddProgressBar = nddProgressDiv.querySelector('.progress-bar');
+        const nddProgressInfo = form.querySelector('#ndd-progress-info');
+
+        // clean environment
+        nddResponseContainer.innerHTML = '';
+        nddProgressDiv.hidden = false;
+        nddProgressBar.parentElement.hidden = true;
+        updateProgressWithPercent(nddProgressBar, 0);
+        enhanceProgressBarWithPercent(nddProgressBar);
+        nddProgressInfo.innerHTML = 'Checking...';
+
+        const requestData = {
+            domain,
+            token,
+            course_id: courseID.value.trim()
+        };
+
+        let assignments = [];
+        let hasError = false;
+        try {
+            assignments = await window.axios.getNoDueDateAssignments(requestData);
+            nddProgressInfo.innerHTML = 'Done';
+        } catch (error) {
+            errorHandler(error, nddProgressInfo);
+            hasError = true;
+        } finally {
+            checkBtn.disabled = false;
+        }
+
+        if (!hasError) {
+            nddResponseContainer.innerHTML = `
+                <div id="ndd-response-details">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <span>Found ${assignments.length} assignments without a due date.</span>
+                        </div>
+                        <div class="w-100"></div>
+                        <div class="col-2">
+                            <button id="remove-btn" type="button" class="btn btn-danger">Remove</button>
+                        </div>
+                        <div class="col-2">
+                            <button id="cancel-btn" type="button" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </div>
+                </div>`;
+
+            const details = nddResponseContainer.querySelector('#ndd-response-details');
+            const removeBtn = details.querySelector('#remove-btn');
+            const cancelBtn = details.querySelector('#cancel-btn');
+
+            cancelBtn.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                courseID.value = '';
+                nddResponseContainer.innerHTML = '';
+                checkBtn.disabled = false;
+            });
+
+            removeBtn.addEventListener('click', async (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+
+                details.innerHTML = '';
+                nddProgressBar.parentElement.hidden = false;
+                nddProgressInfo.innerHTML = `Removing ${assignments.length} assignments...`;
+
+                const assignmentIDs = assignments.map((a) => ({ id: a._id || a.id || a.node?._id }));
+                const messageData = {
+                    domain,
+                    token,
+                    course_id: courseID.value.trim(),
+                    number: assignmentIDs.length,
+                    assignments: assignmentIDs
+                };
+
+                window.progressAPI.onUpdateProgress((progress) => {
+                    updateProgressWithPercent(nddProgressBar, progress);
+                });
+
+                try {
+                    const response = await window.axios.deleteAssignments(messageData);
+                    if (response.successful.length > 0) {
+                        nddProgressInfo.innerHTML = `Successfully removed ${response.successful.length} assignments.`;
+                    }
+                    if (response.failed.length > 0) {
+                        nddProgressInfo.innerHTML += ` Failed to remove ${response.failed.length} assignments.`;
+                    }
+                } catch (error) {
+                    errorHandler(error, nddProgressInfo);
+                } finally {
+                    checkBtn.disabled = false;
+                }
+            });
+
+            if (assignments.length < 1) {
+                removeBtn.disabled = true;
+            }
         }
     });
 }

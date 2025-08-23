@@ -12,6 +12,7 @@ const pagination = require('./pagination.js');
 const csvExporter = require('./csvExporter');
 const axios = require('axios');
 const { deleteRequester, errorCheck } = require('./utilities.js');
+const modulesAPI = require('./modules');
 // const questionAsker = require('../questionAsker');
 // const readline = require('readline');
 
@@ -599,6 +600,59 @@ async function getUnpublishedAssignments(domain, course, token) {
     // return unPublishedAssignments;
 }
 
+async function getNoDueDateAssignments(domain, courseID, token) {
+    console.log('assignments.js > getNoDueDateAssignments');
+    const query = `query getNoDueDateAssignments($courseId: ID, $nextPage: String) {
+        course(id: $courseId) {
+            assignmentsConnection(first: 500, after: $nextPage, filter: {gradingPeriodId: null}) {
+                nodes {
+                    _id
+                    name
+                    dueAt
+                    hasSubmittedSubmissions
+                    gradedSubmissionsExist
+                }
+                pageInfo { endCursor hasNextPage }
+            }
+        }
+    }`;
+    const variables = { courseId: courseID, nextPage: "" };
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${domain}/api/graphql`,
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        data: { query, variables }
+    };
+    let next_page = true;
+    const all = [];
+    while (next_page) {
+        try {
+            const request = async () => axios(axiosConfig);
+            const response = await errorCheck(request);
+            if (response.data.data.course?.assignmentsConnection.nodes) {
+                all.push(...response.data.data.course.assignmentsConnection.nodes);
+                if (response.data.data.course.assignmentsConnection.pageInfo.hasNextPage) {
+                    variables.nextPage = response.data.data.course.assignmentsConnection.pageInfo.endCursor;
+                } else {
+                    next_page = false;
+                }
+            } else {
+                let newError = { status: 'Unknown', message: "Error course ID couldn't be found." };
+                throw newError;
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+    const noDue = all.filter(a => !a.dueAt);
+    const noGradesOrSubs = noDue.filter(a => !(a.hasSubmittedSubmissions || a.gradedSubmissionsExist));
+    // Return uniform id objects for deletion flow
+    return noGradesOrSubs.map(a => ({ id: a._id, name: a.name }));
+}
+
 async function getAssignmentsInOtherGroups(data) {
     const query = `query getAssignmentsInOtherGroups($courseID: ID, $nextPage: String) {
         course(id: $courseID) {
@@ -1023,6 +1077,110 @@ async function getNonModuleAssignments(domain, courseID, token) {
 
     return updatedID;
 }
+
+async function getAssignmentsInModules(data) {
+    // data: { domain, token, course_id, module_ids?: [id], module_names?: [name] }
+    console.log('assignments.js > getAssignmentsInModules');
+    const query = `
+        query AssignmentsInModules($courseId: ID, $nextPage: String) {
+            course(id: $courseId) {
+                assignmentsConnection(first: 500, after: $nextPage, filter: {gradingPeriodId: null}) {
+                    nodes {
+                        _id
+                        name
+                        gradedSubmissionsExist
+                        hasSubmittedSubmissions
+                        modules { _id id name }
+                        quiz { modules { _id id name } }
+                        discussion { modules { _id id name } }
+                    }
+                    pageInfo { endCursor hasNextPage }
+                }
+            }
+        }`;
+
+    const variables = { courseId: data.course_id, nextPage: "" };
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${data.domain}/api/graphql`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`,
+            'Content-Type': 'application/json'
+        },
+        data: { query, variables }
+    };
+
+    let next_page = true;
+    const all = [];
+    while (next_page) {
+        try {
+            const request = async () => axios(axiosConfig);
+            const response = await errorCheck(request);
+            if (response.data.data.course?.assignmentsConnection.nodes) {
+                all.push(...response.data.data.course.assignmentsConnection.nodes);
+                if (response.data.data.course.assignmentsConnection.pageInfo.hasNextPage) {
+                    variables.nextPage = response.data.data.course.assignmentsConnection.pageInfo.endCursor;
+                } else {
+                    next_page = false;
+                }
+            } else {
+                let newError = { status: 'Unknown', message: "Error course ID couldn't be found." };
+                throw newError;
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    let selectedIds = (data.module_ids || []).map(id => String(id));
+    let selectedNames = (data.module_names || []).map(n => (n || '').toLowerCase());
+
+    // If module IDs were provided (likely numeric _id), augment with relay IDs and names for robust matching
+    if (selectedIds.length > 0) {
+        try {
+            const mods = await modulesAPI.getModules({ domain: data.domain, token: data.token, course_id: data.course_id });
+            const idSet = new Set(selectedIds);
+            const relayIdsToAdd = [];
+            const namesToAdd = [];
+            mods.forEach(edge => {
+                const node = edge.node || {};
+                const nid = String(node._id || '');
+                if (nid && idSet.has(nid)) {
+                    if (node.id) relayIdsToAdd.push(String(node.id));
+                    if (node.name) namesToAdd.push(String(node.name).toLowerCase());
+                }
+            });
+            selectedIds = Array.from(new Set([...selectedIds, ...relayIdsToAdd]));
+            selectedNames = Array.from(new Set([...selectedNames, ...namesToAdd]));
+        } catch (e) {
+            // Non-fatal: continue with provided IDs/names
+            console.warn('getAssignmentsInModules: failed to augment module IDs via getModules', e?.message || e);
+        }
+    }
+    const inSelectedModules = all.filter(a => {
+        const names = [];
+        const ids = [];
+        if (a.modules) {
+            names.push(...a.modules.map(m => (m.name || '').toLowerCase()));
+            ids.push(...a.modules.map(m => String(m._id || m.id || '')));
+        }
+        if (a.quiz?.modules) {
+            names.push(...a.quiz.modules.map(m => (m.name || '').toLowerCase()));
+            ids.push(...a.quiz.modules.map(m => String(m._id || m.id || '')));
+        }
+        if (a.discussion?.modules) {
+            names.push(...a.discussion.modules.map(m => (m.name || '').toLowerCase()));
+            ids.push(...a.discussion.modules.map(m => String(m._id || m.id || '')));
+        }
+        const byId = selectedIds.length > 0 ? ids.some(mid => selectedIds.includes(mid)) : false;
+        const byName = selectedNames.length > 0 ? names.some(n => selectedNames.includes(n)) : false;
+        return byId || byName;
+    });
+
+    // filter out assignments with submissions or grades
+    const noGradesOrSubs = inSelectedModules.filter(a => !(a.gradedSubmissionsExist || a.hasSubmittedSubmissions));
+    return noGradesOrSubs.map(a => ({ id: a._id, name: a.name }));
+}
 // the function that does the stuff
 // (async () => {
 //     const curDomain = await questionAsker.questionDetails('What domain: ');
@@ -1041,5 +1199,5 @@ async function getNonModuleAssignments(domain, courseID, token) {
 // }) ();
 
 module.exports = {
-    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups, getAssignmentsInGroup
+    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups, getAssignmentsInGroup, getNoDueDateAssignments, getAssignmentsInModules
 }
