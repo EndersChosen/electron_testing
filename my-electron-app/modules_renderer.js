@@ -98,7 +98,8 @@ async function deleteModules(e) {
         responseContainer.innerHTML = '';
         progressDiv.hidden = false;
         progressBar.parentElement.hidden = true;
-        progressBar.style.width = '0%';
+        updateProgressWithPercent(progressBar, 0);
+        enhanceProgressBarWithPercent(progressBar);
         progressInfo.innerHTML = 'Checking...';
 
         const requestData = {
@@ -185,7 +186,7 @@ async function deleteModules(e) {
                 };
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    progressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(progressBar, progress);
                 });
 
                 try {
@@ -291,7 +292,8 @@ async function createModules(e) {
         responseContainer.innerHTML = '';
         progressDiv.hidden = false;
         progressBar.parentElement.hidden = true;
-        progressBar.style.width = '0%';
+        updateProgressWithPercent(progressBar, 0);
+        enhanceProgressBarWithPercent(progressBar);
         progressInfo.innerHTML = 'Creating...';
 
         const requestData = {
@@ -302,13 +304,13 @@ async function createModules(e) {
         };
 
         window.progressAPI.onUpdateProgress((progress) => {
-            progressBar.style.width = `${progress}%`;
+            updateProgressWithPercent(progressBar, progress);
         });
 
         try {
             const createdModules = await window.axios.createModules(requestData);
             progressInfo.innerHTML = 'Done';
-            progressBar.style.width = '100%';
+            updateProgressWithPercent(progressBar, 100);
 
             if (createdModules.successful.length === 0 && createdModules.failed.length === 0) {
                 responseContainer.innerHTML = `

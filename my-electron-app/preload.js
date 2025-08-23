@@ -32,6 +32,10 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('Inside preload axios:checkCommDomain');
         return await ipcRenderer.invoke('axios:checkCommDomain', data);
     },
+    resetCommChannelsByPattern: async (data) => {
+        console.log('Inside preload axios:resetCommChannelsByPattern');
+        return await ipcRenderer.invoke('axios:resetCommChannelsByPattern', data);
+    },
     createAssignments: async (data) => {
         console.log('inside preload createAssignments');
 
@@ -236,6 +240,16 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > createModules');
 
         return await ipcRenderer.invoke('axios:createModules', data);
+    },
+    updateNotifications: async (data) => {
+        console.log('preload.js > updateNotifications');
+
+        return await ipcRenderer.invoke('axios:updateNotifications', data);
+    },
+    getCommChannels: async (data) => {
+        console.log('preload.js > getCommChannels');
+
+        return await ipcRenderer.invoke('axios:getCommChannels', data);
     }
 });
 
@@ -296,5 +310,23 @@ contextBridge.exposeInMainWorld('menus', {
 contextBridge.exposeInMainWorld('shell', {
     openExternal: (data) => {
         ipcRenderer.send('shell:openExternal', data);
+    }
+});
+
+contextBridge.exposeInMainWorld('electronAPI', {
+    selectFolder: async () => {
+        return await ipcRenderer.invoke('sis:selectFolder');
+    },
+    previewSISData: async (fileType, rowCount, emailDomain, authProviderId, allOptions) => {
+        return await ipcRenderer.invoke('sis:previewData', fileType, rowCount, emailDomain, authProviderId, allOptions);
+    },
+    createSISFile: async (fileType, rowCount, outputPath, emailDomain, authProviderId, allOptions) => {
+        return await ipcRenderer.invoke('sis:createFile', fileType, rowCount, outputPath, emailDomain, authProviderId, allOptions);
+    },
+    createBulkSISFiles: async (fileTypes, rowCounts, outputPath, createZip, emailDomain, authProviderId, enrollmentOptions) => {
+        return await ipcRenderer.invoke('sis:createBulkFiles', fileTypes, rowCounts, outputPath, createZip, emailDomain, authProviderId, enrollmentOptions);
+    },
+    fetchAuthProviders: async (domain, token, accountId) => {
+        return await ipcRenderer.invoke('sis:fetchAuthProviders', domain, token, accountId);
     }
 });

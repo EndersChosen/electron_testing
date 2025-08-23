@@ -3,6 +3,7 @@
 // Communication Channel endpoints
 //
 // ****************************************
+
 async function commChannelTemplate(e) {
     switch (e.target.id) {
         case 'check-commchannel':
@@ -264,19 +265,32 @@ function resetComm(e) {
                     <input id="reset-single-email" type="checkbox" role="switch" class="form-check-input">
                 </div>
                 <div class="form-check form-switch">
-                    <label clas="form-label" for="reset-upload-input">Upload file to reset</label>
+                    <label clas="form-label" for="reset-pattern-emails">Reset emails by pattern</label>
+                    <input id="reset-pattern-emails" type="checkbox" role="switch" class="form-check-input">
+                    <div class="form-text">Use wildcards to match email patterns (e.g., *@domain.edu, student*@*.edu)</div>
+                </div>
+                <div class="form-check form-switch">
+                    <label clas="form-label" for="reset-upload-input">Upload file to reset (TXT or CSV)</label>
                     <input id="reset-upload-input" type="checkbox" role="switch" class="form-check-input">
+                    <div class="form-text">TXT: One email per line. CSV: Must have a column named 'path', 'email', 'email_address', or 'communication_channel_path' containing email addresses.</div>
                 </div>
             </div>
             <div id="reset-data-inputs" hidden>
                 <div id="reset-single-div">
-                    <input id="reset-single-input" type="text" class="form-control">
+                    <label for="reset-single-input" class="form-label">Email Address</label>
+                    <input id="reset-single-input" type="text" class="form-control" placeholder="user@example.com">
+                </div>
+                <div id="reset-pattern-div" hidden>
+                    <label for="reset-pattern-input" class="form-label">Email Pattern</label>
+                    <input id="reset-pattern-input" type="text" class="form-control" placeholder="*@domain.edu">
+                    <div class="form-text">Use wildcards (*) to match multiple emails. Examples: *@university.edu, student*@*.edu</div>
                 </div>
             </div>
         </div>
         <div id="reset-btns">
             <button id="reset-upload-btn" class="btn btn-primary mt-3" hidden>Upload</button>
             <button id="reset-single-btn" class="btn btn-primary mt-3" hidden>Reset</button>
+            <button id="reset-pattern-btn" class="btn btn-primary mt-3" hidden>Reset by Pattern</button>
         </div>
         <div hidden id="progress-div">
             <p id="progress-info"></p>
@@ -285,6 +299,7 @@ function resetComm(e) {
             </div>
         </div>
         <div id="reset-single-comm-response-container" class="mt-3" hidden></div>
+        <div id="reset-pattern-comm-response-container" class="mt-3" hidden></div>
         <div id="reset-upload-comm-response-container" class="mt-3" hidden></div>
         `;
 
@@ -294,6 +309,7 @@ function resetComm(e) {
 
 
     const singleContainer = resetCommForm.querySelector('#reset-single-comm-response-container');
+    const patternContainer = resetCommForm.querySelector('#reset-pattern-comm-response-container');
     const uploadContainer = resetCommForm.querySelector('#reset-upload-comm-response-container');
     const resetSwitches = resetCommForm.querySelector('#reset-switches');
     const inputs = resetSwitches.querySelectorAll('input');
@@ -301,8 +317,12 @@ function resetComm(e) {
     const resetBtns = resetCommForm.querySelector('#reset-btns');
     const allBtns = resetBtns.querySelectorAll('button');
     const resetBtn = resetCommForm.querySelector('#reset-single-btn');
+    const resetPatternBtn = resetCommForm.querySelector('#reset-pattern-btn');
     const uploadBtn = resetCommForm.querySelector('#reset-upload-btn');
     const resetSingleInput = resetCommForm.querySelector('#reset-single-input');
+    const resetPatternInput = resetCommForm.querySelector('#reset-pattern-input');
+    const resetSingleDiv = resetCommForm.querySelector('#reset-single-div');
+    const resetPatternDiv = resetCommForm.querySelector('#reset-pattern-div');
     const progresDiv = resetCommForm.querySelector('#progress-div');
     const progressInfo = resetCommForm.querySelector('#progress-info');
     const progressBar = resetCommForm.querySelector('.progress-bar');
@@ -318,7 +338,10 @@ function resetComm(e) {
             dataInputs.hidden = true;
             resetBtns.hidden = true;
             singleContainer.hidden = true;
+            patternContainer.hidden = true;
             uploadContainer.hidden = true;
+            resetSingleDiv.hidden = true;
+            resetPatternDiv.hidden = true;
         } else {
             resetBtns.hidden = false;
             for (let input of inputs) {
@@ -328,13 +351,28 @@ function resetComm(e) {
             }
             if (e.target.id === 'reset-single-email') {
                 dataInputs.hidden = false;
+                resetSingleDiv.hidden = false;
+                resetPatternDiv.hidden = true;
                 singleContainer.hidden = false;
+                patternContainer.hidden = true;
                 uploadContainer.hidden = true;
                 handleResetOptions(allBtns, resetBtn);
                 resetBtn.disabled = true;
+            } else if (e.target.id === 'reset-pattern-emails') {
+                dataInputs.hidden = false;
+                resetSingleDiv.hidden = true;
+                resetPatternDiv.hidden = false;
+                singleContainer.hidden = true;
+                patternContainer.hidden = false;
+                uploadContainer.hidden = true;
+                handleResetOptions(allBtns, resetPatternBtn);
+                resetPatternBtn.disabled = true;
             } else {
                 dataInputs.hidden = true;
+                resetSingleDiv.hidden = true;
+                resetPatternDiv.hidden = true;
                 singleContainer.hidden = true;
+                patternContainer.hidden = true;
                 uploadContainer.hidden = false;
                 handleResetOptions(allBtns, uploadBtn);
             }
@@ -357,6 +395,10 @@ function resetComm(e) {
 
     resetSingleInput.addEventListener('input', (e) => {
         resetBtn.disabled = resetSingleInput.value.trim().length < 1;
+    })
+
+    resetPatternInput.addEventListener('input', (e) => {
+        resetPatternBtn.disabled = resetPatternInput.value.trim().length < 1;
     })
 
     resetBtn.addEventListener('click', async (e) => {
@@ -396,6 +438,79 @@ function resetComm(e) {
             }
         } catch (error) {
             errorHandler(error, singleContainer);
+        };
+    });
+
+    resetPatternBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        resetPatternBtn.disabled = true;
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const resetPattern = resetPatternInput.value.trim();
+        const regionVal = resetCommForm.querySelector('#region').value;
+
+        // Show progress
+        progresDiv.hidden = false;
+        progressInfo.innerHTML = 'Searching for emails matching pattern...';
+        updateProgressWithPercent(progressBar, 0);
+
+        const requestData = {
+            domain: domain,
+            token: token,
+            pattern: resetPattern
+        };
+
+        window.progressAPI.onUpdateProgress((progress) => {
+            updateProgressWithPercent(progressBar, progress);
+        });
+
+        try {
+            const response = await window.axios.resetCommChannelsByPattern(requestData);
+            progresDiv.hidden = true;
+
+            patternContainer.innerHTML = `<h5>Pattern Reset Results</h5>`;
+            patternContainer.innerHTML += `<p>Pattern: <strong>${resetPattern}</strong></p>`;
+
+            if (response.totalProcessed === 0) {
+                patternContainer.innerHTML += `<p>No emails found matching the pattern.</p>`;
+            } else {
+                const totalBounceReset = response.successful.reduce((sum, item) => sum + item.value.bounce.reset, 0);
+                const totalSuppressionReset = response.successful.reduce((sum, item) => sum + item.value.suppression.reset, 0);
+
+                patternContainer.innerHTML += `<p>Total emails processed: ${response.totalProcessed}</p>`;
+
+                patternContainer.innerHTML += `<h6>Bounce List</h6>`;
+                if (totalBounceReset > 0) {
+                    patternContainer.innerHTML += `<p>Cleared ${totalBounceReset} email(s) from bounce list.</p>`;
+                } else {
+                    patternContainer.innerHTML += `<p>No emails were found on the bounce list.</p>`;
+                }
+
+                patternContainer.innerHTML += `<h6>Suppression List</h6>`;
+                if (totalSuppressionReset > 0) {
+                    patternContainer.innerHTML += `<p>Cleared ${totalSuppressionReset} email(s) from suppression list.</p>`;
+                } else {
+                    patternContainer.innerHTML += `<p>No emails were found on the suppression list.</p>`;
+                }
+
+                if (response.failed && response.failed.length > 0) {
+                    patternContainer.innerHTML += `<h6>Errors</h6>`;
+                    patternContainer.innerHTML += `<p>${response.failed.length} email(s) failed to process.</p>`;
+                }
+            }
+        } catch (error) {
+            progresDiv.hidden = true;
+            if (error.message.toLowerCase().includes('not implemented')) {
+                patternContainer.innerHTML = '<p class="text-warning">Pattern-based reset functionality needs to be implemented in the backend.</p>';
+            } else {
+                errorHandler(error, patternContainer);
+            }
+        } finally {
+            resetPatternBtn.disabled = false;
+            updateProgressWithPercent(progressBar, 0);
         };
     });
 
@@ -527,9 +642,9 @@ function unconfirmed(e) {
                     </div>
                 </div>
                 <div class="form-check form-switch">
-                    <label class="form-check-label" for="confirm-email-switch">Upload file of emails to confirm</label>
+                    <label class="form-check-label" for="confirm-email-switch">Upload file of emails to confirm (TXT or CSV)</label>
                     <input class="form-check-input" type="checkbox" role="switch" id="upload-email-switch" aria-describedby="confirm-file-description">
-                    <div id="confirm-file-description" class="form-text" hidden>Must be a simple text file only containing a list of emails. Emails may be comma separated or on individual lines</div>
+                    <div id="confirm-file-description" class="form-text" hidden>TXT: One email per line. CSV: Must have a column named 'path', 'email', 'email_address', or 'communication_channel_path' containing email addresses.</div>
                 </div>
                 <div class="form-check form-switch">
                     <label class="form-check-label" for="confirm-email-list-switch">Input list of emails to confirm</label>

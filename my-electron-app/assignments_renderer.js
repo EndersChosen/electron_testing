@@ -148,6 +148,12 @@ function assignmentCreator(e) {
             </div>
         `;
         eContent.append(assignmentCreatorForm);
+
+        // Enhance the progress bar with percent label
+        const progressBar = assignmentCreatorForm.querySelector('.progress-bar');
+        if (progressBar) {
+            enhanceProgressBarWithPercent(progressBar);
+        }
     }
     assignmentCreatorForm.hidden = false;
 
@@ -214,14 +220,15 @@ function assignmentCreator(e) {
 
         // clean environment
         assignmentCreatorProgressDiv.hidden = false;
-        assignmentCreatorProgressBar.style.width = '0%';
+        updateProgressWithPercent(assignmentCreatorProgressBar, 0);
+        enhanceProgressBarWithPercent(assignmentCreatorProgressBar);
         assignmentCreatorProgressInfo.innerHTML = '';
 
         // data to be used to create assignments
         const requestData = {
             domain: domain.value.trim(),
             token: apiToken.value.trim(),
-            course: courseID.value.trim(),
+            course_id: courseID.value.trim(),
             number: parseInt(assignmentNumber),
             name: 'Assignment',
             points: parseInt(assignmentPoints.value.trim()),
@@ -234,7 +241,7 @@ function assignmentCreator(e) {
 
 
         window.progressAPI.onUpdateProgress((progress) => {
-            assignmentCreatorProgressBar.style.width = `${progress}%`;
+            updateProgressWithPercent(assignmentCreatorProgressBar, progress);
         });
 
         try {
@@ -426,7 +433,8 @@ function noSubmissionAssignments(e) {
         nsaResponseContainer.innerHTML = '';
         nsaProgressDiv.hidden = false;
         nsaProgressBar.parentElement.hidden = true;
-        nsaProgressBar.style.width = '0%';
+        updateProgressWithPercent(nsaProgressBar, 0);
+        enhanceProgressBarWithPercent(nsaProgressBar);
         nsaProgressInfo.innerHTML = 'Checking...';
 
 
@@ -514,7 +522,7 @@ function noSubmissionAssignments(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    nsaProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(nsaProgressBar, progress);
                 });
 
                 try {
@@ -641,7 +649,8 @@ function unpublishedAssignments(e) {
 
         // clean environment
         duaProgressDiv.hidden = false;
-        duaProgressBar.style.width = '0%';
+        updateProgressWithPercent(duaProgressBar, 0);
+        enhanceProgressBarWithPercent(duaProgressBar);
         duaProgressBar.parentElement.hidden = true;
         duaProgressInfo.innerHTML = "Checking...";
 
@@ -709,7 +718,7 @@ function unpublishedAssignments(e) {
                 // responseDetails.innerHTML = `Removing ${assignments.length} assignments...`;
                 duaResponseDetails.innerHTML = ``;
                 duaProgressInfo.innerHTML = `Deleting ${assignments.length} assignments...`;
-                duaProgressBar.style.width = '0%';
+                updateProgressWithPercent(duaProgressBar, 0);
                 duaProgressBar.parentElement.hidden = false;
 
 
@@ -733,7 +742,7 @@ function unpublishedAssignments(e) {
 
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    duaProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(duaProgressBar, progress);
                 });
 
                 try {
@@ -943,7 +952,7 @@ function nonModuleAssignments(e) {
         // clean environment
         danimProgressDiv.hidden = false;
         danimProgressBar.parentElement.hidden = true;
-        danimProgressBar.style.width = '0%';
+        updateProgressWithPercent(danimProgressBar, 0);
         danimProgressInfo.innerHTML = "Checking...";
 
         const requestData = {
@@ -1025,7 +1034,7 @@ function nonModuleAssignments(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    danimProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(danimProgressBar, progress);
                 });
 
                 try {
@@ -1158,7 +1167,7 @@ function deleteOldAssignments(e) {
             doaResponseContainer.innerHTML = '';
             doaProgressDiv.hidden = false;
             doaProgressBar.parentElement.hidden = true;
-            doaProgressBar.style.width = '0%';
+            updateProgressWithPercent(doaProgressBar, 0);
             doaProgressInfo.innerHTML = 'Checking...';
 
             const requestData = {
@@ -1239,7 +1248,7 @@ function deleteOldAssignments(e) {
                         // responseDetails.innerHTML = `Removing ${assignments.length} assignments...`;
                         doaResponseDetails.innerHTML = ``;
                         doaProgressInfo.innerHTML = `Deleting ${assignments.length} assignments...`;
-                        doaProgressBar.style.width = '0%';
+                        updateProgressWithPercent(doaProgressBar, 0);
                         doaProgressBar.parentElement.hidden = false;
 
 
@@ -1263,7 +1272,7 @@ function deleteOldAssignments(e) {
 
 
                         window.progressAPI.onUpdateProgress((progress) => {
-                            doaProgressBar.style.width = `${progress}%`;
+                            updateProgressWithPercent(doaProgressBar, progress);
                         });
 
                         try {
@@ -1286,7 +1295,7 @@ function deleteOldAssignments(e) {
             doaResponseContainer.innerHTML = '';
             doaProgressDiv.hidden = false;
             doaProgressBar.parentElement.hidden = true;
-            doaProgressBar.style.width = '0%';
+            updateProgressWithPercent(doaProgressBar, 0);
             doaProgressInfo.innerHTML = '<span style="color: red;">Enter a valid due date</span>';
 
             deleteOldAssignmentsBtn.disabled = false;
@@ -1371,7 +1380,7 @@ function deleteAssignmentsFromImport(e) {
         // clearing values
         dafiResponseContainer.innerHTML = '';
         dafiProgressBar.parentElement.hidden = true;
-        dafiProgressBar.style.width = '0%';
+        updateProgressWithPercent(dafiProgressBar, 0);
         dafiProgressInfo.innerHTML = '';
         dafiProgressDiv.hidden = false;
 
@@ -1467,7 +1476,7 @@ function deleteAssignmentsFromImport(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    dafiProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(dafiProgressBar, progress);
                 });
 
                 try {
@@ -1618,7 +1627,7 @@ function keepAssignmentsInGroup(e) {
         // clean environment
         kaigProgressDiv.hidden = false;
         kaigProgressBar.parentElement.hidden = true;
-        kaigProgressBar.style.width = '0%';
+        updateProgressWithPercent(kaigProgressBar, 0);
         kaigProgressInfo.innerHTML = "Checking...";
 
         const data = {
@@ -1710,7 +1719,7 @@ function keepAssignmentsInGroup(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    kaigProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(kaigProgressBar, progress);
                 });
 
                 try {
@@ -1822,7 +1831,7 @@ function moveAssignmentsToSingleGroup(e) {
         // clean environment
         magProgressDiv.hidden = false;
         magProgressBar.parentElement.hidden = true;
-        magProgressBar.style.width = '0%';
+        updateProgressWithPercent(magProgressBar, 0);
         magProgressInfo.innerHTML = "Checking...";
 
         const data = {
@@ -1908,7 +1917,7 @@ function moveAssignmentsToSingleGroup(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    magProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(magProgressBar, progress);
                 });
 
                 try {
@@ -2085,7 +2094,7 @@ function deleteAssignmentsInGroup(e) {
 
         const daigProgressDiv = deleteAssignmentsInGroupForm.querySelector('#daig-progress-div');
         const daigProgressBar = daigProgressDiv.querySelector('.progress-bar');
-        daigProgressBar.style.width = '0%';
+        updateProgressWithPercent(daigProgressBar, 0);
         const daigProgressInfo = deleteAssignmentsInGroupForm.querySelector('#daig-progress-info');
         const daigResponseContainer = deleteAssignmentsInGroupForm.querySelector('#daig-response-container');
         // clean environment
@@ -2169,7 +2178,7 @@ function deleteAssignmentsInGroup(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    daigProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(daigProgressBar, progress);
                 });
 
                 try {

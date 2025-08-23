@@ -3,6 +3,7 @@
 // AssignmentGroup Endpoints
 //
 // ****************************************************
+
 function assignmentGroupTemplate(e) {
     switch (e.target.id) {
         case 'create-assignment-groups':
@@ -105,7 +106,7 @@ function emptyAssignmentGroups(e) {
         // clean environment
         eagProgressDiv.hidden = false;
         eagProgressBar.parentElement.hidden = true;
-        eagProgressBar.style.width = '0%';
+        updateProgressWithPercent(eagProgressBar, 0);
         eagProgressInfo.innerHTML = "Checking...";
         eagResponseContainer.innerHTML = '';
 
@@ -185,7 +186,7 @@ function emptyAssignmentGroups(e) {
                 }
 
                 window.progressAPI.onUpdateProgress((progress) => {
-                    eagProgressBar.style.width = `${progress}%`;
+                    updateProgressWithPercent(eagProgressBar, progress);
                 });
 
                 try {
@@ -305,7 +306,7 @@ function assignmentGroupCreator(e) {
         };
 
         window.progressAPI.onUpdateProgress((progress) => {
-            agcProgressBar.style.width = `${progress}%`;
+            updateProgressWithPercent(agcProgressBar, progress);
         });
 
         try {

@@ -3,6 +3,7 @@
 // Course endpoints
 //
 // ****************************************
+
 function courseTemplate(e) {
     switch (e.target.id) {
         case 'restore-content':
@@ -109,7 +110,7 @@ async function restoreContent(e) {
         // clean environment
         rcfProgressDiv.hidden = false;
         rcfProgressBar.parentElement.hidden = true;
-        rcfProgressBar.style.width = '0%';
+        updateProgressWithPercent(rcfProgressBar, 0);
         rcfProgressInfo.innerHTML = "Checking...";
 
         const data = {

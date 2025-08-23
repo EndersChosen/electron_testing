@@ -13,6 +13,37 @@ const REGION = {
     "yul": "https://4ib3vmp6bpq74pmitasw3v6wiy0etggh.lambda-url.ca-central-1.on.aws/emails/"
 }
 
+async function getBouncedData(data) {
+    console.log('comm_channels.js > getBounced');
+    const emails = [];
+
+    const url = `https://${data.domain}/api/v1/accounts/self/bounced_communication_channels?pattern=${data.pattern}`;
+
+    const axiosConfig = {
+        method: 'get',
+        url: url,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        }
+
+        const response = await errorCheck(request);
+        // if response.data.length > 1 push the data to emails starting at index 1
+        if (response.data.length > 1) {
+            emails.push(...response.data);
+        }
+        return emails;
+    } catch (error) {
+        throw error;
+    }
+
+}
+
 async function emailCheck(data) {
     const domain = data.domain;
     const token = data.token;
@@ -302,5 +333,5 @@ async function confirmEmail(data) {
 }
 
 module.exports = {
-    emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail
+    emailCheck, getBouncedData, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail
 }

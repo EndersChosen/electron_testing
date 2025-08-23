@@ -262,6 +262,12 @@ async function errorCheck(request) {
         return response;
     } catch (error) {
         console.log('there was an error');
+        if (error.response?.status) {
+            console.error(error.response.status);
+        }
+        if (error.response?.statusText) {
+            console.error(error.response.statusText);
+        }
         if (error.code && (error.code === 'ERR_TLS_CERT_ALTNAME_INVALID' || error.code === 'ENOTFOUND')) {
             newError = {
                 status: '404',

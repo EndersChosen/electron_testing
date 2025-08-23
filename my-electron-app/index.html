@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="styles.css">
     <script src="./node_modules/bootstrap/dist/js/bootstrap.min.js" defer></script>
+    <script src="./progress-utils.js" defer></script>
     <script src="./assignments_renderer.js" defer></script>
     <script src="./assignment_group_renderer.js" defer></script>
     <script src="./user_renderer.js" defer></script>
@@ -19,6 +20,7 @@
     <script src="./courses_renderer.js" defer></script>
     <script src="./quizzes_renderer.js" defer></script>
     <script src="./modules_renderer.js" defer></script>
+    <script src="./sis_imports_renderer.js" defer></script>
     <script src="./renderer.js" defer></script>
 </head>
 
@@ -161,6 +163,10 @@
                                         class="list-group-item list-group-item-action list-group-item-action border-start-0 border-end-0">
                                         Get users Page Views
                                     </buton>
+                                    <buton id="user-notifications"
+                                        class="list-group-item list-group-item-action list-group-item-action border-start-0 border-end-0">
+                                        Notifications
+                                    </buton>
                                 </div>
                             </div>
                         </div>
@@ -301,6 +307,28 @@
                                     <button id="create-modules"
                                         class="list-group-item list-group-item-action border-start-0 border-end-0">
                                         Create Module
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#sis-imports" aria-expanded="false" aria-controls="sis-imports">
+                                SIS File Generator
+                            </button>
+                        </h2>
+                        <div id="sis-imports" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                <div id="sis-import-endpoints" class="list-group">
+                                    <button id="create-single-sis-file"
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        Create Single SIS File
+                                    </button>
+                                    <button id="create-bulk-sis-files"
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        Create Bulk SIS Import Package
                                     </button>
                                 </div>
                             </div>

@@ -310,6 +310,657 @@ async function getPageViews(data) {
     return pageViews;
 }
 
+// valid frequency values: 'daily', 'weekly', 'never', 'immediately'
+async function updateNotifications(frequency, domain, user, commChannel, token) {
+    console.log('inside updateNotifications');
+
+    const notificationCategories = [
+        "announcement",
+        "due_date",
+        "course_content",
+        "grading_policies",
+        "grading",
+        "calendar",
+        "invitation",
+        "registration",
+        "discussion",
+        "late_grading",
+        "submission_comment",
+        "summaries",
+        "reminder",
+        "membership_update",
+        "other",
+        "discussionentry",
+        "migration",
+        "all_submissions",
+        "conversation_message",
+        "added_to_conversation",
+        "alert",
+        "student_appointment_signups",
+        "appointment_cancelations",
+        "appointment_availability",
+        "appointment_signups",
+        "files",
+        "announcement_created_by_you",
+        "conversation_created",
+        "recording_ready",
+        "blueprint",
+        "content_link_error",
+        "account_notification",
+        "discussion_mention",
+        "reported_reply"
+    ]
+
+    const notificationPreferences = {
+        "notification_preferences": [
+            {
+                "frequency": frequency,
+                "notification": "new_announcement",
+                "category": "announcement"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_due_date_changed",
+                "category": "due_date"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_changed",
+                "category": "course_content"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_created",
+                "category": "due_date"
+            },
+            {
+                "frequency": frequency,
+                "notification": "grade_weight_changed",
+                "category": "grading_policies"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_graded",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_event_created",
+                "category": "calendar"
+            },
+            {
+                "frequency": frequency,
+                "notification": "event_date_changed",
+                "category": "calendar"
+            },
+            {
+                "frequency": frequency,
+                "notification": "collaboration_invitation",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "web_conference_invitation",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "confirm_email_communication_channel",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "confirm_registration",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "forgot_password",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_discussion_topic",
+                "category": "discussion"
+            },
+            {
+                "frequency": frequency,
+                "notification": "enrollment_invitation",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "enrollment_notification",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_submitted_late",
+                "category": "late_grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "group_assignment_submitted_late",
+                "category": "late_grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submission_graded",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submission_comment",
+                "category": "submission_comment"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submission_grade_changed",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_wiki_page",
+                "category": "course_content"
+            },
+            {
+                "frequency": frequency,
+                "notification": "updated_wiki_page",
+                "category": "course_content"
+            },
+            {
+                "frequency": frequency,
+                "notification": "summaries",
+                "category": "summaries"
+            },
+            {
+                "frequency": frequency,
+                "notification": "enrollment_registration",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "rubric_assessment_submission_reminder",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "rubric_assessment_invitation",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "rubric_association_created",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_account_user",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_publishing_reminder",
+                "category": "reminder"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_grading_reminder",
+                "category": "reminder"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_due_date_reminder",
+                "category": "reminder"
+            },
+            {
+                "frequency": frequency,
+                "notification": "teacher_context_message",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_context_group_membership",
+                "category": "membership_update"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submission_comment_for_teacher",
+                "category": "submission_comment"
+            },
+            {
+                "frequency": frequency,
+                "notification": "enrollment_accepted",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_context_group_membership_invitation",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "group_membership_accepted",
+                "category": "membership_update"
+            },
+            {
+                "frequency": frequency,
+                "notification": "group_membership_rejected",
+                "category": "membership_update"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_student_organized_group",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_course",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_user",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_teacher_registration",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_discussion_entry",
+                "category": "discussion_entry"
+            },
+            {
+                "frequency": frequency,
+                "notification": "migration_export_ready",
+                "category": "migration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "migration_import_finished",
+                "category": "migration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "merge_email_communication_channel",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "migration_import_failed",
+                "category": "migration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_submitted",
+                "category": "all_submissions"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_resubmitted",
+                "category": "all_submissions"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_teacher_registration_immediate",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "report_generated",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "report_generation_failed",
+                "category": "other"
+            },
+            {
+                "frequency": frequency,
+                "notification": "account_user_registration",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "account_user_notification",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "pseudonym_registration",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "content_export_finished",
+                "category": "migration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "content_export_failed",
+                "category": "migration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "conversation_message",
+                "category": "conversation_message"
+            },
+            {
+                "frequency": frequency,
+                "notification": "added_to_conversation",
+                "category": "added_to_conversation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "alert",
+                "category": "alert"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_unmuted",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_canceled_by_user",
+                "category": "student_appointment_signups"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_deleted_for_user",
+                "category": "appointment_cancelations"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_group_deleted",
+                "category": "appointment_cancelations"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_group_published",
+                "category": "appointment_availability"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_group_updated",
+                "category": "appointment_availability"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_reserved_by_user",
+                "category": "student_appointment_signups"
+            },
+            {
+                "frequency": frequency,
+                "notification": "appointment_reserved_for_user",
+                "category": "appointment_signups"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_file_added",
+                "category": "files"
+            },
+            {
+                "frequency": frequency,
+                "notification": "new_files_added",
+                "category": "files"
+            },
+            {
+                "frequency": frequency,
+                "notification": "assignment_due_date_override_changed",
+                "category": "due_date"
+            },
+            {
+                "frequency": frequency,
+                "notification": "canvasnet_migration",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "course_started",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "course_starts_in_week",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "course_required_materials",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "course_already_started",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submission_needs_grading",
+                "category": "all_submissions"
+            },
+            {
+                "frequency": frequency,
+                "notification": "quiz_regrade_finished",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "self_enrollment_registration",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "twd_migration_new",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "twd_migration_existing",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "twd_migration_new_late",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "twd_migration_existing_late",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "peer_review_invitation",
+                "category": "invitation"
+            },
+            {
+                "frequency": frequency,
+                "notification": "announcement_created_by_you",
+                "category": "announcement_created_by_you"
+            },
+            {
+                "frequency": frequency,
+                "notification": "announcement_reply",
+                "category": "announcement_created_by_you"
+            },
+            {
+                "frequency": frequency,
+                "notification": "conversation_created",
+                "category": "conversation_created"
+            },
+            {
+                "frequency": frequency,
+                "notification": "web_conference_recording_ready",
+                "category": "recording_ready"
+            },
+            {
+                "frequency": frequency,
+                "notification": "pseudonym_registration_done",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "blueprint_content_added",
+                "category": "blueprint"
+            },
+            {
+                "frequency": frequency,
+                "notification": "blueprint_sync_complete",
+                "category": "blueprint"
+            },
+            {
+                "frequency": frequency,
+                "notification": "account_user_notification",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "content_link_error",
+                "category": "content_link_error"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submission_posted",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "submissions_posted",
+                "category": "grading"
+            },
+            {
+                "frequency": frequency,
+                "notification": "account_notification",
+                "category": "account_notification"
+            },
+            {
+                "frequency": frequency,
+                "notification": "manually_created_access_token_created",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "annotation_notification",
+                "category": "submission_comment"
+            },
+            {
+                "frequency": frequency,
+                "notification": "annotation_teacher_notification",
+                "category": "submission_comment"
+            },
+            {
+                "frequency": frequency,
+                "notification": "upcoming_assignment_alert",
+                "category": "due_date"
+            },
+            {
+                "frequency": frequency,
+                "notification": "discussion_mention",
+                "category": "discussion_mention"
+            },
+            {
+                "frequency": frequency,
+                "notification": "reported_reply",
+                "category": "reported_reply"
+            },
+            {
+                "frequency": frequency,
+                "notification": "account_verification",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "checkpoints_created",
+                "category": "due_date"
+            },
+            {
+                "frequency": frequency,
+                "notification": "access_token_created_on_behalf_of_user",
+                "category": "registration"
+            },
+            {
+                "frequency": frequency,
+                "notification": "access_token_deleted",
+                "category": "registration"
+            }
+        ]
+
+    }
+
+    // loop through all categories and set them to the frequency
+    // for (const category of notificationCategories) {
+
+    //     let url = `${domain}/api/v1/users/self/communication_channels/${commChannel}/notification_preference_categories/${category}?as_user_id=${user}`;
+
+    //     try {
+    //         const response = await fetch(url, {
+    //             method: 'PUT',
+    //             headers: {
+    //                 'Content-Type': 'application/json',
+    //                 'X-Csrf-Token': token
+    //             },
+    //             body: JSON.stringify({
+    //                 "notification_preferences": [
+    //                     {
+    //                         "frequency": frequency
+    //                     }
+    //                 ],
+    //             })
+    //         });
+    //     } catch (err) {
+    //         throw err;
+    //     }
+    // }
+    let url = `https://${domain}/api/v1/users/self/communication_channels/${commChannel}/notification_preferences/?as_user_id=${user}`;
+    
+    const axiosConfig = {
+        method: 'PUT',
+        url: url,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        data: notificationPreferences
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function getCommChannels(
+    domain,
+    user,
+    token
+) {
+    let url = `https://${domain}/api/v1/users/self/communication_channels/?as_user_id=${user}`;
+
+    const axiosConfig = {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        }
+    };
+    try {
+        const response = await axios(url, axiosConfig);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
 // function updateUserParams(person) {
 //     console.log('Updating user...');
 //     userData.user.name = person.firstName + ' ' + person.lastName;
@@ -367,5 +1018,5 @@ async function getPageViews(data) {
 // })();
 
 module.exports = {
-    addUsers, createUsers, enrollUser, getPageViews
+    addUsers, createUsers, enrollUser, getPageViews, getCommChannels, updateNotifications
 };

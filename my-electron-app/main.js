@@ -14,10 +14,10 @@ const convos = require('./conversations');
 const csvExporter = require('./csvExporter');
 const assignmentGroups = require('./assignment_groups');
 const assignments = require('./assignments');
-const { getPageViews, createUsers, enrollUser, addUsers } = require('./users');
+const { getPageViews, createUsers, enrollUser, addUsers, getCommChannels, updateNotifications } = require('./users');
 const { send } = require('process');
 const { deleteRequester, waitFunc } = require('./utilities');
-const { emailCheck, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } = require('./comm_channels');
+const { emailCheck, getBouncedData, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } = require('./comm_channels');
 const {
     restoreContent,
     resetCourse,
@@ -29,6 +29,7 @@ const {
 } = require('./courses');
 const quizzes_classic = require('./quizzes_classic');
 const modules = require('./modules');
+const sisImports = require('./sis_imports');
 
 let mainWindow;
 let suppressedEmails = [];
@@ -201,6 +202,25 @@ app.whenReady().then(() => {
         }
     });
 
+    ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
+        console.log('inside axios:resetCommChannelsByPattern');
+        const emails = [];
+        let moreEmails = true;
+
+        while (moreEmails) {
+            try {
+                const response = await checkUnconfirmedEmails(data);
+                if (response.length > 1) {
+                    emails.push(...response);
+                } else {
+                    moreEmails = false;
+                }
+            } catch (error) {
+                throw error.message;
+            }
+        }
+    });
+
     ipcMain.handle('axios:createAssignments', async (event, data) => {
         console.log('inside axios:createAssignments');
 
@@ -231,7 +251,13 @@ app.whenReady().then(() => {
                 domain: data.domain,
                 token: data.token,
                 course_id: data.course_id,
-                id: data.assignments[i]
+                anonymous: data.anonymous,
+                grade_type: data.grade_type,
+                name: data.name,
+                peer_reviews: data.peer_reviews,
+                points: data.points,
+                publish: data.publish,
+                submissionTypes: data.submissionTypes
             };
             requests.push({ id: i + 1, request: () => request(requestData) });
         }
@@ -979,7 +1005,7 @@ app.whenReady().then(() => {
     })
 
     ipcMain.handle('axios:resetEmails', async (event, data) => {
-        const fileContents = await getFileContents('txt');
+        const fileContents = await getFileContentsForEmails();
         if (fileContents != 'cancelled') {
             const emails = removeBlanks(fileContents.split(/\r?\n|\r|\,/))
                 .map((email) => { // remove spaces
@@ -1267,13 +1293,43 @@ app.whenReady().then(() => {
         }
     })
 
+    ipcMain.handle('axios:updateNotifications', async (event, data) => {
+        console.log('main.js > axios:updateNotifications');
+        
+        try {
+            const { domain, token, user, commChannel, frequency } = data;
+            
+            await updateNotifications(frequency, domain, user, commChannel, token);
+
+            return { success: true, data: 'Notifications updated successfully' };
+        } catch (error) {
+            console.error('Error updating notifications:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('axios:getCommChannels', async (event, data) => {
+        console.log('main.js > axios:getCommChannels');
+
+        try {
+            const { domain, token, user } = data;
+
+            const channels = await getCommChannels(domain, user, token);
+
+            return { success: true, data: channels };
+        } catch (error) {
+            console.error('Error fetching communication channels:', error);
+            return { success: false, error: error.message };
+        }
+    })
+
     ipcMain.handle('fileUpload:confirmEmails', async (event, data) => {
 
         let emails = [];
         // get the file contents
         try {
 
-            const fileContent = await getFileContents('txt');
+            const fileContent = await getFileContentsForEmails();
             emails = removeBlanks(fileContent.split(/\r?\n|\r|\,/))
                 .map((email) => { // remove spaces
                     return email.trim();
@@ -1329,7 +1385,7 @@ app.whenReady().then(() => {
     })
 
     ipcMain.handle('fileUpload:resetEmails', async (event, data) => {
-        const fileContent = await getFileContents('txt');
+        const fileContent = await getFileContentsForEmails();
 
         return true;
     });
@@ -1566,6 +1622,122 @@ async function getFileContents(ext) {
     }
 }
 
+async function getFileContentsForEmails() {
+    const options = {
+        properties: ['openFile'],
+        filters: [
+            { name: 'Text Files', extensions: ['txt'] },
+            { name: 'CSV Files', extensions: ['csv'] },
+            { name: 'All Files', extensions: ['*'] }
+        ],
+        modal: true
+    };
+
+    const result = await dialog.showOpenDialog(mainWindow, options);
+
+    if (result.canceled) {
+        return 'cancelled';
+    } else {
+        console.log(result.filePaths);
+        const filePath = result.filePaths[0];
+        const fileContent = await fs.promises.readFile(filePath, 'utf8');
+
+        // Determine file type based on extension
+        const fileExt = path.extname(filePath).toLowerCase();
+
+        if (fileExt === '.csv') {
+            try {
+                return parseEmailsFromCSV(fileContent);
+            } catch (error) {
+                throw new Error(`CSV parsing error: ${error.message}`);
+            }
+        } else {
+            // Handle as text file (original behavior)
+            return fileContent;
+        }
+    }
+}
+
+function parseEmailsFromCSV(csvContent) {
+    const lines = csvContent.split(/\r?\n/);
+    if (lines.length === 0) return '';
+
+    // Find the header row and locate the email column
+    const headerRow = lines[0];
+    const headers = parseCSVRow(headerRow);
+
+    // Look for email-related columns (case insensitive)
+    let emailColumnIndex = -1;
+    const emailColumnNames = ['path', 'email', 'email_address', 'communication_channel_path'];
+
+    for (let i = 0; i < headers.length; i++) {
+        const headerLower = headers[i].toLowerCase().trim();
+        if (emailColumnNames.includes(headerLower)) {
+            emailColumnIndex = i;
+            break;
+        }
+    }
+
+    if (emailColumnIndex === -1) {
+        const availableHeaders = headers.map(h => `"${h}"`).join(', ');
+        throw new Error(`Could not find email column in CSV. Expected column names: ${emailColumnNames.join(', ')}. Available columns: ${availableHeaders}`);
+    }
+
+    // Extract emails from the specified column
+    const emails = [];
+    let emailCount = 0;
+    for (let i = 1; i < lines.length; i++) { // Skip header row
+        const line = lines[i].trim();
+        if (line) {
+            const row = parseCSVRow(line);
+            if (row[emailColumnIndex] && row[emailColumnIndex].includes('@')) {
+                emails.push(row[emailColumnIndex].trim());
+                emailCount++;
+            }
+        }
+    }
+
+    console.log(`Parsed CSV: Found ${emailCount} emails from column "${headers[emailColumnIndex]}"`);
+
+    if (emailCount === 0) {
+        throw new Error(`No valid email addresses found in the "${headers[emailColumnIndex]}" column. Please ensure the column contains email addresses with @ symbols.`);
+    }
+
+    return emails.join('\n');
+}
+
+function parseCSVRow(row) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < row.length; i++) {
+        const char = row[i];
+
+        if (char === '"') {
+            if (inQuotes && row[i + 1] === '"') {
+                // Escaped quote
+                current += '"';
+                i++; // Skip next quote
+            } else {
+                // Toggle quote state
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            // End of field
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+
+    // Add the last field
+    result.push(current);
+
+    return result;
+}
+
 function removeBlanks(arr) {
     return arr.filter((element) => element.length > 0);
 }
@@ -1655,6 +1827,178 @@ function convertToPageViewsCsv(data) {
     }
     return csvRows;
 }
+
+// SIS Import IPC Handlers
+ipcMain.handle('sis:selectFolder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory']
+    });
+
+    if (result.canceled) {
+        return null;
+    }
+
+    return result.filePaths[0];
+});
+
+ipcMain.handle('sis:previewData', async (event, fileType, rowCount, emailDomain = '@school.edu', authProviderId = '', allOptions = {}) => {
+    try {
+        let csvContent = '';
+
+        // Extract individual options from the consolidated object
+        const enrollmentOptions = allOptions.enrollmentOptions || {};
+        const userOptions = allOptions.userOptions || {};
+        const accountOptions = allOptions.accountOptions || {};
+        const termOptions = allOptions.termOptions || {};
+        const courseOptions = allOptions.courseOptions || {};
+        const sectionOptions = allOptions.sectionOptions || {};
+        const groupCategoryOptions = allOptions.groupCategoryOptions || {};
+        const groupOptions = allOptions.groupOptions || {};
+        const groupMembershipOptions = allOptions.groupMembershipOptions || {};
+        const adminOptions = allOptions.adminOptions || {};
+        const loginOptions = allOptions.loginOptions || {};
+        const crossListingOptions = allOptions.crossListingOptions || {};
+        const userObserverOptions = allOptions.userObserverOptions || {};
+        const changeSisIdOptions = allOptions.changeSisIdOptions || {};
+        const differentiationTagSetOptions = allOptions.differentiationTagSetOptions || {};
+        const differentiationTagOptions = allOptions.differentiationTagOptions || {};
+        const differentiationTagMembershipOptions = allOptions.differentiationTagMembershipOptions || {};
+
+        switch (fileType) {
+            case 'users':
+                csvContent = sisImports.generateUsersCSV(rowCount, emailDomain, authProviderId, userOptions);
+                break;
+            case 'accounts':
+                csvContent = sisImports.generateAccountsCSV(rowCount, accountOptions);
+                break;
+            case 'terms':
+                csvContent = sisImports.generateTermsCSV(rowCount, termOptions);
+                break;
+            case 'courses':
+                csvContent = sisImports.generateCoursesCSV(rowCount, courseOptions);
+                break;
+            case 'sections':
+                csvContent = sisImports.generateSectionsCSV(rowCount, sectionOptions);
+                break;
+            case 'enrollments':
+                csvContent = sisImports.generateEnrollmentsCSV(rowCount, enrollmentOptions);
+                break;
+            case 'group_categories':
+                csvContent = sisImports.generateGroupCategoriesCSV(rowCount, groupCategoryOptions);
+                break;
+            case 'groups':
+                csvContent = sisImports.generateGroupsCSV(rowCount, groupOptions);
+                break;
+            case 'group_memberships':
+                csvContent = sisImports.generateGroupMembershipsCSV(rowCount, groupMembershipOptions);
+                break;
+            case 'differentiation_tag_sets':
+                csvContent = sisImports.generateDifferentiationTagSetsCSV(rowCount, differentiationTagSetOptions);
+                break;
+            case 'differentiation_tags':
+                csvContent = sisImports.generateDifferentiationTagsCSV(rowCount, differentiationTagOptions);
+                break;
+            case 'differentiation_tag_membership':
+                csvContent = sisImports.generateDifferentiationTagMembershipCSV(rowCount, differentiationTagMembershipOptions);
+                break;
+            case 'xlists':
+                csvContent = sisImports.generateXlistsCSV(rowCount, crossListingOptions);
+                break;
+            case 'user_observers':
+                csvContent = sisImports.generateUserObserversCSV(rowCount, userObserverOptions);
+                break;
+            case 'logins':
+                csvContent = sisImports.generateLoginsCSV(rowCount, emailDomain, authProviderId, loginOptions);
+                break;
+            case 'change_sis_id':
+                csvContent = sisImports.generateChangeSisIdCSV(rowCount, changeSisIdOptions);
+                break;
+            case 'admins':
+                csvContent = sisImports.generateAdminsCSV(rowCount, emailDomain, adminOptions);
+                break;
+            default:
+                throw new Error(`Unsupported file type: ${fileType}`);
+        }
+
+        return csvContent;
+    } catch (error) {
+        throw new Error(`Error generating preview: ${error.message}`);
+    }
+});
+
+ipcMain.handle('sis:fetchAuthProviders', async (event, domain, token, accountId = 1) => {
+    try {
+        const providers = await sisImports.fetchAuthenticationProviders(domain, token, accountId);
+        return providers;
+    } catch (error) {
+        throw new Error(`Error fetching authentication providers: ${error.message}`);
+    }
+});
+
+ipcMain.handle('sis:createFile', async (event, fileType, rowCount, outputPath, emailDomain = '@school.edu', authProviderId = '', allOptions = {}) => {
+    try {
+        // Extract individual options from the consolidated object
+        const enrollmentOptions = allOptions.enrollmentOptions || {};
+        const userOptions = allOptions.userOptions || {};
+        const accountOptions = allOptions.accountOptions || {};
+        const termOptions = allOptions.termOptions || {};
+        const courseOptions = allOptions.courseOptions || {};
+        const sectionOptions = allOptions.sectionOptions || {};
+        const groupCategoryOptions = allOptions.groupCategoryOptions || {};
+        const groupOptions = allOptions.groupOptions || {};
+        const groupMembershipOptions = allOptions.groupMembershipOptions || {};
+        const adminOptions = allOptions.adminOptions || {};
+        const loginOptions = allOptions.loginOptions || {};
+        const crossListingOptions = allOptions.crossListingOptions || {};
+        const userObserverOptions = allOptions.userObserverOptions || {};
+        const changeSisIdOptions = allOptions.changeSisIdOptions || {};
+        const differentiationTagSetOptions = allOptions.differentiationTagSetOptions || {};
+        const differentiationTagOptions = allOptions.differentiationTagOptions || {};
+        const differentiationTagMembershipOptions = allOptions.differentiationTagMembershipOptions || {};
+
+        const filePath = await sisImports.createSISImportFile(fileType, rowCount, outputPath, emailDomain, authProviderId, enrollmentOptions, userOptions, accountOptions, termOptions, courseOptions, sectionOptions, groupCategoryOptions, groupOptions, groupMembershipOptions, adminOptions, loginOptions, crossListingOptions, userObserverOptions, changeSisIdOptions, differentiationTagSetOptions, differentiationTagOptions, differentiationTagMembershipOptions);
+        const fileName = path.basename(filePath);
+
+        return {
+            success: true,
+            filePath: filePath,
+            fileName: fileName
+        };
+    } catch (error) {
+        throw new Error(`Error creating SIS file: ${error.message}`);
+    }
+});
+
+ipcMain.handle('sis:createBulkFiles', async (event, fileTypes, rowCounts, outputPath, createZip, emailDomain = '@school.edu', authProviderId = '', enrollmentOptions = {}) => {
+    try {
+        const createdFiles = await sisImports.createBulkSISImport(fileTypes, rowCounts, outputPath, emailDomain, authProviderId, enrollmentOptions);
+
+        let zipPath = null;
+        if (createZip && createdFiles.length > 0) {
+            // Create ZIP file using a simple approach
+            const JSZip = require('jszip');
+            const zip = new JSZip();
+
+            for (const filePath of createdFiles) {
+                const fileName = path.basename(filePath);
+                const fileContent = fs.readFileSync(filePath, 'utf8');
+                zip.file(fileName, fileContent);
+            }
+
+            const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+            zipPath = path.join(outputPath, 'sis_import_package.zip');
+            fs.writeFileSync(zipPath, zipContent);
+        }
+
+        return {
+            success: true,
+            files: createdFiles.map(file => path.basename(file)),
+            zipPath: zipPath
+        };
+    } catch (error) {
+        throw new Error(`Error creating bulk SIS files: ${error.message}`);
+    }
+});
 
 async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
     let myRequests = requests

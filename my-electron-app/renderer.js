@@ -104,6 +104,9 @@ endpointSelect.addEventListener('click', (e) => {
         case 'module-endpoints':
             moduleTemplate(e);
             break;
+        case 'sis-import-endpoints':
+            sisImportsTemplate(e);
+            break;
         default:
             break;
     }
@@ -178,6 +181,12 @@ function assignmentCourse(eContent) {
     `;
 
         eContent.append(eForm);
+
+        // Enhance the progress bar with percent label
+        const progressBar = eForm.querySelector('.progress-bar');
+        if (progressBar) {
+            enhanceProgressBarWithPercent(progressBar);
+        }
     }
 
 
