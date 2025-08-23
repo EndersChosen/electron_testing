@@ -304,10 +304,10 @@ function userNotifications(e) {
         const userValid = userID.value.trim().length > 0 && /^\d+$/.test(userID.value.trim());
         const commValid = commChannelID.value.trim().length > 0 && /^\d+$/.test(commChannelID.value.trim());
         const bothValid = userValid && commValid;
-        
+
         enableAllBtn.disabled = !bothValid;
         disableAllBtn.disabled = !bothValid;
-        
+
         // Ensure user ID field is never disabled
         userID.disabled = false;
     }
@@ -315,10 +315,10 @@ function userNotifications(e) {
     function updateFetchButtonState() {
         const userValid = userID.value.trim().length > 0 && /^\d+$/.test(userID.value.trim());
         fetchCommChannelsBtn.disabled = !userValid;
-        
+
         // Ensure user ID field is never disabled
         userID.disabled = false;
-    }    function clearCommChannelsWhenUserChanges() {
+    } function clearCommChannelsWhenUserChanges() {
         // Clear the dropdown and reset it to default state when user ID changes
         commChannelSelect.innerHTML = '<option value="">Select a communication channel...</option>';
         commChannelSelect.disabled = true;
@@ -394,7 +394,7 @@ function userNotifications(e) {
     // Initially disable buttons and ensure user ID field is enabled
     updateButtonStates();
     updateFetchButtonState();
-    
+
     // Explicitly ensure user ID field is enabled and editable
     userID.disabled = false;
     userID.readOnly = false;

@@ -917,7 +917,7 @@ async function updateNotifications(frequency, domain, user, commChannel, token) 
     //     }
     // }
     let url = `https://${domain}/api/v1/users/self/communication_channels/${commChannel}/notification_preferences/?as_user_id=${user}`;
-    
+
     const axiosConfig = {
         method: 'PUT',
         url: url,

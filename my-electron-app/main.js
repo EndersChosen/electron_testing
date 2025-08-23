@@ -1295,10 +1295,10 @@ app.whenReady().then(() => {
 
     ipcMain.handle('axios:updateNotifications', async (event, data) => {
         console.log('main.js > axios:updateNotifications');
-        
+
         try {
             const { domain, token, user, commChannel, frequency } = data;
-            
+
             await updateNotifications(frequency, domain, user, commChannel, token);
 
             return { success: true, data: 'Notifications updated successfully' };
