@@ -29,6 +29,7 @@ const {
 } = require('./courses');
 const quizzes_classic = require('./quizzes_classic');
 const modules = require('./modules');
+const quizzes_nq = require('./quizzes_nq');
 const sisImports = require('./sis_imports');
 
 let mainWindow;
@@ -202,24 +203,7 @@ app.whenReady().then(() => {
         }
     });
 
-    ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
-        console.log('inside axios:resetCommChannelsByPattern');
-        const emails = [];
-        let moreEmails = true;
-
-        while (moreEmails) {
-            try {
-                const response = await checkUnconfirmedEmails(data);
-                if (response.length > 1) {
-                    emails.push(...response);
-                } else {
-                    moreEmails = false;
-                }
-            } catch (error) {
-                throw error.message;
-            }
-        }
-    });
+    // Removed duplicate handler for 'axios:resetCommChannelsByPattern' (see single definition near bottom)
 
     ipcMain.handle('axios:createAssignments', async (event, data) => {
         console.log('inside axios:createAssignments');
@@ -838,6 +822,61 @@ app.whenReady().then(() => {
 
                 const assignmentResponses = await batchHandler(requests);
                 console.log('finished creating assignments.');
+            }
+
+            // Create Classic Quizzes if requested
+            if (data.course.addCQ.state && data.course.addCQ.number > 0) {
+                console.log('creating classic quizzes....');
+                try {
+                    await createClassicQuizzes({
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        quiz_type: 'assignment',
+                        publish: true,
+                        num_quizzes: data.course.addCQ.number
+                    });
+                    console.log('finished creating classic quizzes.');
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            // Create New Quizzes if requested
+            if (data.course.addNQ.state && data.course.addNQ.number > 0) {
+                console.log('creating new quizzes....');
+                const totalRequests = data.course.addNQ.number;
+                let completedRequests = 0;
+                const updateProgress = () => {
+                    completedRequests++;
+                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                };
+
+                const request = async (requestData) => {
+                    try {
+                        return await quizzes_nq.createNewQuiz(requestData);
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        updateProgress();
+                    }
+                };
+
+                const requests = [];
+                for (let i = 0; i < totalRequests; i++) {
+                    const requestData = {
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        quiz_title: `New Quiz ${i + 1}`,
+                        published: true,
+                        grading_type: 'points',
+                    };
+                    requests.push({ id: i + 1, request: () => request(requestData) });
+                }
+
+                await batchHandler(requests);
+                console.log('finished creating new quizzes.');
             }
         } catch (error) {
             throw error.message;
@@ -2018,6 +2057,74 @@ ipcMain.handle('sis:createBulkFiles', async (event, fileTypes, rowCounts, output
     } catch (error) {
         throw new Error(`Error creating bulk SIS files: ${error.message}`);
     }
+});
+
+// Progress helpers (main process)
+function progressStartIndeterminate(label = 'Working...') {
+    if (!mainWindow) return;
+    mainWindow.webContents.send('update-progress', { mode: 'indeterminate', label });
+    // Windows taskbar indeterminate
+    try { mainWindow.setProgressBar(0.5, { mode: 'indeterminate' }); } catch { }
+}
+
+function progressUpdateDeterminate(processed, total) {
+    if (!mainWindow) return;
+    const value = total > 0 ? processed / total : 0;
+    mainWindow.webContents.send('update-progress', { mode: 'determinate', value, processed, total });
+    try { mainWindow.setProgressBar(value, { mode: 'normal' }); } catch { }
+}
+
+function progressTickUnknown(processed, label) {
+    if (!mainWindow) return;
+    mainWindow.webContents.send('update-progress', { mode: 'indeterminate', processed, label });
+    try { mainWindow.setProgressBar(0.5, { mode: 'indeterminate' }); } catch { }
+}
+
+function progressDone() {
+    if (!mainWindow) return;
+    mainWindow.webContents.send('update-progress', { mode: 'done' });
+    try { mainWindow.setProgressBar(-1, { mode: 'none' }); } catch { }
+}
+
+// Example: unknown total flow (fixes undefined completedRequests/totalRequests bug)
+ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
+    console.log('inside axios:resetCommChannelsByPattern');
+
+    let emailResetResponse = [];
+    let moreEmails = true;
+    let processed = 0;
+
+    progressStartIndeterminate('Searching for bounced emails...');
+
+    while (moreEmails) {
+        try {
+            const response = await getBouncedData(data); // returns a chunk/page
+            if (response.length > 0) {
+                console.log(`Found ${response.length} emails, resetting...`);
+                for (const row of response) {
+                    const requestData = {
+                        domain: data.domain,
+                        token: data.token,
+                        email: row[4],
+                        region: data.region
+                    };
+                    emailResetResponse.push(await resetEmail(requestData));
+                    processed++;
+                    // tick in unknown mode; if you later know a total, call progressUpdateDeterminate(...)
+                    progressTickUnknown(processed, 'Resetting bounced emails...');
+                }
+            } else {
+                moreEmails = false;
+                console.log('No more emails found.');
+            }
+        } catch (error) {
+            progressDone();
+            throw error.message;
+        }
+    }
+
+    progressDone();
+    return emailResetResponse;
 });
 
 async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {

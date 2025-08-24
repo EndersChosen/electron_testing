@@ -424,12 +424,26 @@ async function createSupportCourse(e) {
                                 </div>
                             </div>
                             <div class="col-auto form-check form-switch">
-                                <label for="course-add-cq" class="form-label"><em style="color:gray;">Add Classic Quizzes - Disabled</em></label>
-                                <input type="checkbox" class="form-check-input" role="switch" id="course-add-cq" disabled>
+                                <label for="course-add-cq" class="form-label">Add Classic Quizzes</label>
+                                <input type="checkbox" class="form-check-input" role="switch" id="course-add-cq">
+                            </div>
+                            <div id="add-cq-div" class="row hidden">
+                                <div class="col-2">
+                                    <label for="course-add-cq-num" class="form-label">How many</label>
+                                    <input type="text" class="form-control" id="course-add-cq-num" aria-describedby="cq-num-help">
+                                    <div id="cq-num-help" class="form-text">Enter a positive number</div>
+                                </div>
                             </div>
                             <div class="col-auto form-check form-switch">
-                                <label for="course-add-nq" class="form-label"><em style="color:gray;">Add New Quizzes - Disabled</em></label>
-                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-nq" disabled>
+                                <label for="course-add-nq" class="form-label">Add New Quizzes</label>
+                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-nq">
+                            </div>
+                            <div id="add-nq-div" class="row hidden">
+                                <div class="col-2">
+                                    <label for="course-add-nq-num" class="form-label">How many</label>
+                                    <input type="text" class="form-control" id="course-add-nq-num" aria-describedby="nq-num-help">
+                                    <div id="nq-num-help" class="form-text">Enter a positive number</div>
+                                </div>
                             </div>
                             <div class="col-auto form-check form-switch">
                                 <label for="course-add-discussions" class="form-label"><em style="color:gray;">Add Discussions - Disabled</em></label>
@@ -558,10 +572,24 @@ async function createSupportCourse(e) {
     }
 
     function courseAddClassicToggle(e) {
-
+        const addCQDiv = createSupportCourseForm.querySelector('#add-cq-div');
+        if (e.target.checked) {
+            addCQDiv.classList.add('visible', 'mb-3');
+            addCQDiv.classList.remove('hidden');
+        } else {
+            addCQDiv.classList.add('hidden');
+            addCQDiv.classList.remove('visible', 'mb-3');
+        }
     }
     function courseAddNewQToggle(e) {
-
+        const addNQDiv = createSupportCourseForm.querySelector('#add-nq-div');
+        if (e.target.checked) {
+            addNQDiv.classList.add('visible', 'mb-3');
+            addNQDiv.classList.remove('hidden');
+        } else {
+            addNQDiv.classList.add('hidden');
+            addNQDiv.classList.remove('visible', 'mb-3');
+        }
     }
     function courseAddDiscussionsToggle(e) {
 
@@ -642,11 +670,13 @@ async function createSupportCourse(e) {
         const courseAddAssignmentsChbx = createSupportCourseForm.querySelector('#course-assignments').checked;
         const numOfAssignments = createSupportCourseForm.querySelector('#course-add-assignments').value;
 
-        // add Classic quizzes stuf
+        // add Classic quizzes stuff
         const courseAddCQChbx = createSupportCourseForm.querySelector('#course-add-cq').checked;
+        const numOfClassicQuizzes = parseInt(createSupportCourseForm.querySelector('#course-add-cq-num')?.value || '0', 10) || 0;
 
         // add New Quizzes stuff
         const courseAddNQChbx = createSupportCourseForm.querySelector('#course-add-nq').checked;
+        const numOfNewQuizzes = parseInt(createSupportCourseForm.querySelector('#course-add-nq-num')?.value || '0', 10) || 0;
 
         // add discussion stuff
         const courseAddDiscussionsChbx = createSupportCourseForm.querySelector('#course-add-discussions').checked;
@@ -687,11 +717,11 @@ async function createSupportCourse(e) {
                 },
                 addCQ: {
                     state: courseAddCQChbx,
-                    number: null
+                    number: numOfClassicQuizzes > 0 ? numOfClassicQuizzes : null
                 },
                 addNQ: {
                     state: courseAddNQChbx,
-                    number: null
+                    number: numOfNewQuizzes > 0 ? numOfNewQuizzes : null
                 },
                 addDiscussions: {
                     state: courseAddDiscussionsChbx,

@@ -293,7 +293,8 @@ contextBridge.exposeInMainWorld('fileUpload', {
 })
 
 contextBridge.exposeInMainWorld('progressAPI', {
-    onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_event, value) => callback(value))
+    // Forwards any progress payload from main (number or object)
+    onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_event, payload) => callback(payload))
 });
 
 contextBridge.exposeInMainWorld('testAPI', {

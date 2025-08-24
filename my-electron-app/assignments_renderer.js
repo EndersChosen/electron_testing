@@ -1896,9 +1896,9 @@ function moveAssignmentsToSingleGroup(e) {
         checkBtn.disabled = true;
         console.log('Inside renderer check');
 
-    const magResponseContainer = moveAssignmentsForm.querySelector('#mag-response-container');
-    const domain = document.querySelector('#domain').value.trim();
-    const apiToken = document.querySelector('#token').value.trim();
+        const magResponseContainer = moveAssignmentsForm.querySelector('#mag-response-container');
+        const domain = document.querySelector('#domain').value.trim();
+        const apiToken = document.querySelector('#token').value.trim();
         const magProgressDiv = moveAssignmentsForm.querySelector('#mag-progress-div');
         const magProgressBar = magProgressDiv.querySelector('.progress-bar');
         const magProgressInfo = moveAssignmentsForm.querySelector('#mag-progress-info');

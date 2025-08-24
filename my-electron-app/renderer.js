@@ -63,7 +63,13 @@ function setupMenuHandlers() {
 }
 
 // Initialize menu handlers when DOM is loaded
-document.addEventListener('DOMContentLoaded', setupMenuHandlers);
+document.addEventListener('DOMContentLoaded', () => {
+    setupMenuHandlers();
+    // Auto-attach global progress listener if containers exist
+    if (window.ProgressUtils && window.progressAPI) {
+        window.ProgressUtils.autoWireGlobalProgress();
+    }
+});
 
 function getSelectedText() {
     const selectedText = window.getSelection();

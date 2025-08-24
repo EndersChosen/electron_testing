@@ -13,11 +13,12 @@ const REGION = {
     "yul": "https://4ib3vmp6bpq74pmitasw3v6wiy0etggh.lambda-url.ca-central-1.on.aws/emails/"
 }
 
+// returns a list of bounced emails that match a pattern
 async function getBouncedData(data) {
     console.log('comm_channels.js > getBounced');
     const emails = [];
 
-    const url = `https://${data.domain}/api/v1/accounts/self/bounced_communication_channels?pattern=${data.pattern}`;
+    const url = `https://${data.domain}/api/v1/accounts/self/bounced_communication_channels?pattern=*${data.pattern}`;
 
     const axiosConfig = {
         method: 'get',
@@ -35,7 +36,7 @@ async function getBouncedData(data) {
         const response = await errorCheck(request);
         // if response.data.length > 1 push the data to emails starting at index 1
         if (response.data.length > 1) {
-            emails.push(...response.data);
+            emails.push(...response.data.slice(1));
         }
         return emails;
     } catch (error) {
@@ -80,7 +81,9 @@ async function awsCheck(domain, token, email) {
         const response = await errorCheck(request);
         return !!response.data?.suppressed;
     } catch (error) {
-        if (error.status.match(/404/)) {
+        // Treat 404 (numeric or string) as "not suppressed"
+        const statusStr = error && typeof error.status !== 'undefined' ? String(error.status) : '';
+        if (statusStr === '404') {
             return false;
         }
         throw error;

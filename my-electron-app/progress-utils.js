@@ -48,6 +48,121 @@ window.ProgressUtils = {
         if (percentLabel) {
             percentLabel.textContent = `${Math.round(percent)}%`;
         }
+    },
+
+    // Attach a progress handler to a specific progress container
+    // opts: { container: Element|String, barSelector?: String, infoSelector?: String }
+    attachGlobalProgressListener: function (opts = {}) {
+        const container = typeof opts.container === 'string'
+            ? document.querySelector(opts.container)
+            : (opts.container || document);
+
+        if (!container) return () => { };
+
+        // avoid double-binding on same container
+        if (container.dataset && container.dataset.progressAttached === '1') {
+            return () => { };
+        }
+
+        const barSel = opts.barSelector || '.progress-bar';
+        const infoSel = opts.infoSelector || '.progress-info, #progress-info';
+
+        const getNodes = () => {
+            const bar = container.querySelector(barSel);
+            // try multiple common info selectors
+            let info = container.querySelector(infoSel);
+            if (!info) info = container.querySelector('#daig-progress-info');
+            if (!info) info = container.querySelector('.progress-info');
+            const wrap = container.closest('#progress-div') || container;
+            return { bar, info, wrap };
+        };
+
+        const handler = (_e, msg) => {
+            const { bar, info, wrap } = getNodes();
+            if (!bar || !wrap) return;
+            if (wrap.hidden !== undefined) wrap.hidden = false;
+
+            // Back-compat: if msg is a number, treat as percent
+            if (typeof msg === 'number') {
+                bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                window.ProgressUtils.updateProgressWithPercent(bar, msg);
+                if (info) info.textContent = `${Math.round(msg)}%`;
+                return;
+            }
+
+            const mode = msg?.mode || 'determinate';
+            if (mode === 'indeterminate') {
+                bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+                bar.style.width = '100%';
+                if (info) {
+                    const count = (msg && typeof msg.processed === 'number') ? ` (${msg.processed})` : '';
+                    info.textContent = msg?.label ? `${msg.label}${count}` : `Processing${count}`;
+                }
+            } else if (mode === 'determinate') {
+                bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                const value = Math.max(0, Math.min(1, Number(msg?.value || 0)));
+                window.ProgressUtils.updateProgressWithPercent(bar, value * 100);
+                if (info) {
+                    const pct = Math.round(value * 100);
+                    if (typeof msg?.processed === 'number' && typeof msg?.total === 'number') {
+                        info.textContent = `Processed ${msg.processed}/${msg.total} (${pct}%)`;
+                    } else {
+                        info.textContent = `${pct}%`;
+                    }
+                }
+            } else if (mode === 'done') {
+                bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                bar.style.width = '100%';
+                if (info) info.textContent = 'Done';
+                setTimeout(() => { if (wrap.hidden !== undefined) wrap.hidden = true; }, 800);
+            }
+        };
+
+        // Subscribe via preload-exposed API if present, else noop
+        const unsubscribe = (window.progressAPI && window.progressAPI.onUpdateProgress)
+            ? window.progressAPI.onUpdateProgress((payload) => handler(null, payload))
+            : null;
+
+        if (container.dataset) container.dataset.progressAttached = '1';
+
+        // Return a detach function
+        return () => {
+            if (unsubscribe && window.ipcRenderer && window.ipcRenderer.removeListener) {
+                try { window.ipcRenderer.removeListener('update-progress', handler); } catch { }
+            }
+            if (container.dataset) delete container.dataset.progressAttached;
+        };
+    },
+
+    // Auto-wire any existing and future progress containers (#progress-div)
+    autoWireGlobalProgress: function () {
+        const wireAll = () => {
+            const nodes = document.querySelectorAll('#progress-div');
+            nodes.forEach((n) => {
+                window.ProgressUtils.attachGlobalProgressListener({ container: n });
+            });
+        };
+
+        // initial pass
+        wireAll();
+
+        // observe future additions
+        const observer = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                m.addedNodes && m.addedNodes.forEach((node) => {
+                    if (!(node instanceof Element)) return;
+                    if (node.id === 'progress-div') {
+                        window.ProgressUtils.attachGlobalProgressListener({ container: node });
+                    } else {
+                        const nested = node.querySelectorAll ? node.querySelectorAll('#progress-div') : [];
+                        nested.forEach((n) => window.ProgressUtils.attachGlobalProgressListener({ container: n }));
+                    }
+                });
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        return () => observer.disconnect();
     }
 };
 

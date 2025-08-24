@@ -60,7 +60,7 @@ function checkComm(e) {
                                 <option value="iad_pdx" selected>IAD/PDX</option>
                                 <option value="dub_fra">DUB/FRA</option>
                                 <option value="syd_sin">SYD/SIN</option>
-                                <option value="yul" selected>YUL</option>
+                                <option value="yul">YUL</option>
                             </select>
                         </div>
                     </div>
@@ -166,6 +166,10 @@ function checkComm(e) {
         const progresDiv = checkSuppressionListForm.querySelector('#progress-div');
         const progressBar = progresDiv.querySelector('.progress-bar');
         const progressInfo = checkSuppressionListForm.querySelector('#progress-info');
+        // Attach global progress listener for this form's progress area
+        if (window.ProgressUtils && window.progressAPI) {
+            window.ProgressUtils.attachGlobalProgressListener({ container: progresDiv });
+        }
 
         responseContainer.innerHTML = '';
 
@@ -256,7 +260,7 @@ function resetComm(e) {
                     <option value="iad_pdx" selected>IAD/PDX</option>
                     <option value="dub_fra">DUB/FRA</option>
                     <option value="syd_sin">SYD/SIN</option>
-                    <option value="yul" selected>YUL</option>
+                    <option value="yul">YUL</option>
                 </select>
             </div>
             <div id="reset-switches" class="mt-2">
@@ -294,6 +298,11 @@ function resetComm(e) {
         </div>
         <div hidden id="progress-div">
             <p id="progress-info"></p>
+            <div id="loading-wheel" hidden>
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
             <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                 <div class="progress-bar" style="width: 0%"></div>
             </div>
@@ -326,6 +335,8 @@ function resetComm(e) {
     const progresDiv = resetCommForm.querySelector('#progress-div');
     const progressInfo = resetCommForm.querySelector('#progress-info');
     const progressBar = resetCommForm.querySelector('.progress-bar');
+    const progressBarWrapper = resetCommForm.querySelector('.progress');
+    const loadingWheel = resetCommForm.querySelector('#loading-wheel');
 
     // listener for the toggle switches
     resetSwitches.addEventListener('change', (e) => {
@@ -405,6 +416,9 @@ function resetComm(e) {
         e.preventDefault();
         e.stopPropagation();
 
+        // prevent duplicate submissions
+        resetBtn.disabled = true;
+
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
         const resetValue = resetSingleInput.value.trim();
@@ -418,6 +432,12 @@ function resetComm(e) {
         };
 
         try {
+            // Show progress for single reset (unknown steps)
+            progresDiv.hidden = false;
+            if (loadingWheel) loadingWheel.hidden = false;
+            if (progressBarWrapper) progressBarWrapper.hidden = true;
+            progressInfo.textContent = 'Resetting communication channel...';
+
             const response = await window.axios.resetCommChannel(requestData);
             // { bounce: { status: reset},suppression: {status, reset}}
             singleContainer.innerHTML = `<h5>Bounce</h5>`;
@@ -439,6 +459,11 @@ function resetComm(e) {
         } catch (error) {
             errorHandler(error, singleContainer);
         };
+        // Always hide progress and restore controls
+        progresDiv.hidden = true;
+        if (loadingWheel) loadingWheel.hidden = true;
+        if (progressBarWrapper) progressBarWrapper.hidden = false;
+        resetBtn.disabled = false;
     });
 
     resetPatternBtn.addEventListener('click', async (e) => {
@@ -454,21 +479,26 @@ function resetComm(e) {
 
         // Show progress
         progresDiv.hidden = false;
-        progressInfo.innerHTML = 'Searching for emails matching pattern...';
-        updateProgressWithPercent(progressBar, 0);
+        // Unknown total -> show spinner and processed count
+        if (loadingWheel) loadingWheel.hidden = false;
+        if (progressBarWrapper) progressBarWrapper.hidden = true;
+        progressInfo.textContent = 'Searching for emails matching pattern... Processed: 0';
 
         const requestData = {
             domain: domain,
             token: token,
-            pattern: resetPattern
+            pattern: resetPattern,
+            region: regionVal
         };
 
-        window.progressAPI.onUpdateProgress((progress) => {
-            updateProgressWithPercent(progressBar, progress);
-        });
+        if (window.ProgressUtils && window.progressAPI) {
+            window.ProgressUtils.attachGlobalProgressListener({ container: progresDiv });
+        }
 
         try {
             const response = await window.axios.resetCommChannelsByPattern(requestData);
+            const totalProcessed = response.length;
+
             progresDiv.hidden = true;
 
             patternContainer.innerHTML = `<h5>Pattern Reset Results</h5>`;
@@ -477,10 +507,10 @@ function resetComm(e) {
             if (response.totalProcessed === 0) {
                 patternContainer.innerHTML += `<p>No emails found matching the pattern.</p>`;
             } else {
-                const totalBounceReset = response.successful.reduce((sum, item) => sum + item.value.bounce.reset, 0);
-                const totalSuppressionReset = response.successful.reduce((sum, item) => sum + item.value.suppression.reset, 0);
+                const totalBounceReset = response.reduce((sum, item) => sum + item.bounce.reset, 0);
+                const totalSuppressionReset = response.reduce((sum, item) => sum + item.suppression.reset, 0);
 
-                patternContainer.innerHTML += `<p>Total emails processed: ${response.totalProcessed}</p>`;
+                patternContainer.innerHTML += `<p>Total emails processed: ${totalProcessed}</p>`;
 
                 patternContainer.innerHTML += `<h6>Bounce List</h6>`;
                 if (totalBounceReset > 0) {
@@ -510,7 +540,10 @@ function resetComm(e) {
             }
         } finally {
             resetPatternBtn.disabled = false;
-            updateProgressWithPercent(progressBar, 0);
+            // Reset UI state
+            if (progressBar) progressBar.style.width = '0%';
+            if (loadingWheel) loadingWheel.hidden = true;
+            if (progressBarWrapper) progressBarWrapper.hidden = false;
         };
     });
 
@@ -530,12 +563,17 @@ function resetComm(e) {
             region: regionVal
         };
 
-        window.progressAPI.onUpdateProgress((progress) => {
-            progressBar.style.width = `${progress}%`;
-        });
+        if (window.ProgressUtils && window.progressAPI) {
+            window.ProgressUtils.attachGlobalProgressListener({ container: progresDiv });
+        }
 
         try {
             progresDiv.hidden = false;
+            // Unknown total -> show spinner and processed count
+            if (loadingWheel) loadingWheel.hidden = true; // ensure fresh state, then show
+            if (loadingWheel) loadingWheel.hidden = false;
+            if (progressBarWrapper) progressBarWrapper.hidden = true;
+            progressInfo.textContent = 'Processing... Processed: 0';
             uploadContainer.innerHTML = "Working...";
             const response = await window.axios.resetEmails(requestData);
             progresDiv.hidden = true;
@@ -604,7 +642,9 @@ function resetComm(e) {
             }
         } finally {
             uploadBtn.disabled = false;
-            progressBar.style.width = '0%';
+            if (progressBar) progressBar.style.width = '0%';
+            if (loadingWheel) loadingWheel.hidden = true;
+            if (progressBarWrapper) progressBarWrapper.hidden = false;
         };
     });
 }
@@ -660,6 +700,11 @@ function unconfirmed(e) {
     
             <div hidden id="progress-div">
                 <p id="progress-info"></p>
+                <div id="loading-wheel" hidden>
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
                 <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                     <div class="progress-bar" style="width: 0%"></div>
                 </div>
@@ -814,6 +859,8 @@ function unconfirmed(e) {
         const progresDiv = unconfirmedEmailForm.querySelector('#progress-div');
         const progressBar = progresDiv.querySelector('.progress-bar');
         const progressInfo = unconfirmedEmailForm.querySelector('#progress-info');
+        const progressBarWrapper = progresDiv.querySelector('.progress');
+        const loadingWheel = progresDiv.querySelector('#loading-wheel');
 
         progressInfo.innerHTML = '';
 
@@ -823,13 +870,15 @@ function unconfirmed(e) {
         }
 
         progresDiv.hidden = false;
-        window.progressAPI.onUpdateProgress((progress) => {
-            progressBar.style.width = `${progress}%`;
-        });
+        // Unknown total during file discovery -> show spinner and live processed count
+        if (loadingWheel) loadingWheel.hidden = false;
+        if (progressBarWrapper) progressBarWrapper.hidden = true;
+        progressInfo.textContent = 'Processing... Processed: 0';
 
         let totalEmails = 0;
         window.dataUpdate.onUpdate((data) => {
             totalEmails = data;
+            progressInfo.textContent = `Processing... Processed: ${totalEmails}`;
         });
         try {
             const result = await window.fileUpload.confirmEmails(requestData);
@@ -844,6 +893,8 @@ function unconfirmed(e) {
             errorHandler(error, progressInfo);
         } finally {
             uploadBtn.disabled = false;
+            if (loadingWheel) loadingWheel.hidden = true;
+            if (progressBarWrapper) progressBarWrapper.hidden = false;
         }
 
     }
@@ -858,6 +909,8 @@ function unconfirmed(e) {
         const progresDiv = unconfirmedEmailForm.querySelector('#progress-div');
         const progressBar = progresDiv.querySelector('.progress-bar');
         const progressInfo = unconfirmedEmailForm.querySelector('#progress-info');
+        const progressBarWrapper = progresDiv.querySelector('.progress');
+        const loadingWheel = progresDiv.querySelector('#loading-wheel');
         const emails = emailBox.value.split(/\r?\n|\n|\,/)
             .map((email) => email.trim());
 
@@ -870,6 +923,9 @@ function unconfirmed(e) {
         }
 
         progresDiv.hidden = false;
+        // Determinate: show progress bar, hide spinner
+        if (loadingWheel) loadingWheel.hidden = true;
+        if (progressBarWrapper) progressBarWrapper.hidden = false;
         window.progressAPI.onUpdateProgress((progress) => {
             progressBar.style.width = `${progress}%`;
         });
