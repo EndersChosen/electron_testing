@@ -446,20 +446,48 @@ async function createSupportCourse(e) {
                                 </div>
                             </div>
                             <div class="col-auto form-check form-switch">
-                                <label for="course-add-discussions" class="form-label"><em style="color:gray;">Add Discussions - Disabled</em></label>
-                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-discussions" disabled>
+                                <label for="course-add-discussions" class="form-label">Add Discussions</label>
+                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-discussions">
+                            </div>
+                            <div id="add-discussions-div" class="row hidden">
+                                <div class="col-2">
+                                    <label for="course-add-discussions-num" class="form-label">How many</label>
+                                    <input type="text" class="form-control" id="course-add-discussions-num" aria-describedby="discussions-num-help">
+                                    <div id="discussions-num-help" class="form-text">Enter a positive number</div>
+                                </div>
                             </div>
                             <div class="col-auto form-check form-switch">
-                                <label for="course-add-pages" class="form-label"><em style="color:gray;">Add Pages - Disabled</em></label>
-                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-pages" disabled>
+                                <label for="course-add-pages" class="form-label">Add Pages</label>
+                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-pages">
+                            </div>
+                            <div id="add-pages-div" class="row hidden">
+                                <div class="col-2">
+                                    <label for="course-add-pages-num" class="form-label">How many</label>
+                                    <input type="text" class="form-control" id="course-add-pages-num" aria-describedby="pages-num-help">
+                                    <div id="pages-num-help" class="form-text">Enter a positive number</div>
+                                </div>
                             </div>
                             <div class="col-auto form-check form-switch">
-                                <label for="course-add-modules" class="form-label"><em style="color:gray;">Add Modules - Disabled</em></label>
-                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-modules" disabled>
+                                <label for="course-add-modules" class="form-label">Add Modules</label>
+                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-modules">
+                            </div>
+                            <div id="add-modules-div" class="row hidden">
+                                <div class="col-2">
+                                    <label for="course-add-modules-num" class="form-label">How many</label>
+                                    <input type="text" class="form-control" id="course-add-modules-num" aria-describedby="modules-num-help">
+                                    <div id="modules-num-help" class="form-text">Enter a positive number</div>
+                                </div>
                             </div>
                             <div class="col-auto form-check form-switch">
-                                <label for="course-add-sections" class="form-label"><em style="color:gray;">Add Sections - Disabled</em></label>
-                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-sections" disabled>
+                                <label for="course-add-sections" class="form-label">Add Sections</label>
+                                <input type="checkbox" class="form-check-input"  role="switch" id="course-add-sections">
+                            </div>
+                            <div id="add-sections-div" class="row hidden">
+                                <div class="col-2">
+                                    <label for="course-add-sections-num" class="form-label">How many</label>
+                                    <input type="text" class="form-control" id="course-add-sections-num" aria-describedby="sections-num-help">
+                                    <div id="sections-num-help" class="form-text">Enter a positive number</div>
+                                </div>
                             </div>
                             <div class="col-auto form-check form-switch">
                                 <label for="course-submissions" class="form-label" disabled><em style="color: gray;">Create Submissions - Disabled</em></label>
@@ -592,16 +620,44 @@ async function createSupportCourse(e) {
         }
     }
     function courseAddDiscussionsToggle(e) {
-
+        const addDiv = createSupportCourseForm.querySelector('#add-discussions-div');
+        if (e.target.checked) {
+            addDiv.classList.add('visible', 'mb-3');
+            addDiv.classList.remove('hidden');
+        } else {
+            addDiv.classList.add('hidden');
+            addDiv.classList.remove('visible', 'mb-3');
+        }
     }
     function courseAddPagesToggle(e) {
-
+        const addDiv = createSupportCourseForm.querySelector('#add-pages-div');
+        if (e.target.checked) {
+            addDiv.classList.add('visible', 'mb-3');
+            addDiv.classList.remove('hidden');
+        } else {
+            addDiv.classList.add('hidden');
+            addDiv.classList.remove('visible', 'mb-3');
+        }
     }
     function courseAddModulesToggle(e) {
-
+        const addDiv = createSupportCourseForm.querySelector('#add-modules-div');
+        if (e.target.checked) {
+            addDiv.classList.add('visible', 'mb-3');
+            addDiv.classList.remove('hidden');
+        } else {
+            addDiv.classList.add('hidden');
+            addDiv.classList.remove('visible', 'mb-3');
+        }
     }
     function courseAddSectionsToggle(e) {
-
+        const addDiv = createSupportCourseForm.querySelector('#add-sections-div');
+        if (e.target.checked) {
+            addDiv.classList.add('visible', 'mb-3');
+            addDiv.classList.remove('hidden');
+        } else {
+            addDiv.classList.add('hidden');
+            addDiv.classList.remove('visible', 'mb-3');
+        }
     }
     function courseCreateSubmissionsToggle(e) {
 
@@ -680,15 +736,19 @@ async function createSupportCourse(e) {
 
         // add discussion stuff
         const courseAddDiscussionsChbx = createSupportCourseForm.querySelector('#course-add-discussions').checked;
+        const numOfDiscussions = parseInt(createSupportCourseForm.querySelector('#course-add-discussions-num')?.value || '0', 10) || 0;
 
         // add pages stuff
         const courseAddPagesChbx = createSupportCourseForm.querySelector('#course-add-pages').checked;
+        const numOfPages = parseInt(createSupportCourseForm.querySelector('#course-add-pages-num')?.value || '0', 10) || 0;
 
         // add module stuff
         const courseAddModulesChbx = createSupportCourseForm.querySelector('#course-add-modules').checked;
+        const numOfModules = parseInt(createSupportCourseForm.querySelector('#course-add-modules-num')?.value || '0', 10) || 0;
 
         // add section stuff
         const courseAddSectionsChbx = createSupportCourseForm.querySelector('#course-add-sections').checked;
+        const numOfSections = parseInt(createSupportCourseForm.querySelector('#course-add-sections-num')?.value || '0', 10) || 0;
 
         // create submisison stuff
         const courseSubmissionsChbx = createSupportCourseForm.querySelector('#course-submissions').checked;
@@ -725,19 +785,19 @@ async function createSupportCourse(e) {
                 },
                 addDiscussions: {
                     state: courseAddDiscussionsChbx,
-                    number: null
+                    number: numOfDiscussions > 0 ? numOfDiscussions : null
                 },
                 addPages: {
                     state: courseAddPagesChbx,
-                    number: null
+                    number: numOfPages > 0 ? numOfPages : null
                 },
                 addModules: {
                     state: courseAddModulesChbx,
-                    number: null
+                    number: numOfModules > 0 ? numOfModules : null
                 },
                 addSections: {
                     state: courseAddSectionsChbx,
-                    number: null
+                    number: numOfSections > 0 ? numOfSections : null
                 }
             }
         }
@@ -879,15 +939,33 @@ async function createAssociatedCourses(e) {
             if (isBluePrint) {
                 // create the courses to be added as associated courses
                 try {
+                    asscProgressDiv.hidden = false;
+                    asscProgressBar.style.width = '0%';
+                    asscProgressInfo.textContent = `Creating ${acValue} associated course(s)...`;
+
+                    if (window.progressAPI) {
+                        window.progressAPI.onUpdateProgress((progress) => {
+                            asscProgressBar.style.width = `${progress}%`;
+                        });
+                    }
+
                     const courseResponse = await window.axios.createBasicCourse(data);
+
+                    if (courseResponse.failed && courseResponse.failed.length > 0) {
+                        asscProgressInfo.textContent = `Failed to create ${courseResponse.failed.length} course(s). Aborting association.`;
+                        return;
+                    }
                     const associatedCourses = courseResponse.successful.map(course => course.value.id);
 
                     // adding the ids of the courses to be associated to the data set
                     data.associated_course_ids = associatedCourses;
 
+                    asscProgressInfo.textContent = `Associating ${associatedCourses.length} course(s) to blueprint and starting sync...`;
                     const associate = await window.axios.associateCourses(data);
-                    if (associate.workflow_state === 'queued') {
-                        asscProgressInfo.innerHTML = `Finished associating ${acValue} courses to the Blueprint, sync has started.`;
+                    if (associate?.workflow_state) {
+                        asscProgressInfo.textContent = `Association complete. Sync status: ${associate.workflow_state}.`;
+                    } else {
+                        asscProgressInfo.textContent = `Association complete.`;
                     }
                     console.log('Finished associating courses.');
 

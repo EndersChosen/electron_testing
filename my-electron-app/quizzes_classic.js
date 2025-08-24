@@ -4,6 +4,20 @@ const axios = require('axios');
 const pagination = require('./pagination.js');
 const { errorCheck } = require('./utilities.js');
 
+// Helper to POST a quiz question
+async function sendQuestion(requestConfig, questionData) {
+    requestConfig.data = { quiz_question: questionData };
+    try {
+        const request = async () => {
+            return await axios(requestConfig);
+        }
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
 
 async function getClassicQuizzes(data) {
     console.log("Getting Classic Quizzes");
@@ -127,12 +141,14 @@ async function createQuestions(data) {
         }
     };
 
+    // posting handled by sendQuestion helper
     // loop through all the question types
     // and add the number of questions specified for each type
     for (let qData of Object.keys(data.question_data)) {
         if (data.question_data[qData].enabled) {
+            const total = Number(data.question_data[qData].number) || 1;
             // loop through the number of question to add of the specific type
-            for (let qNum = 0; qNum < data.question_data[qData].number; qNum++) {
+            for (let qNum = 0; qNum < total; qNum++) {
                 switch (data.question_data[qData].name) {
                     case "calculated_question":
                         await addCalculatedQuestion(axiosConfig);
@@ -227,6 +243,7 @@ async function addCalculatedQuestion(requestConfig) {
             { "variables": [{ "name": "x", "value": 9 }], "answer_text": "14" }
         ]
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addEssayQuestion(requestConfig) {
@@ -244,6 +261,7 @@ async function addEssayQuestion(requestConfig) {
         text_after_answers: null,
         matching_answer_incorrect_matches: null
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addFileUploadQuestion(requestConfig) {
@@ -261,6 +279,7 @@ async function addFileUploadQuestion(requestConfig) {
         text_after_answers: null,
         matching_answer_incorrect_matches: null
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addFillInMultipleBlanksQuestion(requestConfig) {
@@ -312,6 +331,7 @@ async function addFillInMultipleBlanksQuestion(requestConfig) {
             }
         ]
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addMatchingQuestion(requestConfig) {
@@ -346,7 +366,7 @@ async function addMatchingQuestion(requestConfig) {
             }
         ]
     };
-
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addMultipleAnswerQuestion(requestConfig) {
@@ -426,6 +446,7 @@ async function addMultipleAnswerQuestion(requestConfig) {
             }
         ]
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addMultipleChoiceQuestion(requestConfig) {
@@ -506,20 +527,7 @@ async function addMultipleChoiceQuestion(requestConfig) {
             }
         ]
     };
-
-    requestConfig.data = {
-        "quiz_question": questionData
-    };
-
-    try {
-        const request = async () => {
-            return await axios(requestConfig);
-        }
-        const response = await errorCheck(request);
-        return response.data;
-    } catch (error) {
-        throw error
-    }
+    return await sendQuestion(requestConfig, questionData);
 
 }
 async function addMultipleDropdownsQuestion(requestConfig) {
@@ -603,6 +611,7 @@ async function addMultipleDropdownsQuestion(requestConfig) {
             }
         ]
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 async function addNumericalQuestion(requestConfig) {
@@ -642,10 +651,43 @@ async function addNumericalQuestion(requestConfig) {
             }
         ]
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
-async function addShortAnswerQuestion(requestConfig) { }
-async function addTextOnlyQuestion(requestConfig) { }
+async function addShortAnswerQuestion(requestConfig) {
+    const questionData = {
+        question_name: "Question",
+        assessment_question_id: null,
+        question_type: "short_answer_question",
+        points_possible: 1,
+        correct_comments_html: null,
+        incorrect_comments_html: null,
+        neutral_comments_html: null,
+        question_text: "<p>Short Answer</p>",
+        regrade_option: null,
+        position: 0,
+        text_after_answers: null,
+        matching_answer_incorrect_matches: null
+    };
+    return await sendQuestion(requestConfig, questionData);
+}
+async function addTextOnlyQuestion(requestConfig) {
+    const questionData = {
+        question_name: "Question",
+        assessment_question_id: null,
+        question_type: "text_only_question",
+        points_possible: 0,
+        correct_comments_html: null,
+        incorrect_comments_html: null,
+        neutral_comments_html: null,
+        question_text: "<p>Text Only</p>",
+        regrade_option: null,
+        position: 0,
+        text_after_answers: null,
+        matching_answer_incorrect_matches: null
+    };
+    return await sendQuestion(requestConfig, questionData);
+}
 async function addTrueFalseQuestion(requestConfig) {
     const questionData = {
         question_name: "Question",
@@ -703,6 +745,7 @@ async function addTrueFalseQuestion(requestConfig) {
             }
         ]
     };
+    return await sendQuestion(requestConfig, questionData);
 }
 
 module.exports = {

@@ -30,6 +30,9 @@ const {
 const quizzes_classic = require('./quizzes_classic');
 const modules = require('./modules');
 const quizzes_nq = require('./quizzes_nq');
+const discussions = require('./discussions');
+const pages = require('./pages');
+const sections = require('./sections');
 const sisImports = require('./sis_imports');
 
 let mainWindow;
@@ -808,9 +811,9 @@ app.whenReady().then(() => {
                     const requestData = {
                         domain: data.domain,
                         token: data.token,
-                        course: data.course_id,
+                        course_id: data.course_id,
                         name: `Assignment ${i + 1}`,
-                        submissionTypes: "online_upload",
+                        submissionTypes: ["online_upload"],
                         grade_type: "points",
                         points: 10,
                         publish: "published",
@@ -878,6 +881,138 @@ app.whenReady().then(() => {
                 await batchHandler(requests);
                 console.log('finished creating new quizzes.');
             }
+
+            // Create Discussions if requested
+            if (data.course.addDiscussions.state && data.course.addDiscussions.number > 0) {
+                console.log('creating discussions....');
+                const totalRequests = data.course.addDiscussions.number;
+                let completedRequests = 0;
+                const updateProgress = () => {
+                    completedRequests++;
+                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                };
+                const request = async (requestData) => {
+                    try {
+                        return await discussions.createDiscussion(requestData);
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        updateProgress();
+                    }
+                };
+                const requests = [];
+                for (let i = 0; i < totalRequests; i++) {
+                    const requestData = {
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        title: `Discussion ${i + 1}`,
+                        message: '',
+                        published: true,
+                    };
+                    requests.push({ id: i + 1, request: () => request(requestData) });
+                }
+                await batchHandler(requests);
+                console.log('finished creating discussions.');
+            }
+
+            // Create Pages if requested
+            if (data.course.addPages.state && data.course.addPages.number > 0) {
+                console.log('creating pages....');
+                const totalRequests = data.course.addPages.number;
+                let completedRequests = 0;
+                const updateProgress = () => {
+                    completedRequests++;
+                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                };
+                const request = async (requestData) => {
+                    try {
+                        return await pages.createPage(requestData);
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        updateProgress();
+                    }
+                };
+                const requests = [];
+                for (let i = 0; i < totalRequests; i++) {
+                    const requestData = {
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        title: `Page ${i + 1}`,
+                        body: '',
+                        published: true,
+                    };
+                    requests.push({ id: i + 1, request: () => request(requestData) });
+                }
+                await batchHandler(requests);
+                console.log('finished creating pages.');
+            }
+
+            // Create Modules if requested
+            if (data.course.addModules.state && data.course.addModules.number > 0) {
+                console.log('creating modules....');
+                const totalRequests = data.course.addModules.number;
+                let completedRequests = 0;
+                const updateProgress = () => {
+                    completedRequests++;
+                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                };
+                const request = async (requestData) => {
+                    try {
+                        return await modules.createModule(requestData);
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        updateProgress();
+                    }
+                };
+                const requests = [];
+                for (let i = 0; i < totalRequests; i++) {
+                    const requestData = {
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        module_name: `Module ${i + 1}`,
+                    };
+                    requests.push({ id: i + 1, request: () => request(requestData) });
+                }
+                await batchHandler(requests);
+                console.log('finished creating modules.');
+            }
+
+            // Create Sections if requested
+            if (data.course.addSections.state && data.course.addSections.number > 0) {
+                console.log('creating sections....');
+                const totalRequests = data.course.addSections.number;
+                let completedRequests = 0;
+                const updateProgress = () => {
+                    completedRequests++;
+                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                };
+                const request = async (requestData) => {
+                    try {
+                        return await sections.createSection(requestData);
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        updateProgress();
+                    }
+                };
+                const requests = [];
+                for (let i = 0; i < totalRequests; i++) {
+                    const requestData = {
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        name: `Section ${i + 1}`,
+                    };
+                    requests.push({ id: i + 1, request: () => request(requestData) });
+                }
+                await batchHandler(requests);
+                console.log('finished creating sections.');
+            }
         } catch (error) {
             throw error.message;
         }
@@ -892,12 +1027,19 @@ app.whenReady().then(() => {
         let completedRequests = 0;
         const totalRequests = data.acCourseNum;
 
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        };
+
         const request = async (requestData) => {
             try {
                 const response = await createSupportCourse(requestData)
                 return response;
             } catch (error) {
                 throw error;
+            } finally {
+                updateProgress();
             }
         };
 
@@ -922,7 +1064,8 @@ app.whenReady().then(() => {
         try {
             const associateRequest = await associateCourses(data); // associate the courses to the BP
             const migrationRequest = await syncBPCourses(data);
-            return migrationRequest.workflow_state;
+            // Return the full migration object so callers can inspect workflow_state and other fields
+            return migrationRequest;
         } catch (error) {
             throw error.message;
         }
