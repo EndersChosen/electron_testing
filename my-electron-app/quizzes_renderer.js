@@ -63,6 +63,26 @@ async function createQuiz(e) {
                     <div id="question-types" class="mt-3">
                         <h5>Questions</h5>
                         <div class="col-auto form-check form-switch" >
+                            <input id="true_false_question" class="form-check-input" type="checkbox" role="switch">
+                            <label for="true_false_question" class="form-check-label">True/False</label>
+                        </div>
+                        <div id="add-true-false-div" class="row hidden">
+                            <div class="col-2">
+                                <label for="add-true-false-input" class="form-label">How many</label>
+                                <input type="text" class="form-control" role="switch" id="add-true-false-input">
+                            </div>
+                        </div>
+                        <div class="col-auto form-check form-switch" >
+                            <input id="short_answer_question" class="form-check-input" type="checkbox" role="switch">
+                            <label for="short_answer_question" class="form-check-label">Fill in the Blank</label>
+                        </div>
+                        <div id="add-short-answer-div" class="row hidden">
+                            <div class="col-2">
+                                <label for="add-short-answer-input" class="form-label">How many</label>
+                                <input type="text" class="form-control" role="switch" id="add-short-answer-input">
+                            </div>
+                        </div>
+                        <div class="col-auto form-check form-switch" >
                             <input id="essay_question" class="form-check-input" type="checkbox" role="switch">
                             <label for="essay_question" class="form-check-label">Essay</label>
                         </div>
@@ -142,6 +162,16 @@ async function createQuiz(e) {
                                 <input type="text" class="form-control" role="switch" id="add-numerical-input">
                             </div>
                         </div>
+                        <div class="col-auto form-check form-switch" >
+                            <input id="calculated_question" class="form-check-input" type="checkbox" role="switch">
+                            <label for="calculated_question" class="form-check-label">Formula</label>
+                        </div>
+                        <div id="add-calculated-div" class="row hidden">
+                            <div class="col-2">
+                                <label for="add-calculated-input" class="form-label">How many</label>
+                                <input type="text" class="form-control" role="switch" id="add-calculated-input">
+                            </div>
+                        </div>
                     </div>           
                 </div>
                 <div class="w-100"></div>
@@ -182,6 +212,8 @@ async function createQuiz(e) {
 
     // map to use for eventHandler to toggle the div on or off
     const quizToggleMap = {
+        "true_false_question": 'add-true-false-div',
+        "short_answer_question": 'add-short-answer-div',
         "essay_question": 'add-essay-div',
         "file_upload_question": 'add-fileUpload-div',
         "fill_in_multiple_blanks_question": 'add-fill-mlt-blanks-div',
@@ -189,7 +221,8 @@ async function createQuiz(e) {
         "multiple_answers_question": 'add-mlt-answers-div',
         "multiple_choice_question": 'add-mlt-choice-div',
         "multiple_dropdowns_question": 'add-mlt-drop-div',
-        "numerical_question": 'add-numerical-div'
+        "numerical_question": 'add-numerical-div',
+        "calculated_question": 'add-calculated-div'
     }
 
     const questionToggles = createQuizForm.querySelector('#question-types');
@@ -227,9 +260,24 @@ async function createQuiz(e) {
         // finding out which question types to add
         const questionTypes = [
             {
+                name: "true_false_question",
+                enabled: createQuizForm.querySelector('#true_false_question').checked,
+                number: createQuizForm.querySelector('#add-true-false-input').value.trim()
+            },
+            {
+                name: "short_answer_question",
+                enabled: createQuizForm.querySelector('#short_answer_question').checked,
+                number: createQuizForm.querySelector('#add-short-answer-input').value.trim()
+            },
+            {
                 name: "numerical_question",
                 enabled: createQuizForm.querySelector('#numerical_question').checked,
                 number: createQuizForm.querySelector('#add-numerical-input').value.trim()
+            },
+            {
+                name: "calculated_question",
+                enabled: createQuizForm.querySelector('#calculated_question').checked,
+                number: createQuizForm.querySelector('#add-calculated-input').value.trim()
             },
             {
                 name: "multiple_dropdowns_question",

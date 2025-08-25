@@ -6,7 +6,8 @@ const { errorCheck } = require('./utilities.js');
 
 // Helper to POST a quiz question
 async function sendQuestion(requestConfig, questionData) {
-    requestConfig.data = { quiz_question: questionData };
+    // Canvas expects the payload wrapped under `question` when posting quiz questions
+    requestConfig.data = { question: questionData };
     try {
         const request = async () => {
             return await axios(requestConfig);

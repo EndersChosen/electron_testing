@@ -12,6 +12,9 @@ function assignmentTemplate(e) {
         case 'create-assignments':
             assignmentCreator(e);
             break;
+        case 'delete-assignments-combined':
+            deleteAssignmentsCombined(e);
+            break;
         case 'delete-nosubmission-assignments':
             noSubmissionAssignments(e);
             break;
@@ -42,6 +45,296 @@ function assignmentTemplate(e) {
         default:
             break;
     }
+}
+
+// Combined Delete Assignments with selectable filters (AND semantics)
+function deleteAssignmentsCombined(e) {
+    hideEndpoints(e);
+
+    const eContent = document.querySelector('#endpoint-content');
+    let form = eContent.querySelector('#combined-delete-assignments-form');
+
+    if (!form) {
+        form = document.createElement('form');
+        form.id = 'combined-delete-assignments-form';
+        form.innerHTML = `
+            <div>
+                <h3>Delete Assignments (combined filters)</h3>
+                <div class="text-muted">Select one or more filters. We'll find assignments that match ALL selected filters.</div>
+            </div>
+            <div class="row align-items-center">
+                <div class="col-auto"><label class="form-label">Course</label></div>
+                <div class="w-100"></div>
+                <div class="col-2">
+                    <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                </div>
+                <div class="col-auto">
+                    <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                </div>
+            </div>
+            <hr class="mt-2">
+            <div class="row g-3">
+                <div class="col-auto form-check">
+                    <input id="f-nonmodule" class="form-check-input" type="checkbox" />
+                    <label for="f-nonmodule" class="form-check-label">Not in a module</label>
+                </div>
+                <div class="col-auto form-check">
+                    <input id="f-noduedate" class="form-check-input" type="checkbox" />
+                    <label for="f-noduedate" class="form-check-label">No due date</label>
+                </div>
+                <div class="col-auto form-check">
+                    <input id="f-unpublished" class="form-check-input" type="checkbox" />
+                    <label for="f-unpublished" class="form-check-label">Unpublished</label>
+                </div>
+                <div class="col-auto form-check">
+                    <input id="f-nosubs" class="form-check-input" type="checkbox" />
+                    <label for="f-nosubs" class="form-check-label">No submissions</label>
+                </div>
+                <div class="w-100"></div>
+                <div class="col-auto form-check">
+                    <input id="f-older-than" class="form-check-input" type="checkbox" />
+                    <label for="f-older-than" class="form-check-label">Older than date (by due date)</label>
+                </div>
+                <div class="col-auto">
+                    <input id="f-older-date" class="form-control" type="date" disabled />
+                </div>
+                <div class="w-100"></div>
+                <div class="col-auto form-check">
+                    <input id="f-older-created" class="form-check-input" type="checkbox" />
+                    <label for="f-older-created" class="form-check-label">Older than date (by created at)</label>
+                </div>
+                <div class="col-auto">
+                    <input id="f-older-created-date" class="form-control" type="date" disabled />
+                </div>
+                <div class="w-100"></div>
+                <div class="col-auto form-check form-switch ms-3" id="nosubs-graded-wrap" hidden>
+                    <input id="f-nosubs-graded" class="form-check-input" type="checkbox" />
+                    <label for="f-nosubs-graded" class="form-check-label">Include assignments with grades</label>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button id="combined-check-btn" class="btn btn-primary">Check</button>
+            </div>
+            <div hidden id="combined-progress-div" class="mt-3">
+                <p id="combined-progress-info"></p>
+                <div class="progress mt-2" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="combined-response-container" class="mt-3"></div>
+        `;
+        eContent.append(form);
+
+        const courseID = form.querySelector('#course-id');
+        courseID.addEventListener('change', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            checkCourseID(courseID, form);
+        });
+
+        const fNoSubs = form.querySelector('#f-nosubs');
+        const gradedWrap = form.querySelector('#nosubs-graded-wrap');
+        fNoSubs.addEventListener('change', () => {
+            gradedWrap.hidden = !fNoSubs.checked;
+        });
+
+        // Toggle date input enablement based on older-than checkbox
+        const fOlder = form.querySelector('#f-older-than');
+        const fOlderDate = form.querySelector('#f-older-date');
+        fOlder.addEventListener('change', () => {
+            fOlderDate.disabled = !fOlder.checked;
+        });
+        const fOlderCreated = form.querySelector('#f-older-created');
+        const fOlderCreatedDate = form.querySelector('#f-older-created-date');
+        fOlderCreated.addEventListener('change', () => {
+            fOlderCreatedDate.disabled = !fOlderCreated.checked;
+        });
+
+    const checkBtn = form.querySelector('#combined-check-btn');
+        checkBtn.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            const domain = document.querySelector('#domain').value.trim();
+            const token = document.querySelector('#token').value.trim();
+            const cid = courseID.value.trim();
+            if (!cid || isNaN(Number(cid))) {
+                form.querySelector('#input-checker').style.display = 'inline';
+                return;
+            } else {
+                form.querySelector('#input-checker').style.display = 'none';
+            }
+
+            const useNonModule = form.querySelector('#f-nonmodule').checked;
+            const useNoDue = form.querySelector('#f-noduedate').checked;
+            const useUnpub = form.querySelector('#f-unpublished').checked;
+            const useNoSubs = fNoSubs.checked;
+            const includeGraded = form.querySelector('#f-nosubs-graded').checked; // only relevant if No submissions is on
+            const useOlder = fOlder.checked;
+            const olderDateVal = fOlderDate.value; // yyyy-mm-dd
+            const useOlderCreated = fOlderCreated.checked;
+            const olderCreatedDateVal = fOlderCreatedDate.value; // yyyy-mm-dd
+
+            const selectedCount = [useNonModule, useNoDue, useUnpub, useNoSubs, useOlder, useOlderCreated].filter(Boolean).length;
+            const responseDiv = form.querySelector('#combined-response-container');
+            const progressDiv = form.querySelector('#combined-progress-div');
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            const progressInfo = form.querySelector('#combined-progress-info');
+
+            responseDiv.innerHTML = '';
+            progressDiv.hidden = false;
+            progressBar.parentElement.hidden = true;
+            updateProgressWithPercent(progressBar, 0);
+            if (typeof enhanceProgressBarWithPercent === 'function') enhanceProgressBarWithPercent(progressBar);
+            progressInfo.innerHTML = 'Checking...';
+
+            if (selectedCount === 0) {
+                progressInfo.innerHTML = '<span style="color: red;">Select at least one filter.</span>';
+                return;
+            }
+
+            if (useOlder && !olderDateVal) {
+                progressInfo.innerHTML = '<span style="color: red;">Select a date for the "Older than" filter.</span>';
+                return;
+            }
+            if (useOlderCreated && !olderCreatedDateVal) {
+                progressInfo.innerHTML = '<span style="color: red;">Select a date for the "Older than (created at)" filter.</span>';
+                return;
+            }
+
+            // Only disable the button once we know we're executing a real check
+            checkBtn.disabled = true;
+            try {
+                // Fetch selected sets in parallel
+                const promises = [];
+                if (useNonModule) {
+                    promises.push(window.axios.getNonModuleAssignments({ domain, token, course: cid }));
+                } else { promises.push(Promise.resolve(null)); }
+                if (useNoDue) {
+                    promises.push(window.axios.getNoDueDateAssignments({ domain, token, course_id: cid }));
+                } else { promises.push(Promise.resolve(null)); }
+                if (useUnpub) {
+                    promises.push(window.axios.getUnpublishedAssignments({ domain, token, course: cid }));
+                } else { promises.push(Promise.resolve(null)); }
+                if (useNoSubs) {
+                    promises.push(window.axios.getNoSubmissionAssignments({ domain, token, course_id: cid, graded: includeGraded }));
+                } else { promises.push(Promise.resolve(null)); }
+                if (useOlder) {
+                    promises.push(window.axios.getOldAssignments({ domain, token, course_id: cid, date_filter: olderDateVal, date_type: 'dueAt' }));
+                } else { promises.push(Promise.resolve(null)); }
+                if (useOlderCreated) {
+                    promises.push(window.axios.getOldAssignments({ domain, token, course_id: cid, date_filter: olderCreatedDateVal, date_type: 'createdAt' }));
+                } else { promises.push(Promise.resolve(null)); }
+
+                const [nonModule, noDue, unpub, noSubs, oldDue, oldCreated] = await Promise.all(promises);
+
+                // Normalize to { id, name }
+                const norm = (arr, shape) => {
+                    if (!arr) return null;
+                    if (shape === 'edges') {
+                        return arr.map(edge => ({ id: edge.node._id, name: edge.node.name }));
+                    }
+                    if (shape === 'nodes') {
+                        return arr.map(n => ({ id: n._id, name: n.name }));
+                    }
+                    // already mapped arrays of {id, name}
+                    return arr.map(a => ({ id: a.id ?? a._id ?? a, name: a.name }));
+                };
+
+                const sets = [];
+                if (useNonModule) sets.push(new Map(norm(nonModule, 'mapped').map(a => [String(a.id), a])));
+                if (useNoDue) sets.push(new Map(norm(noDue, 'mapped').map(a => [String(a.id), a])));
+                if (useUnpub) sets.push(new Map(norm(unpub, 'nodes').map(a => [String(a.id), a])));
+                if (useNoSubs) sets.push(new Map(norm(noSubs, 'edges').map(a => [String(a.id), a])));
+                if (useOlder) sets.push(new Map(norm(oldDue, 'nodes').map(a => [String(a.id), a])));
+                if (useOlderCreated) sets.push(new Map(norm(oldCreated, 'nodes').map(a => [String(a.id), a])));
+
+                // Compute intersection by id
+                let finalAssignments = [];
+                if (sets.length === 1) {
+                    finalAssignments = Array.from(sets[0].values());
+                } else {
+                    // start with smallest set to optimize
+                    sets.sort((a, b) => a.size - b.size);
+                    const [first, ...rest] = sets;
+                    for (const [id, obj] of first.entries()) {
+                        if (rest.every(s => s.has(id))) finalAssignments.push(obj);
+                    }
+                }
+
+                progressInfo.innerHTML = 'Done';
+
+                const details = document.createElement('div');
+                details.id = 'combined-response-details';
+                details.innerHTML = `
+                    <div class="row align-items-center">
+                        <div class="col-auto">Found ${finalAssignments.length} assignments matching all selected filters.</div>
+                        <div class="w-100"></div>
+                        <div class="col-2"><button id="combined-remove-btn" type="button" class="btn btn-danger">Remove</button></div>
+                        <div class="col-2"><button id="combined-cancel-btn" type="button" class="btn btn-secondary">Cancel</button></div>
+                    </div>
+                `;
+                responseDiv.appendChild(details);
+
+                // Re-enable check so filters can be adjusted and re-run
+                checkBtn.disabled = false;
+
+                const cancelBtn = details.querySelector('#combined-cancel-btn');
+                cancelBtn.addEventListener('click', (ev2) => {
+                    ev2.preventDefault();
+                    ev2.stopPropagation();
+                    courseID.value = '';
+                    responseDiv.innerHTML = '';
+                    checkBtn.disabled = false;
+                });
+
+                const removeBtn = details.querySelector('#combined-remove-btn');
+                if (finalAssignments.length < 1) removeBtn.disabled = true;
+                removeBtn.addEventListener('click', async (ev2) => {
+                    ev2.preventDefault();
+                    ev2.stopPropagation();
+
+                    details.innerHTML = '';
+                    progressBar.parentElement.hidden = false;
+                    progressInfo.innerHTML = `Removing ${finalAssignments.length} assignments...`;
+
+                    const payload = {
+                        domain,
+                        token,
+                        course_id: cid,
+                        number: finalAssignments.length,
+                        assignments: finalAssignments.map(a => ({ id: a.id, name: a.name }))
+                    };
+
+                    window.progressAPI.onUpdateProgress((p) => {
+                        updateProgressWithPercent(progressBar, p);
+                    });
+
+                    try {
+                        const result = await window.axios.deleteAssignments(payload);
+                        if (result.successful?.length > 0) {
+                            progressInfo.innerHTML = `Successfully removed ${result.successful.length} assignments.`;
+                        }
+                        if (result.failed?.length > 0) {
+                            progressInfo.innerHTML += ` Failed to remove ${result.failed.length} assignments.`;
+                        }
+                    } catch (err) {
+                        errorHandler(err, progressInfo);
+                    } finally {
+                        checkBtn.disabled = false;
+                    }
+                });
+
+            } catch (error) {
+                errorHandler(error, form.querySelector('#combined-progress-info'));
+                checkBtn.disabled = false;
+            } finally {
+                // no-op
+            }
+        });
+    }
+
+    form.hidden = false;
 }
 
 function assignmentCreator(e) {
@@ -1979,13 +2272,16 @@ function moveAssignmentsToSingleGroup(e) {
             });
 
             const moveBtn = magResponseContainer.querySelector('#move-btn');
-            moveBtn.addEventListener('click', async (e) => {
+                removeBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
 
                 console.log('inside move');
 
                 magResponseDetails.innerHTML = '';
+
+                    // Prevent new checks during deletion
+                    checkBtn.disabled = true;
                 magProgressBar.parentElement.hidden = false;
                 magProgressInfo.innerHTML = `Moving ${assignments.length} assignments...`;
 
@@ -2017,7 +2313,7 @@ function moveAssignmentsToSingleGroup(e) {
                         magProgressInfo.innerHTML = `Failed to move ${moveAssignmentsToSingleGroup.failed.length} assignments.`;
                     }
                     checkBtn.disabled = false;
-                } catch (error) {
+                    } catch (err) {
                     errorHandler(error, magProgressInfo)
                 } finally {
                     checkBtn.disabled = false;

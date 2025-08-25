@@ -338,6 +338,22 @@ function resetComm(e) {
     const progressBarWrapper = resetCommForm.querySelector('.progress');
     const loadingWheel = resetCommForm.querySelector('#loading-wheel');
 
+    // Helpers to use progress bar instead of spinner
+    function useProgressBarIndeterminate() {
+        if (!progressBarWrapper || !progressBar) return;
+        progressBarWrapper.hidden = false;
+        if (loadingWheel) loadingWheel.hidden = true;
+        progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+        progressBar.style.width = '100%';
+        progressBar.setAttribute('aria-valuenow', '100');
+    }
+    function resetProgressBar() {
+        if (!progressBar) return;
+        progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        progressBar.style.width = '0%';
+        progressBar.setAttribute('aria-valuenow', '0');
+    }
+
     // listener for the toggle switches
     resetSwitches.addEventListener('change', (e) => {
         e.preventDefault();
@@ -432,10 +448,9 @@ function resetComm(e) {
         };
 
         try {
-            // Show progress for single reset (unknown steps)
+            // Show progress bar (indeterminate) for single reset
             progresDiv.hidden = false;
-            if (loadingWheel) loadingWheel.hidden = false;
-            if (progressBarWrapper) progressBarWrapper.hidden = true;
+            useProgressBarIndeterminate();
             progressInfo.textContent = 'Resetting communication channel...';
 
             const response = await window.axios.resetCommChannel(requestData);
@@ -461,8 +476,7 @@ function resetComm(e) {
         };
         // Always hide progress and restore controls
         progresDiv.hidden = true;
-        if (loadingWheel) loadingWheel.hidden = true;
-        if (progressBarWrapper) progressBarWrapper.hidden = false;
+        resetProgressBar();
         resetBtn.disabled = false;
     });
 
@@ -477,11 +491,9 @@ function resetComm(e) {
         const resetPattern = resetPatternInput.value.trim();
         const regionVal = resetCommForm.querySelector('#region').value;
 
-        // Show progress
+        // Show progress bar (indeterminate)
         progresDiv.hidden = false;
-        // Unknown total -> show spinner and processed count
-        if (loadingWheel) loadingWheel.hidden = false;
-        if (progressBarWrapper) progressBarWrapper.hidden = true;
+        useProgressBarIndeterminate();
         progressInfo.textContent = 'Searching for emails matching pattern... Processed: 0';
 
         const requestData = {
@@ -541,9 +553,7 @@ function resetComm(e) {
         } finally {
             resetPatternBtn.disabled = false;
             // Reset UI state
-            if (progressBar) progressBar.style.width = '0%';
-            if (loadingWheel) loadingWheel.hidden = true;
-            if (progressBarWrapper) progressBarWrapper.hidden = false;
+            resetProgressBar();
         };
     });
 
@@ -569,10 +579,8 @@ function resetComm(e) {
 
         try {
             progresDiv.hidden = false;
-            // Unknown total -> show spinner and processed count
-            if (loadingWheel) loadingWheel.hidden = true; // ensure fresh state, then show
-            if (loadingWheel) loadingWheel.hidden = false;
-            if (progressBarWrapper) progressBarWrapper.hidden = true;
+            // Use progress bar (indeterminate) and processed count
+            useProgressBarIndeterminate();
             progressInfo.textContent = 'Processing... Processed: 0';
             uploadContainer.innerHTML = "Working...";
             const response = await window.axios.resetEmails(requestData);
@@ -642,9 +650,7 @@ function resetComm(e) {
             }
         } finally {
             uploadBtn.disabled = false;
-            if (progressBar) progressBar.style.width = '0%';
-            if (loadingWheel) loadingWheel.hidden = true;
-            if (progressBarWrapper) progressBarWrapper.hidden = false;
+            resetProgressBar();
         };
     });
 }
