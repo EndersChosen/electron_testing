@@ -116,3 +116,6 @@ out/
 #forge.config.js
 
 .DS_STORE
+
+# Archive files
+*.zip

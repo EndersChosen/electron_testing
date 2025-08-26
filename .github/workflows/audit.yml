@@ -1,0 +1,23 @@
+name: Security Audit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: my-electron-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: my-electron-app/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Run audit (prod only)
+        run: npm run audit:prod
