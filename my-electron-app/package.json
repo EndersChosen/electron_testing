@@ -9,7 +9,9 @@
     "test": "electron ./index_bs_example.html",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "audit": "npm audit --audit-level=moderate",
+    "audit:prod": "npm audit --omit=dev --audit-level=moderate"
   },
   "build": {
     "appId": "com.canvatools.canvascripter",
@@ -39,5 +41,9 @@
     "bootstrap": "^5.3.0",
     "electron-squirrel-startup": "^1.0.0",
     "jszip": "^3.10.1"
+  },
+  "overrides": {
+    "form-data": "^4.0.4",
+    "tmp": "^0.2.4"
   }
 }
