@@ -45,6 +45,8 @@ const createWindow = () => {
         height: 900,
         webPreferences: {
             nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
             preload: path.join(__dirname, './preload.js')
         }
     })
@@ -116,6 +118,16 @@ app.whenReady().then(() => {
         // console.log('Total messages ', totalMessages.length);
 
 
+    });
+
+    ipcMain.handle('axios:getDeletedConversations', async (event, data) => {
+        console.log('Inside main:getDeletedConversations');
+        try {
+            const results = await convos.getDeletedConversations(data);
+            return results;
+        } catch (error) {
+            throw error.message || error;
+        }
     });
 
     ipcMain.handle('axios:deleteConvos', async (event, data) => {
@@ -1315,6 +1327,16 @@ app.whenReady().then(() => {
 
     });
 
+    ipcMain.handle('axios:updateClassicQuiz', async (event, data) => {
+        console.log('main.js > axios:updateClassicQuiz');
+
+        try {
+            return await quizzes_classic.updateClassicQuiz(data);
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
     ipcMain.handle('axios:deleteClassicQuizzes', async (event, data) => {
         console.log('main.js > axios:deleteClassicQuizzes');
 
@@ -1610,6 +1632,19 @@ app.whenReady().then(() => {
         sendToCSV(data);
     });
 
+    // Write CSV directly to a provided full path (no dialog)
+    ipcMain.handle('csv:writeAtPath', async (event, payload) => {
+        try {
+            const { fullPath, data } = payload || {};
+            if (!fullPath || !data) throw new Error('fullPath and data are required');
+            await csvExporter.exportToCSV(data, fullPath);
+            return true;
+        } catch (err) {
+            console.error('csv:writeAtPath error:', err);
+            throw err;
+        }
+    });
+
     ipcMain.on('csv:sendToText', () => {
         console.log('csv:sendToText');
 
@@ -1660,6 +1695,19 @@ app.whenReady().then(() => {
 
     ipcMain.on('write-text', (event, data) => {
         clipboard.writeText(data);
+    });
+
+    // Select and parse a list of user IDs (txt or csv)
+    ipcMain.handle('fileUpload:getUserIdsFromFile', async () => {
+        // Reuse getFileContentsForEmails dialog and parsing flow, then map to numeric IDs
+        const fileContent = await getFileContentsForEmails();
+        if (fileContent === 'cancelled') return 'cancelled';
+
+        // fileContent comes back as raw text with newlines when txt, or joined emails for csv parser.
+        const tokens = removeBlanks(fileContent.split(/\r?\n|\r|,|\s+/));
+        // Keep only numeric values for user IDs
+        const ids = tokens.filter((v) => v && !isNaN(Number(v))).map((v) => v.trim());
+        return ids;
     });
     //ipcMain.handle('')
     createWindow();

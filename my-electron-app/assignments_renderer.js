@@ -150,7 +150,7 @@ function deleteAssignmentsCombined(e) {
             fOlderCreatedDate.disabled = !fOlderCreated.checked;
         });
 
-    const checkBtn = form.querySelector('#combined-check-btn');
+        const checkBtn = form.querySelector('#combined-check-btn');
         checkBtn.addEventListener('click', async (ev) => {
             ev.preventDefault();
             ev.stopPropagation();
@@ -2272,7 +2272,7 @@ function moveAssignmentsToSingleGroup(e) {
             });
 
             const moveBtn = magResponseContainer.querySelector('#move-btn');
-                removeBtn.addEventListener('click', async (e) => {
+            removeBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -2280,8 +2280,8 @@ function moveAssignmentsToSingleGroup(e) {
 
                 magResponseDetails.innerHTML = '';
 
-                    // Prevent new checks during deletion
-                    checkBtn.disabled = true;
+                // Prevent new checks during deletion
+                checkBtn.disabled = true;
                 magProgressBar.parentElement.hidden = false;
                 magProgressInfo.innerHTML = `Moving ${assignments.length} assignments...`;
 
@@ -2313,7 +2313,7 @@ function moveAssignmentsToSingleGroup(e) {
                         magProgressInfo.innerHTML = `Failed to move ${moveAssignmentsToSingleGroup.failed.length} assignments.`;
                     }
                     checkBtn.disabled = false;
-                    } catch (err) {
+                } catch (err) {
                     errorHandler(error, magProgressInfo)
                 } finally {
                     checkBtn.disabled = false;

@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('axios', {
 
         return result;
     },
+    getDeletedConversations: async (data) => {
+        console.log('preload.js > getDeletedConversations');
+        return await ipcRenderer.invoke('axios:getDeletedConversations', data);
+    },
     deleteConvos: async (data) => {
         console.log('inside deleteConvos');
 
@@ -214,6 +218,11 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:createClassicQuizzes', data)
     },
+    updateClassicQuiz: async (data) => {
+        console.log('preload.js > updateClassicQuiz');
+
+        return await ipcRenderer.invoke('axios:updateClassicQuiz', data);
+    },
     createClassicQuestions: async (data) => {
         console.log('preload.js > createClassicQuestions');
 
@@ -269,6 +278,9 @@ contextBridge.exposeInMainWorld('csv', {
 
         await ipcRenderer.invoke('csv:sendToCSV', data);
     },
+    writeAtPath: async (fullPath, data) => {
+        return await ipcRenderer.invoke('csv:writeAtPath', { fullPath, data });
+    },
     sendToText: async () => {
         console.log('inside preload sendToText');
 
@@ -276,11 +288,11 @@ contextBridge.exposeInMainWorld('csv', {
     }
 });
 
-contextBridge.exposeInMainWorld('dataUpdate', {
-    onUpdate: async (callback) => ipcRenderer.on('email-count', (_event, value) => callback(value))
-})
-
+// File helpers for bulk user ID uploads and related actions
 contextBridge.exposeInMainWorld('fileUpload', {
+    getUserIdsFromFile: async () => {
+        return await ipcRenderer.invoke('fileUpload:getUserIdsFromFile');
+    },
     confirmEmails: async (data) => {
         return await ipcRenderer.invoke('fileUpload:confirmEmails', data);
     },
@@ -290,7 +302,13 @@ contextBridge.exposeInMainWorld('fileUpload', {
     resetEmails: async (data) => {
         return await ipcRenderer.invoke('fileUpload:resetEmails', data);
     }
+});
+
+contextBridge.exposeInMainWorld('dataUpdate', {
+    onUpdate: async (callback) => ipcRenderer.on('email-count', (_event, value) => callback(value))
 })
+
+// (Removed duplicate exposeInMainWorld('fileUpload') to avoid overriding methods)
 
 contextBridge.exposeInMainWorld('progressAPI', {
     // Forwards any progress payload from main (number or object)
@@ -339,3 +357,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return await ipcRenderer.invoke('sis:fetchAuthProviders', domain, token, accountId);
     }
 });
+
+// Small utilities (none exposed currently)

@@ -14,6 +14,9 @@ async function conversationTemplate(e) {
         case 'download-conversations-csv': // Not Complete
             downloadConvos(e);
             break;
+        case 'get-deleted-conversations':
+            getDeletedConversations(e);
+            break;
         case 'gc-between-users': // Not complete
             getConvos(e);
             break;
@@ -21,6 +24,369 @@ async function conversationTemplate(e) {
             break;
     }
 };
+
+async function getDeletedConversations(e) {
+    hideEndpoints(e);
+
+    const eContent = document.querySelector('#endpoint-content');
+    let form = eContent.querySelector('#get-deleted-conversations-form');
+
+    if (!form) {
+        form = document.createElement('form');
+        form.id = 'get-deleted-conversations-form';
+        form.innerHTML = `
+            <div>
+                <h3>Get Deleted Conversations</h3>
+                <p>Fetch deleted conversations for a user, optionally filtered by deleted_before/after.</p>
+            </div>
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <label for="gdc-user-id" class="form-label">User ID</label>
+                </div>
+                <div class="col-2">
+                    <input id="gdc-user-id" type="text" class="form-control" aria-describedby="gdc-user-help" />
+                </div>
+                <div class="col-auto">
+                    <span id="gdc-user-help" class="form-text" style="display:none;">Must only contain numbers</span>
+                </div>
+            </div>
+        <div class="row align-items-center mt-2">
+                <div class="col-auto">
+                    <label for="gdc-deleted-after" class="form-label">Deleted After</label>
+                </div>
+                <div class="col-auto">
+            <input id="gdc-deleted-after" type="date" class="form-control" />
+                </div>
+                <div class="col-auto">
+                    <label for="gdc-deleted-before" class="form-label">Deleted Before</label>
+                </div>
+                <div class="col-auto">
+            <input id="gdc-deleted-before" type="date" class="form-control" />
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-auto">
+                    <button id="gdc-search" type="button" class="btn btn-primary" disabled>Get Deleted</button>
+                </div>
+                <div class="col-auto">
+                    <button id="gdc-export-csv" type="button" class="btn btn-secondary" hidden>Export to CSV</button>
+                </div>
+            </div>
+            <!-- Single-user progress moved above the divider -->
+            <div hidden id="gdc-single-progress-div" class="mt-3">
+                <p id="gdc-single-progress-info"></p>
+                <div class="progress mt-1" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <hr class="my-3" />
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <label class="form-label">Bulk: Upload user list (txt/csv)</label>
+                </div>
+                <div class="col-auto">
+                    <button id="gdc-upload" type="button" class="btn btn-secondary">Choose file</button>
+                </div>
+                <div class="col-auto">
+                    <span id="gdc-upload-info" class="form-text"></span>
+                </div>
+            </div>
+            <div class="row mb-3 mt-2">
+                <div class="col-12">
+                    <label for="gdc-output-path" class="form-label">Output Folder</label>
+                    <div class="input-group">
+                        <input type="text" id="gdc-output-path" class="form-control" placeholder="Select output folder..." readonly>
+                        <button type="button" id="gdc-browse-folder" class="btn btn-outline-secondary">Browse</button>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-auto">
+                    <button id="gdc-export-multi" type="button" class="btn btn-primary" disabled>Export for users</button>
+                </div>
+            </div>
+            <!-- Bulk progress -->
+            <div hidden id="gdc-bulk-progress-div" class="mt-3">
+                <p id="gdc-bulk-progress-info"></p>
+                <div class="progress mt-1" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="gdc-response" class="mt-3"></div>
+        `;
+
+        eContent.append(form);
+    }
+    form.hidden = false;
+
+    const userInput = form.querySelector('#gdc-user-id');
+    const searchBtn = form.querySelector('#gdc-search');
+    const singleProgressDiv = form.querySelector('#gdc-single-progress-div');
+    const singleProgressBar = singleProgressDiv.querySelector('.progress-bar');
+    const singleProgressInfo = form.querySelector('#gdc-single-progress-info');
+    const bulkProgressDiv = form.querySelector('#gdc-bulk-progress-div');
+    const bulkProgressBar = bulkProgressDiv.querySelector('.progress-bar');
+    const bulkProgressInfo = form.querySelector('#gdc-bulk-progress-info');
+    const responseDiv = form.querySelector('#gdc-response');
+    const uploadBtn = form.querySelector('#gdc-upload');
+    const uploadInfo = form.querySelector('#gdc-upload-info');
+    const browseFolderBtn = form.querySelector('#gdc-browse-folder');
+    const outputPathInput = form.querySelector('#gdc-output-path');
+    const exportMultiBtn = form.querySelector('#gdc-export-multi');
+    let bulkUserIds = [];
+    let outputFolder = '';
+    const updateExportEnabled = () => {
+        exportMultiBtn.disabled = !(bulkUserIds.length > 0 && !!outputFolder);
+    };
+
+    const toggleBtn = () => {
+        searchBtn.disabled = !(userInput.value && userInput.value.trim() !== '' && !isNaN(Number(userInput.value.trim())));
+        form.querySelector('#gdc-user-help').style.display = searchBtn.disabled ? 'inline' : 'none';
+    };
+    userInput.addEventListener('input', toggleBtn);
+
+    if (form.dataset.bound !== 'true') {
+        searchBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+
+            searchBtn.disabled = true;
+            responseDiv.innerHTML = '';
+            singleProgressDiv.hidden = false;
+            singleProgressBar.style.width = '0%';
+            singleProgressInfo.innerHTML = 'Fetching deleted conversations...';
+
+            const domain = document.querySelector('#domain').value.trim();
+            const token = document.querySelector('#token').value.trim();
+            const user_id = userInput.value.trim();
+            const deleted_after = form.querySelector('#gdc-deleted-after').value.trim();
+            const deleted_before = form.querySelector('#gdc-deleted-before').value.trim();
+
+            try {
+                const params = { domain, token, user_id };
+                const toStartOfDayISO = (dateStr) => dateStr ? new Date(`${dateStr}T00:00:00`).toISOString() : undefined;
+                const toEndOfDayISO = (dateStr) => dateStr ? new Date(`${dateStr}T23:59:59.999`).toISOString() : undefined;
+                const afterISO = toStartOfDayISO(deleted_after);
+                const beforeISO = toEndOfDayISO(deleted_before);
+                if (afterISO) params.deleted_after = afterISO;
+                if (beforeISO) params.deleted_before = beforeISO;
+
+                const results = await window.axios.getDeletedConversations(params);
+
+                const count = results.length;
+                singleProgressInfo.innerHTML = `Found ${count} deleted conversation(s).`;
+                singleProgressBar.style.width = '100%';
+
+                if (count > 0) {
+                    const exportBtn = form.querySelector('#gdc-export-csv');
+                    exportBtn.hidden = false;
+                    // exportBtn.id = 'gdc-export-csv';
+                    // exportBtn.className = 'btn btn-secondary mt-2';
+                    // exportBtn.textContent = 'Export to CSV';
+                    // responseDiv.append(exportBtn);
+
+                    exportBtn.addEventListener('click', (e2) => {
+                        e2.preventDefault();
+                        e2.stopPropagation();
+                        const fileName = `deleted_conversations_${user_id}.csv`;
+
+                        // Sanitize each record: keep top-level fields; stringify arrays/objects
+                        const sanitized = results.map((item) => {
+                            const row = {};
+                            for (const key of Object.keys(item)) {
+                                const val = item[key];
+                                if (key === 'attachments' && Array.isArray(val)) {
+                                    // Only include id and url for attachments; join as a semicolon-separated list
+                                    const pairs = val.map(att => `${att.id}:${att.url}`).join('; ');
+                                    row[key] = pairs;
+                                } else if (val !== null && typeof val === 'object') {
+                                    // Fallback: stringify objects/arrays
+                                    row[key] = JSON.stringify(val);
+                                } else {
+                                    row[key] = val;
+                                }
+                            }
+                            return row;
+                        });
+
+                        // Ensure headers include all keys (Canvas responses should be consistent,
+                        // but we build a union just in case). csvExporter uses the first row to build headers.
+                        const allKeys = Array.from(new Set(sanitized.flatMap(obj => Object.keys(obj))));
+                        if (sanitized.length > 0) {
+                            const first = sanitized[0];
+                            const headerCompleteFirst = {};
+                            for (const k of allKeys) {
+                                headerCompleteFirst[k] = Object.prototype.hasOwnProperty.call(first, k) ? first[k] : '';
+                            }
+                            const data = [headerCompleteFirst, ...sanitized.slice(1).map(obj => {
+                                const full = {};
+                                for (const k of allKeys) full[k] = Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : '';
+                                return full;
+                            })];
+                            window.csv.sendToCSV({ fileName, data });
+                        }
+                    });
+                }
+            } catch (error) {
+                singleProgressBar.parentElement.hidden = true;
+                errorHandler(error, singleProgressInfo);
+            } finally {
+                searchBtn.disabled = false;
+            }
+        });
+
+        // Handle upload of user list
+        uploadBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            uploadBtn.disabled = true;
+            uploadInfo.textContent = '';
+            try {
+                if (window.fileUpload && typeof window.fileUpload.getUserIdsFromFile === 'function') {
+                    const ids = await window.fileUpload.getUserIdsFromFile();
+                    if (ids === 'cancelled') {
+                        uploadInfo.textContent = 'Cancelled.';
+                        return;
+                    }
+                    // Ensure numeric uniqueness
+                    bulkUserIds = Array.from(new Set(ids.map((v) => Number(v)).filter((n) => !isNaN(n))));
+                    uploadInfo.textContent = `Found ${bulkUserIds.length} user(s).`;
+                    updateExportEnabled();
+                } else {
+                    // Fallback: client-side file picker and parser (txt/csv)
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.txt,.csv,text/plain,text/csv';
+                    input.onchange = async () => {
+                        try {
+                            const file = input.files && input.files[0];
+                            if (!file) return;
+                            const text = await file.text();
+                            const tokens = text.split(/\r?\n|\r|,|\s+/).filter(Boolean);
+                            const numeric = tokens.map((v) => Number(v)).filter((n) => !isNaN(n));
+                            bulkUserIds = Array.from(new Set(numeric));
+                            uploadInfo.textContent = `Found ${bulkUserIds.length} user(s).`;
+                            updateExportEnabled();
+                        } catch (err) {
+                            errorHandler(err, uploadInfo);
+                        }
+                    };
+                    input.click();
+                }
+            } catch (error) {
+                errorHandler(error, uploadInfo);
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // Choose output folder for bulk exports
+        browseFolderBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            try {
+                const selected = await window.electronAPI.selectFolder();
+                if (selected) {
+                    outputFolder = selected;
+                    outputPathInput.value = outputFolder;
+                    // Enable export only if we have users and a folder
+                    updateExportEnabled();
+                }
+            } catch (error) {
+                errorHandler(error, outputPathInput);
+            }
+        });
+
+        // Bulk export per user
+        exportMultiBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            if (bulkUserIds.length === 0) return;
+            if (!outputFolder) {
+                bulkProgressDiv.hidden = false;
+                bulkProgressInfo.textContent = 'Please choose an output folder first.';
+                return;
+            }
+
+            exportMultiBtn.disabled = true;
+            bulkProgressDiv.hidden = false;
+            bulkProgressBar.style.width = '0%';
+            bulkProgressInfo.innerHTML = `Exporting for ${bulkUserIds.length} user(s)...`;
+
+            const domain = document.querySelector('#domain').value.trim();
+            const token = document.querySelector('#token').value.trim();
+            const deleted_after = form.querySelector('#gdc-deleted-after').value.trim();
+            const deleted_before = form.querySelector('#gdc-deleted-before').value.trim();
+
+            const toStartOfDayISO = (dateStr) => dateStr ? new Date(`${dateStr}T00:00:00`).toISOString() : undefined;
+            const toEndOfDayISO = (dateStr) => dateStr ? new Date(`${dateStr}T23:59:59.999`).toISOString() : undefined;
+
+            let completed = 0;
+            let exported = 0;
+            let skipped = 0;
+
+            for (const uid of bulkUserIds) {
+                try {
+                    const params = { domain, token, user_id: String(uid) };
+                    const afterISO = toStartOfDayISO(deleted_after);
+                    const beforeISO = toEndOfDayISO(deleted_before);
+                    if (afterISO) params.deleted_after = afterISO;
+                    if (beforeISO) params.deleted_before = beforeISO;
+
+                    const results = await window.axios.getDeletedConversations(params);
+
+                    if (results.length > 0) {
+                        // Sanitize rows (attachments handled, JSON stringify objects)
+                        const sanitized = results.map((item) => {
+                            const row = {};
+                            for (const key of Object.keys(item)) {
+                                const val = item[key];
+                                if (key === 'attachments' && Array.isArray(val)) {
+                                    const pairs = val.map(att => `${att.id}:${att.url}`).join('; ');
+                                    row[key] = pairs;
+                                } else if (val !== null && typeof val === 'object') {
+                                    row[key] = JSON.stringify(val);
+                                } else {
+                                    row[key] = val;
+                                }
+                            }
+                            return row;
+                        });
+
+                        // Build union-of-keys for header consistency per file
+                        const allKeys = Array.from(new Set(sanitized.flatMap(obj => Object.keys(obj))));
+                        const first = sanitized[0];
+                        const headerCompleteFirst = {};
+                        for (const k of allKeys) headerCompleteFirst[k] = Object.prototype.hasOwnProperty.call(first, k) ? first[k] : '';
+                        const data = [headerCompleteFirst, ...sanitized.slice(1).map(obj => {
+                            const full = {};
+                            for (const k of allKeys) full[k] = Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : '';
+                            return full;
+                        })];
+
+                        const fileName = `deleted_conversations_${uid}.csv`;
+                        const fullPath = `${outputFolder.replace(/[\\/]+$/, '')}\\${fileName}`;
+                        await window.csv.writeAtPath(fullPath, data);
+                        exported++;
+                    } else {
+                        skipped++;
+                    }
+                } catch (err) {
+                    // count as skipped on error
+                    skipped++;
+                } finally {
+                    completed++;
+                    const pct = Math.round((completed / bulkUserIds.length) * 100);
+                    bulkProgressBar.style.width = `${pct}%`;
+                    bulkProgressInfo.innerHTML = `Processed ${completed}/${bulkUserIds.length}. Exported: ${exported}. Skipped: ${skipped}.`;
+                }
+            }
+
+            exportMultiBtn.disabled = false;
+        });
+        form.dataset.bound = 'true';
+    }
+}
 
 async function deleteConvos(e) {
     hideEndpoints(e);
@@ -210,34 +576,34 @@ async function deleteConvos(e) {
             const cancelBtn = responseContainer.querySelector('#cancel-btn');
             const sendToCSV = responseContainer.querySelector('#csv-btn');
 
-            removeBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+            // Remove selected conversations by subject
+            removeBtn.addEventListener('click', async (evt) => {
+                evt.preventDefault();
+                evt.stopPropagation();
 
-                console.log('inside remove');
-                // const responseDetails = responseContainer.querySelector('#response-details');
-                // responseDetails.innerHTML = `Removing ${messages.length} conversations...`;
-
-                // const messageIDs = messages.map((message) => {
-                //     return message.node.conversation;
-                // });
-
-                progressInfo.innerHTML += `<p>Removing ${messages.length} conversations.</p>`;
+                progressDiv.hidden = false;
                 progressBar.parentElement.hidden = false;
-                const messageData = {
-                    domain: domain,
-                    token: apiToken,
-                    messages: messages
-                }
+                progressBar.style.width = '0%';
+                progressInfo.innerHTML = 'Removing conversations...';
 
-                window.progressAPI.onUpdateProgress((progress) => {
-                    progressBar.style.width = `${progress}%`;
-                });
+                const messageData = {
+                    domain,
+                    token: apiToken,
+                    messages
+                };
+
+                if (window.progressAPI && window.ProgressUtils) {
+                    window.ProgressUtils.autoWireGlobalProgress();
+                } else if (window.progressAPI) {
+                    window.progressAPI.onUpdateProgress((progress) => {
+                        progressBar.style.width = `${progress}%`;
+                    });
+                }
 
                 try {
                     const result = await window.axios.deleteConvos(messageData);
                     if (result.successful.length > 0) {
-                        progressInfo.innerHTML += `<p>Successfully removed ${result.successful.length} messages</p>`
+                        progressInfo.innerHTML += `<p>Successfully removed ${result.successful.length} messages</p>`;
                     }
                     if (result.failed.length > 0) {
                         progressBar.parentElement.hidden = true;

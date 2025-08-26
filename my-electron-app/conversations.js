@@ -489,5 +489,42 @@ async function bulkDeleteNew(messages, url, token) {
 
 
 module.exports = {
-    getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll
+    getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll, getDeletedConversations
 };
+
+// Fetch deleted conversations for a user with optional deleted_before/after and pagination
+async function getDeletedConversations(data) {
+    const { domain, token, user_id, deleted_before, deleted_after } = data;
+    const baseUrl = `https://${domain}/api/v1/conversations/deleted`;
+    const params = new URLSearchParams();
+    // Canvas allows user_id[]
+    params.append('user_id[]', user_id);
+    if (deleted_before) params.append('deleted_before', deleted_before);
+    if (deleted_after) params.append('deleted_after', deleted_after);
+    params.append('per_page', '100');
+
+    let url = `${baseUrl}?${params.toString()}`;
+    const results = [];
+
+    while (url) {
+        try {
+            const response = await axios.get(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (Array.isArray(response.data)) {
+                results.push(...response.data);
+            }
+            const next = response.headers && response.headers.link ? pagination.getNextPage(response.headers.link) : false;
+            url = next || false;
+        } catch (error) {
+            // surface Canvas error message if available
+            if (error.response && error.response.data && error.response.data.errors) {
+                const msg = error.response.data.errors.map(e => e.message).join('; ');
+                throw new Error(msg);
+            }
+            throw error;
+        }
+    }
+
+    return results;
+}

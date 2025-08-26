@@ -9,7 +9,9 @@ async function exportToCSV(data, filePath = 'MyCSV') {
     const csvRows = [];
 
     // const wStream = fs.createWriteStream(`${path.join(__dirname, fileName)}.csv`);
-    const wStream = fs.createWriteStream(filePath, { flag: 'a' });
+    // Overwrite file each time and write UTF-8 BOM for Excel compatibility
+    const wStream = fs.createWriteStream(filePath, { flag: 'w' });
+    wStream.write('\uFEFF');
 
     const headers = getHeaders(data[0]);
     //console.log(headers);
@@ -19,43 +21,49 @@ async function exportToCSV(data, filePath = 'MyCSV') {
         return header.slice(lastIndex + 1);
     })
     //const writeStream = fs.createWriteStream('my_file.csv', { flag: 'a' });
-    wStream.write(reMappedHeaders.toString() + '\n');
+    wStream.write(reMappedHeaders.join(',') + '\r\n');
 
-    writeValues(data, headers);
-    //console.log(values);
-    wStream.close();
+    await writeValues(data, headers);
+    wStream.end();
+    await new Promise((resolve) => wStream.on('finish', resolve));
 
     // loop through each item and write the values to the file
     async function writeValues(data, headers) {
-        let values = [];
+        // RFC 4180-style field formatter: escape quotes and wrap fields containing commas, quotes, or newlines
+        const formatField = (value) => {
+            if (value === null || value === undefined) return '';
+            let s = String(value);
+            // Normalize line endings inside fields to CRLF for Excel
+            s = s.replace(/\r?\n/g, '\r\n');
+            // Escape double quotes by doubling them
+            if (s.includes('"')) s = s.replace(/"/g, '""');
+            // Wrap in quotes if field contains comma, quote, or newline
+            if (/[",\r\n]/.test(s)) {
+                return `"${s}"`;
+            }
+            return s;
+        };
 
         for (item of data) {
+            const values = [];
             for (let header of headers) {
                 const hDepth = header.split('->');
                 if (hDepth.length < 2) {
-                    values.push(item[hDepth[0]]);
+                    values.push(item?.[hDepth[0]]);
                 } else if (hDepth.length < 3) {
-                    values.push(item[hDepth[0]][hDepth[1]]);
+                    values.push(item?.[hDepth[0]]?.[hDepth[1]]);
                 } else if (hDepth.length < 4) {
-                    values.push(item[hDepth[0]][hDepth[1]][hDepth[2]]);
+                    values.push(item?.[hDepth[0]]?.[hDepth[1]]?.[hDepth[2]]);
                 }
             }
 
-            // check for any values which have commas in them
-            for (let value of values) {
-                if (typeof (value) === 'string') {
-                    if (value?.indexOf(',') > 0) {
-                        values[values.indexOf(value)] = `"${value}"`;
-                    }
-                }
-            }
-            underWaterMark = wStream.write(values.toString() + '\n');
+            const line = values.map(formatField).join(',');
+            underWaterMark = wStream.write(line + '\r\n');
             if (!underWaterMark) {
                 await new Promise((resolve) => {
                     wStream.once('drain', resolve);
                 });
             }
-            values = [];
         }
     }
 

@@ -19,6 +19,81 @@ async function sendQuestion(requestConfig, questionData) {
     }
 }
 
+// Fetch current quiz details to support a follow-up save
+async function fetchQuiz(domain, token, course_id, quiz_id) {
+    const axiosConfig = {
+        method: 'GET',
+        url: `https://${domain}/api/v1/courses/${course_id}/quizzes/${quiz_id}`,
+        headers: { 'Authorization': `Bearer ${token}` }
+    };
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
+// Issue a PUT to update the quiz with its existing fields (acts as a save)
+async function saveQuiz(domain, token, course_id, quiz_id) {
+    let quiz;
+    try {
+        quiz = await fetchQuiz(domain, token, course_id, quiz_id);
+    } catch (e) {
+        // Non-fatal: skip save if fetch fails
+        return null;
+    }
+
+    const payload = {
+        quiz: {
+            title: quiz.title,
+            quiz_type: quiz.quiz_type,
+            allowed_attempts: quiz.allowed_attempts,
+            published: quiz.published,
+            description: quiz.description || undefined
+        }
+    };
+
+    const axiosConfig = {
+        method: 'PUT',
+        url: `https://${domain}/api/v1/courses/${course_id}/quizzes/${quiz_id}`,
+        headers: { 'Authorization': `Bearer ${token}` },
+        data: payload
+    };
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        // Non-fatal
+        return null;
+    }
+}
+
+async function updateClassicQuiz(data) {
+    const axiosConfig = {
+        method: 'PUT',
+        url: `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes/${data.quiz_id}`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
 
 async function getClassicQuizzes(data) {
     console.log("Getting Classic Quizzes");
@@ -153,39 +228,51 @@ async function createQuestions(data) {
                 switch (data.question_data[qData].name) {
                     case "calculated_question":
                         await addCalculatedQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "essay_question":
                         await addEssayQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "file_upload_question":
                         await addFileUploadQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "fill_in_multiple_blanks_question":
                         await addFillInMultipleBlanksQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "matching_question":
                         await addMatchingQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "multiple_answers_question":
                         await addMultipleAnswerQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "multiple_choice_question":
                         await addMultipleChoiceQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "multiple_dropdowns_question":
                         await addMultipleDropdownsQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "numerical_question":
                         await addNumericalQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "short_answer_question":
                         await addShortAnswerQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "text_only_question":
                         await addTextOnlyQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "true_false_question":
                         await addTrueFalseQuestion(axiosConfig);
+                        await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     default:
                         break;
@@ -750,5 +837,5 @@ async function addTrueFalseQuestion(requestConfig) {
 }
 
 module.exports = {
-    createQuiz, createQuestions, getClassicQuizzes, deleteClassicQuiz
+    createQuiz, createQuestions, getClassicQuizzes, deleteClassicQuiz, updateClassicQuiz
 }
