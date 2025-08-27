@@ -111,6 +111,74 @@ document.addEventListener('DOMContentLoaded', () => {
             applySidebarState(willCollapse, { animate: true });
         });
     }
+
+    // Endpoint search filter
+    const searchInput = document.getElementById('endpoint-search');
+    if (searchInput) {
+        const accordion = document.getElementById('endpoints');
+        const collapseElems = () => Array.from(accordion.querySelectorAll('.accordion-collapse'));
+        const headerButtonFor = (collapseEl) => {
+            const id = collapseEl.id;
+            return accordion.querySelector(`[data-bs-target="#${id}"]`);
+        };
+
+        function setCollapseState(collapseEl, expand) {
+            // Use Bootstrap Collapse API if available; else fallback by toggling classes/inline style
+            try {
+                const bsCollapse = bootstrap?.Collapse ? bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false }) : null;
+                if (bsCollapse) {
+                    if (expand) bsCollapse.show(); else bsCollapse.hide();
+                } else {
+                    collapseEl.classList.toggle('show', expand);
+                }
+                const headerBtn = headerButtonFor(collapseEl);
+                if (headerBtn) headerBtn.classList.toggle('collapsed', !expand);
+            } catch (e) {
+                collapseEl.classList.toggle('show', expand);
+            }
+        }
+
+        function filterEndpoints(query) {
+            const q = query.trim().toLowerCase();
+            const sections = collapseElems();
+            // If empty, reset: show all buttons and collapse sections
+            if (!q) {
+                sections.forEach(sec => {
+                    // show every button
+                    sec.querySelectorAll('.list-group > button').forEach(btn => btn.classList.remove('d-none'));
+                    // keep collapsed by default
+                    setCollapseState(sec, false);
+                    // show all categories
+                    const item = sec.closest('.accordion-item');
+                    if (item) item.classList.remove('d-none');
+                });
+                return;
+            }
+
+            sections.forEach(sec => {
+                let anyMatch = false;
+                sec.querySelectorAll('.list-group > button').forEach(btn => {
+                    const text = btn.textContent.trim().toLowerCase();
+                    const match = text.includes(q);
+                    btn.classList.toggle('d-none', !match);
+                    if (match) anyMatch = true;
+                });
+                // expand sections with matches, collapse others
+                setCollapseState(sec, anyMatch);
+                // hide categories (accordion-item) with no matches
+                const item = sec.closest('.accordion-item');
+                if (item) item.classList.toggle('d-none', !anyMatch);
+            });
+        }
+
+        // Debounce input for snappier UX
+        let t;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(t);
+            const val = e.target.value;
+            t = setTimeout(() => filterEndpoints(val), 100);
+        });
+    }
 });
 
 function getSelectedText() {
