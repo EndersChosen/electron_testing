@@ -132,6 +132,56 @@ app.whenReady().then(() => {
         }
     });
 
+    ipcMain.handle('axios:restoreDeletedConversations', async (event, data) => {
+        console.log('Inside main:restoreDeletedConversations');
+
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        const toInt = (v) => {
+            const n = parseInt(v, 10);
+            return Number.isFinite(n) ? n : null;
+        };
+        const normalized = rows.map(r => ({
+            user_id: toInt(r.user_id),
+            message_id: toInt(r.message_id),
+            conversation_id: toInt(r.conversation_id)
+        }));
+        const valid = normalized.filter(r => r.user_id !== null && r.message_id !== null && r.conversation_id !== null);
+        const skipped = rows.length - valid.length;
+        console.log(`restoreDeletedConversations: processing ${valid.length} row(s), skipped ${skipped}.`);
+        const total = valid.length || 1;
+
+        const requests = valid.map((row, idx) => ({
+            id: idx + 1,
+            request: async () => convos.restoreConversation({
+                domain: data.domain,
+                token: data.token,
+                user_id: row.user_id,
+                message_id: row.message_id,
+                conversation_id: row.conversation_id
+            })
+        }));
+
+        let response = await canvasRateLimitedHandler(requests, { maxConcurrent: 35, baseDelayMs: 100, jitterMs: 150, maxRetries: 3 });
+        if ((response.successful?.length || 0) + (response.failed?.length || 0) === 0 && valid.length > 0) {
+            // Fallback probe to surface a concrete error reason
+            try {
+                const probe = await convos.restoreConversation({
+                    domain: data.domain,
+                    token: data.token,
+                    user_id: valid[0].user_id,
+                    message_id: valid[0].message_id,
+                    conversation_id: valid[0].conversation_id
+                });
+                response.successful.push({ id: 0, status: 'fulfilled', value: probe });
+            } catch (err) {
+                const status = err?.response?.status || err?.status || 0;
+                const reason = err?.message || 'Unknown error';
+                response.failed.push({ id: 0, status, reason });
+            }
+        }
+        return response;
+    });
+
     ipcMain.handle('axios:deleteConvos', async (event, data) => {
         console.log('inside axios:deleteConvos');
 
@@ -2591,4 +2641,70 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
     while (counter < 3 && retryRequests.length > 0) // loop through if there are failed requests until the counter is ove 3
 
     return { successful, failed };
+}
+
+// Adaptive rate-limited runner for Canvas API with concurrency control and backoff
+async function canvasRateLimitedHandler(requests, options = {}) {
+    const {
+        maxConcurrent = 35,
+        baseDelayMs = 200,
+        jitterMs = 200,
+        maxRetries = 3
+    } = options;
+
+    let successful = [];
+    let failed = [];
+    let completed = 0;
+    const total = requests.length || 1;
+
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+    const withJitter = (ms) => ms + Math.floor(Math.random() * jitterMs);
+
+    const queue = [...requests];
+    let inflight = 0;
+
+    return await new Promise((resolve) => {
+        const startNext = () => {
+            while (inflight < maxConcurrent && queue.length > 0) {
+                const item = queue.shift();
+                inflight++;
+
+                const run = async (attempt = 0) => {
+                    try {
+                        const value = await item.request();
+                        successful.push({ id: item.id, status: 'fulfilled', value });
+                    } catch (err) {
+                        const status = err?.response?.status || err?.status || 0;
+                        const headers = err?.response?.headers || {};
+                        const data = err?.response?.data || {};
+                        const msg = (Array.isArray(data?.errors) ? data.errors.map(e => e?.message || '').join(' ') : (data?.message || '')) + '';
+                        // Canvas throttling commonly returns 403 with throttling language; also honor 429/5xx
+                        const looksThrottled = /throttl|rate.?limit|too many|try again later|exceed/i.test(msg) || String(headers['x-rate-limit-remaining'] || headers['X-Rate-Limit-Remaining'] || '').trim() === '0' || typeof headers['retry-after'] !== 'undefined' || typeof headers['Retry-After'] !== 'undefined';
+                        const isRetryable = [429, 500, 502, 503, 504].includes(status) || (!status) || (status === 403 && looksThrottled);
+                        if (attempt < maxRetries && isRetryable) {
+                            // Prefer Retry-After if present; otherwise exponential backoff with jitter
+                            const retryAfter = Number(headers['retry-after'] ?? headers['Retry-After']);
+                            const base = isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : baseDelayMs * Math.pow(2, attempt);
+                            const delay = withJitter(base);
+                            await sleep(delay);
+                            return run(attempt + 1);
+                        }
+                        failed.push({ id: item.id, status, reason: err?.message || 'Request failed' });
+                    } finally {
+                        completed++;
+                        const pct = Math.round((completed / total) * 100);
+                        try { mainWindow?.webContents?.send('update-progress', pct); } catch (_) { /* noop */ }
+                        inflight--;
+                        if (queue.length > 0) startNext();
+                        else if (inflight === 0) resolve({ successful, failed });
+                    }
+                };
+
+                run(0);
+            }
+        };
+
+        if (queue.length === 0) return resolve({ successful, failed });
+        startNext();
+    });
 }

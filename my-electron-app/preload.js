@@ -156,6 +156,10 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:getPageViews', data);
     },
+    restoreDeletedConversations: async (data) => {
+        console.log('preload.js > restoreDeletedConversations');
+        return await ipcRenderer.invoke('axios:restoreDeletedConversations', data);
+    },
     restoreContent: async (data) => {
         console.log('preload.js > restoreContent');
 

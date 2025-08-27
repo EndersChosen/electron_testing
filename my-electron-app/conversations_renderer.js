@@ -20,10 +20,238 @@ async function conversationTemplate(e) {
         case 'gc-between-users': // Not complete
             getConvos(e);
             break;
+        case 'restore-deleted-conversations':
+            restoreDeletedConversations(e);
+            break;
         default:
             break;
     }
 };
+
+async function restoreDeletedConversations(e) {
+    hideEndpoints(e);
+
+    const eContent = document.querySelector('#endpoint-content');
+    let form = eContent.querySelector('#restore-deleted-convos-form');
+
+    if (!form) {
+        form = document.createElement('form');
+        form.id = 'restore-deleted-convos-form';
+    form.innerHTML = `
+            <div>
+                <h3>Restore Deleted Conversations</h3>
+        <p>Upload a CSV that includes 'user_id', 'id','conversation_id' headers</p>
+            </div>
+            <div class="row align-items-center mt-2">
+                <div class="col-auto">
+                    <button id="rdc-upload" type="button" class="btn btn-secondary">Choose CSV</button>
+                </div>
+                <div class="col-auto">
+                    <span id="rdc-upload-info" class="form-text"></span>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-auto">
+                    <button id="rdc-restore" type="button" class="btn btn-primary" disabled>Restore</button>
+                </div>
+                <div class="col-auto">
+                    <button id="rdc-clear" type="button" class="btn btn-outline-secondary">Clear</button>
+                </div>
+            </div>
+            <div hidden id="rdc-progress-div" class="mt-3">
+                <p id="rdc-progress-info"></p>
+                <div class="progress mt-1" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="rdc-response" class="mt-3"></div>
+        `;
+        eContent.append(form);
+    }
+    form.hidden = false;
+
+    const uploadBtn = form.querySelector('#rdc-upload');
+    const uploadInfo = form.querySelector('#rdc-upload-info');
+    const restoreBtn = form.querySelector('#rdc-restore');
+    const clearBtn = form.querySelector('#rdc-clear');
+    const progressDiv = form.querySelector('#rdc-progress-div');
+    const progressBar = progressDiv.querySelector('.progress-bar');
+    const progressInfo = form.querySelector('#rdc-progress-info');
+    const responseDiv = form.querySelector('#rdc-response');
+
+    let records = [];
+
+    function parseCSVRow(row) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < row.length; i++) {
+            const ch = row[i];
+            if (ch === '"') {
+                if (inQuotes && row[i + 1] === '"') { current += '"'; i++; }
+                else { inQuotes = !inQuotes; }
+            } else if (ch === ',' && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+        result.push(current);
+        return result.map(v => v.trim());
+    }
+
+    function normalizeHeader(h) {
+        return (h || '')
+            .replace(/^\uFEFF/, '') // strip BOM
+            .toLowerCase()
+            .replace(/\s+/g, '_');
+    }
+
+    function parseDeletedConvosCSV(text) {
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (lines.length === 0) return [];
+        const headers = parseCSVRow(lines[0]).map(normalizeHeader);
+        const colIdx = {
+            user_id: headers.indexOf('user_id'),
+            id: headers.indexOf('id'),
+            conversation_id: headers.indexOf('conversation_id')
+        };
+        if (colIdx.user_id === -1 || colIdx.id === -1 || colIdx.conversation_id === -1) {
+            throw new Error(`CSV must include headers: user_id, id, conversation_id. Found: ${headers.join(', ')}`);
+        }
+        const out = [];
+        for (let i = 1; i < lines.length; i++) {
+            const row = parseCSVRow(lines[i]);
+            if (!row.length) continue;
+            const user_id = row[colIdx.user_id];
+            const message_id = row[colIdx.id];
+            const conversation_id = row[colIdx.conversation_id];
+            if (user_id && message_id && conversation_id) {
+                out.push({ user_id: String(user_id).trim(), message_id: String(message_id).trim(), conversation_id: String(conversation_id).trim() });
+            }
+        }
+        return out;
+    }
+
+    if (form.dataset.bound !== 'true') {
+    uploadBtn.addEventListener('click', async (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        uploadBtn.disabled = true;
+        uploadInfo.textContent = '';
+        records = [];
+        try {
+            // Prefer native file dialog via hidden input here to control parsing locally
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv,text/csv';
+            // If the user cancels the dialog, 'change' won't fire.
+            // When the window regains focus, if no file was chosen, re-enable the button.
+            const onFocus = () => {
+                if (!input.files || input.files.length === 0) {
+                    uploadBtn.disabled = false;
+                }
+            };
+            window.addEventListener('focus', onFocus, { once: true });
+            input.onchange = async () => {
+                try {
+                    window.removeEventListener('focus', onFocus);
+                    const file = input.files && input.files[0];
+                    if (!file) return;
+                    const text = await file.text();
+                    records = parseDeletedConvosCSV(text);
+                    uploadInfo.textContent = `Loaded ${records.length} row(s).`;
+                    restoreBtn.disabled = records.length === 0;
+                } catch (err) {
+                    errorHandler(err, uploadInfo);
+                } finally {
+                    uploadBtn.disabled = false;
+                }
+            };
+            input.click();
+        } catch (error) {
+            errorHandler(error, uploadInfo);
+            uploadBtn.disabled = false;
+        }
+    });
+
+    restoreBtn.addEventListener('click', async (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (records.length === 0) return;
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+
+        // Validate rows: ensure all three fields are numeric
+        const isNum = (v) => /^\d+$/.test(String(v).trim());
+        const validRecords = records.filter(r => isNum(r.user_id) && isNum(r.message_id) && isNum(r.conversation_id));
+        const skipped = records.length - validRecords.length;
+
+        if (validRecords.length === 0) {
+            progressDiv.hidden = false;
+            progressBar.style.width = '0%';
+            progressInfo.innerHTML = 'No valid rows to process. Ensure CSV has numeric user_id, id, and conversation_id values.';
+            restoreBtn.disabled = false;
+            return;
+        }
+
+        progressDiv.hidden = false;
+        progressBar.style.width = '0%';
+        progressInfo.innerHTML = `Restoring ${validRecords.length} conversation message(s)...${skipped > 0 ? ` (skipping ${skipped} invalid row(s))` : ''}`;
+        responseDiv.innerHTML = '';
+        restoreBtn.disabled = true;
+
+        if (window.progressAPI && window.ProgressUtils) {
+            window.ProgressUtils.autoWireGlobalProgress();
+        } else if (window.progressAPI) {
+            window.progressAPI.onUpdateProgress((progress) => {
+                if (typeof progress === 'number') {
+                    progressBar.style.width = `${progress}%`;
+                } else if (progress && typeof progress.value === 'number') {
+                    progressBar.style.width = `${Math.round(progress.value * 100)}%`;
+                }
+            });
+        }
+
+        try {
+            const result = await window.axios.restoreDeletedConversations({ domain, token, rows: validRecords });
+            const success = result?.successful?.length || 0;
+            const failed = result?.failed?.length || 0;
+            progressBar.style.width = '100%';
+            progressInfo.innerHTML = `Done. Restored ${success}, failed ${failed}.${skipped > 0 ? ` Skipped ${skipped}.` : ''}`;
+            if (failed > 0) {
+                const ul = document.createElement('ul');
+                result.failed.slice(0, 50).forEach(f => {
+                    const li = document.createElement('li');
+                    li.textContent = f.reason || 'Unknown error';
+                    ul.appendChild(li);
+                });
+                responseDiv.append(ul);
+            }
+        } catch (error) {
+            progressBar.parentElement.hidden = true;
+            errorHandler(error, progressInfo);
+        } finally {
+            restoreBtn.disabled = false;
+        }
+    });
+    clearBtn.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        // Reset in-memory records and UI state
+        records = [];
+        uploadInfo.textContent = '';
+        restoreBtn.disabled = true;
+        responseDiv.innerHTML = '';
+        progressInfo.innerHTML = '';
+        progressBar.style.width = '0%';
+        progressDiv.hidden = true;
+    });
+    form.dataset.bound = 'true';
+    }
+}
 
 async function getDeletedConversations(e) {
     hideEndpoints(e);
@@ -212,6 +440,7 @@ async function getDeletedConversations(e) {
                         // Ensure headers include all keys (Canvas responses should be consistent,
                         // but we build a union just in case). csvExporter uses the first row to build headers.
                         const allKeys = Array.from(new Set(sanitized.flatMap(obj => Object.keys(obj))));
+                        if (!allKeys.includes('deleted_at')) allKeys.push('deleted_at');
                         if (sanitized.length > 0) {
                             const first = sanitized[0];
                             const headerCompleteFirst = {};
@@ -355,6 +584,7 @@ async function getDeletedConversations(e) {
 
                         // Build union-of-keys for header consistency per file
                         const allKeys = Array.from(new Set(sanitized.flatMap(obj => Object.keys(obj))));
+                        if (!allKeys.includes('deleted_at')) allKeys.push('deleted_at');
                         const first = sanitized[0];
                         const headerCompleteFirst = {};
                         for (const k of allKeys) headerCompleteFirst[k] = Object.prototype.hasOwnProperty.call(first, k) ? first[k] : '';

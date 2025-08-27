@@ -489,7 +489,7 @@ async function bulkDeleteNew(messages, url, token) {
 
 
 module.exports = {
-    getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll, getDeletedConversations
+    getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll, getDeletedConversations, restoreConversation
 };
 
 // Fetch deleted conversations for a user with optional deleted_before/after and pagination
@@ -527,4 +527,35 @@ async function getDeletedConversations(data) {
     }
 
     return results;
+}
+
+// Restore a deleted conversation message for a user using the documented endpoint
+async function restoreConversation({ domain, token, user_id, message_id, conversation_id }) {
+    const url = `https://${domain}/api/v1/conversations/restore`;
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const toInt = (v) => {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? n : v;
+    };
+    const body = {
+        user_id: toInt(user_id),
+        message_id: toInt(message_id),
+        conversation_id: toInt(conversation_id)
+    };
+
+    try {
+        const response = await axios({ method: 'put', url, headers, data: body });
+        return response.data;
+    } catch (err) {
+        const status = err?.response?.status;
+        if (err?.response?.data?.errors) {
+            const msg = err.response.data.errors.map(e => e.message).join('; ');
+            const e = new Error(`${msg} (${url})`);
+            e.status = status;
+            throw e;
+        }
+        const e = new Error(`${err?.message || 'Request failed'} (${url})`);
+        e.status = status;
+        throw e;
+    }
 }
