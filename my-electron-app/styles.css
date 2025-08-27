@@ -11,7 +11,8 @@ body {
 }
 
 #main-row {
-    --sidebar-width: 33.3333%; /* default ~col-4 */
+    --sidebar-width: 33.3333%;
+    /* default ~col-4 */
     --content-width: calc(100% - var(--sidebar-width));
 }
 
@@ -19,6 +20,7 @@ body {
     height: 80vh;
     overflow: auto;
 }
+
 /* Sidebar collapse behavior */
 /* Smooth slide animation using width/flex-basis transitions */
 #sidebar {
@@ -26,7 +28,8 @@ body {
     flex: 0 0 var(--sidebar-width);
     max-width: var(--sidebar-width);
     transition: width 0.25s ease, flex-basis 0.25s ease, max-width 0.25s ease, padding 0.25s ease;
-    overflow: hidden; /* prevent content spill during slide */
+    overflow: hidden;
+    /* prevent content spill during slide */
 }
 
 #endpoint-content {
@@ -53,7 +56,11 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #sidebar, #endpoint-content { transition: none; }
+
+    #sidebar,
+    #endpoint-content {
+        transition: none;
+    }
 }
 
 .custom-border-bottom {

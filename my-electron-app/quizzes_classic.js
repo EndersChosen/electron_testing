@@ -81,7 +81,8 @@ async function updateClassicQuiz(data) {
         url: `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes/${data.quiz_id}`,
         headers: {
             'Authorization': `Bearer ${data.token}`
-        }
+        },
+        data: data.payload || undefined
     };
 
     try {

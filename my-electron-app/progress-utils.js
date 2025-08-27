@@ -5,8 +5,24 @@ window.ProgressUtils = {
     enhanceProgressBarWithPercent: function (progressBar) {
         if (!progressBar) return null;
 
-        // Check if percent label already exists
-        let percentLabel = progressBar.querySelector('.progress-percent');
+        // Always work with the progress container (parent) for the overlay label
+        const progressContainer = progressBar.parentElement;
+        if (!progressContainer) return null;
+
+        // Ensure container is positioned for absolute overlay
+        if (!progressContainer.style.position) {
+            progressContainer.style.position = 'relative';
+        }
+
+        // Find existing labels in the container, reuse first, remove extras
+        const existing = progressContainer.querySelectorAll('.progress-percent');
+        let percentLabel = existing[0] || null;
+        if (existing.length > 1) {
+            for (let i = 1; i < existing.length; i++) {
+                existing[i].remove();
+            }
+        }
+
         if (!percentLabel) {
             // Create percent label element
             percentLabel = document.createElement('span');
@@ -23,14 +39,6 @@ window.ProgressUtils = {
                 z-index: 1;
             `;
             percentLabel.textContent = '0%';
-
-            // Make progress bar container relative positioned
-            const progressContainer = progressBar.parentElement;
-            if (progressContainer) {
-                progressContainer.style.position = 'relative';
-            }
-
-            // Add the percent label to the progress container
             progressContainer.appendChild(percentLabel);
         }
 

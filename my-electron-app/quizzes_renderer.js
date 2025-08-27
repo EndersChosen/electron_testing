@@ -38,6 +38,10 @@ async function createQuiz(e) {
                         <label class="form-label">How many</label>
                         <input id="quiz-number" type="number" class="form-control" value="1">
                     </div>
+                    <div class="col-4">
+                        <label class="form-label" for="quiz-name">Quiz Name (optional)</label>
+                        <input id="quiz-name" type="text" class="form-control" placeholder="e.g., Unit 1 Check">
+                    </div>
                 </div>
                 <div class="col-auto" >
                     <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
@@ -53,6 +57,7 @@ async function createQuiz(e) {
                             <option value="graded_survey">Graded Survey</option>
                         </select>
                     </div>
+                    
                     <div id="quiz-settings" class="mt-3">
                         <h5>Settings</h5>
                         <div class="col-auto form-check form-switch" >
@@ -62,126 +67,34 @@ async function createQuiz(e) {
                     </div>           
                     <div id="question-types" class="mt-3">
                         <h5>Questions</h5>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="text_only_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="text_only_question" class="form-check-label">Text (no points)</label>
-                        </div>
-                        <div id="add-text-only-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-text-only-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-text-only-input">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-6">
+                                <label for="cq-question-type" class="form-label">Question type</label>
+                                <select id="cq-question-type" class="form-select">
+                                    <option value="text_only_question">Text (no points)</option>
+                                    <option value="true_false_question">True/False</option>
+                                    <option value="short_answer_question">Fill in the Blank</option>
+                                    <option value="essay_question">Essay</option>
+                                    <option value="file_upload_question">File Upload</option>
+                                    <option value="fill_in_multiple_blanks_question">Fill in multiple blanks</option>
+                                    <option value="matching_question">Matching</option>
+                                    <option value="multiple_answers_question">Multiple Answers</option>
+                                    <option value="multiple_choice_question">Multiple Choice</option>
+                                    <option value="multiple_dropdowns_question">Multiple Dropdowns</option>
+                                    <option value="numerical_question">Numerical</option>
+                                    <option value="calculated_question">Formula</option>
+                                </select>
+                            </div>
+                            <div class="col-3">
+                                <label for="cq-question-qty" class="form-label">Quantity</label>
+                                <input id="cq-question-qty" type="number" min="1" class="form-control" placeholder="e.g., 3">
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-secondary" id="cq-question-add">Add/Update</button>
+                                <button type="button" class="btn btn-link" id="cq-question-clear">Clear all</button>
                             </div>
                         </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="true_false_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="true_false_question" class="form-check-label">True/False</label>
-                        </div>
-                        <div id="add-true-false-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-true-false-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-true-false-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="short_answer_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="short_answer_question" class="form-check-label">Fill in the Blank</label>
-                        </div>
-                        <div id="add-short-answer-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-short-answer-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-short-answer-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="essay_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="essay_question" class="form-check-label">Essay</label>
-                        </div>
-                        <div id="add-essay-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-essay-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-essay-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="file_upload_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="file_upload_question" class="form-check-label">File Upload</label>
-                        </div>
-                        <div id="add-fileUpload-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-fileUpload-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-fileUpload-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="fill_in_multiple_blanks_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="fill_in_multiple_blanks_question" class="form-check-label">Fill in multiple blanks</label>
-                        </div>
-                        <div id="add-fill-mlt-blanks-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-fill-mlt-blanks-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-fill-mlt-blanks-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="matching_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="matching_question" class="form-check-label">Matching</label>
-                        </div>
-                        <div id="add-matching-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-matching-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-matching-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="multiple_answers_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="multiple_answers_question" class="form-check-label">Multiple Answers</label>
-                        </div>
-                         <div id="add-mlt-answers-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-mlt-answers-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-mlt-answers-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="multiple_choice_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="multiple_choice_question" class="form-check-label">Multiple Choice</label>
-                        </div>
-                        <div id="add-mlt-choice-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-mlt-choice-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-mlt-choice-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="multiple_dropdowns_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="multiple_dropdowns_question" class="form-check-label">Multiple Dropdowns</label>
-                        </div>
-                        <div id="add-mlt-drop-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-mlt-drop-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-mlt-drop-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="numerical_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="numerical_question" class="form-check-label">Numerical</label>
-                        </div>
-                        <div id="add-numerical-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-numerical-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-numerical-input">
-                            </div>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="calculated_question" class="form-check-input" type="checkbox" role="switch">
-                            <label for="calculated_question" class="form-check-label">Formula</label>
-                        </div>
-                        <div id="add-calculated-div" class="row hidden">
-                            <div class="col-2">
-                                <label for="add-calculated-input" class="form-label">How many</label>
-                                <input type="text" class="form-control" role="switch" id="add-calculated-input">
-                            </div>
-                        </div>
+                        <div id="cq-question-summary" class="form-text mt-1"></div>
                     </div>           
                 </div>
                 <div class="w-100"></div>
@@ -207,51 +120,65 @@ async function createQuiz(e) {
     // Attach listeners only once to avoid duplicate submissions when reopening this view
     if (createQuizForm.dataset.bound !== 'true') {
         const courseID = createQuizForm.querySelector('#course-id');
-        courseID.addEventListener('change', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            checkCourseID(courseID, createQuizForm);
-        });
-
         const numOfQuizzes = createQuizForm.querySelector('#quiz-number');
-        numOfQuizzes.addEventListener('change', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
 
-            checkCourseID(numOfQuizzes, createQuizForm);
-        })
-
-        // map to use for eventHandler to toggle the div on or off
-        const quizToggleMap = {
-            "text_only_question": 'add-text-only-div',
-            "true_false_question": 'add-true-false-div',
-            "short_answer_question": 'add-short-answer-div',
-            "essay_question": 'add-essay-div',
-            "file_upload_question": 'add-fileUpload-div',
-            "fill_in_multiple_blanks_question": 'add-fill-mlt-blanks-div',
-            "matching_question": 'add-matching-div',
-            "multiple_answers_question": 'add-mlt-answers-div',
-            "multiple_choice_question": 'add-mlt-choice-div',
-            "multiple_dropdowns_question": 'add-mlt-drop-div',
-            "numerical_question": 'add-numerical-div',
-            "calculated_question": 'add-calculated-div'
-        }
-
-        const questionToggles = createQuizForm.querySelector('#question-types');
-        questionToggles.addEventListener('change', (e) => {
-            e.stopPropagation();
-
-            const toggleDivID = quizToggleMap[e.target.id];
-            if (toggleDivID) {
-                const toggleDiv = createQuizForm.querySelector(`#${toggleDivID}`);
-                if (toggleDiv) {
-                    toggleDiv.classList.toggle('hidden');
-                }
-            }
-        });
+        const qTypeSel = createQuizForm.querySelector('#cq-question-type');
+        const qQtyInput = createQuizForm.querySelector('#cq-question-qty');
+        const qAddBtn = createQuizForm.querySelector('#cq-question-add');
+        const qClearBtn = createQuizForm.querySelector('#cq-question-clear');
+        const qSummary = createQuizForm.querySelector('#cq-question-summary');
 
         const createBtn = createQuizForm.querySelector('#action-btn');
+
+        const selectedQuestions = new Map(); // type -> qty
+
+        const isPositiveInt = (v) => {
+            const n = Number(v);
+            return Number.isInteger(n) && n > 0;
+        };
+
+        function refreshCreateEnabled() {
+            const okCourse = isPositiveInt(courseID.value.trim());
+            const okQuizNum = isPositiveInt(numOfQuizzes.value.trim());
+            const hasQuestions = selectedQuestions.size > 0;
+            createBtn.disabled = !(okCourse && okQuizNum && hasQuestions);
+        }
+
+        function renderSummary() {
+            if (selectedQuestions.size === 0) {
+                qSummary.textContent = 'No question types selected';
+            } else {
+                const parts = [];
+                for (const [type, qty] of selectedQuestions.entries()) {
+                    const label = qTypeSel.querySelector(`option[value="${type}"]`)?.textContent || type;
+                    parts.push(`${label} x ${qty}`);
+                }
+                qSummary.textContent = `Selected: ${parts.join(', ')}`;
+            }
+            refreshCreateEnabled();
+        }
+
+        qAddBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const type = qTypeSel.value;
+            const qty = qQtyInput.value.trim();
+            if (!isPositiveInt(qty)) return;
+            selectedQuestions.set(type, Number(qty));
+            renderSummary();
+        });
+
+        qClearBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            selectedQuestions.clear();
+            renderSummary();
+        });
+
+        courseID.addEventListener('input', refreshCreateEnabled);
+        numOfQuizzes.addEventListener('input', refreshCreateEnabled);
+        qQtyInput.addEventListener('input', (e) => {
+            // no-op except possibly enabling add button in future
+        });
+        renderSummary();
         createBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -265,72 +192,16 @@ async function createQuiz(e) {
             const token = document.querySelector('#token').value.trim();
             const course_id = courseID.value.trim();
             const quiz_type = createQuizForm.querySelector('#quiz-type').value;
+            const quiz_name = createQuizForm.querySelector('#quiz-name')?.value.trim();
             const publish = createQuizForm.querySelector('#quiz-publish').checked;
             const num_quizzes = numOfQuizzes.value.trim();
 
-            // finding out which question types to add
-            const questionTypes = [
-                {
-                    name: "text_only_question",
-                    enabled: createQuizForm.querySelector('#text_only_question').checked,
-                    number: createQuizForm.querySelector('#add-text-only-input').value.trim()
-                },
-                {
-                    name: "true_false_question",
-                    enabled: createQuizForm.querySelector('#true_false_question').checked,
-                    number: createQuizForm.querySelector('#add-true-false-input').value.trim()
-                },
-                {
-                    name: "short_answer_question",
-                    enabled: createQuizForm.querySelector('#short_answer_question').checked,
-                    number: createQuizForm.querySelector('#add-short-answer-input').value.trim()
-                },
-                {
-                    name: "numerical_question",
-                    enabled: createQuizForm.querySelector('#numerical_question').checked,
-                    number: createQuizForm.querySelector('#add-numerical-input').value.trim()
-                },
-                {
-                    name: "calculated_question",
-                    enabled: createQuizForm.querySelector('#calculated_question').checked,
-                    number: createQuizForm.querySelector('#add-calculated-input').value.trim()
-                },
-                {
-                    name: "multiple_dropdowns_question",
-                    enabled: createQuizForm.querySelector('#multiple_dropdowns_question').checked,
-                    number: createQuizForm.querySelector('#add-mlt-drop-input').value.trim()
-                },
-                {
-                    name: "multiple_choice_question",
-                    enabled: createQuizForm.querySelector('#multiple_choice_question').checked,
-                    number: createQuizForm.querySelector('#add-mlt-choice-input').value.trim()
-                },
-                {
-                    name: "multiple_answers_question",
-                    enabled: createQuizForm.querySelector('#multiple_answers_question').checked,
-                    number: createQuizForm.querySelector('#add-mlt-answers-input').value.trim()
-                },
-                {
-                    name: "matching_question",
-                    enabled: createQuizForm.querySelector('#matching_question').checked,
-                    number: createQuizForm.querySelector('#add-matching-input').value.trim()
-                },
-                {
-                    name: "fill_in_multiple_blanks_question",
-                    enabled: createQuizForm.querySelector('#fill_in_multiple_blanks_question').checked,
-                    number: createQuizForm.querySelector('#add-fill-mlt-blanks-input').value.trim()
-                },
-                {
-                    name: "file_upload_question",
-                    enabled: createQuizForm.querySelector('#file_upload_question').checked,
-                    number: createQuizForm.querySelector('#add-fileUpload-input').value.trim()
-                },
-                {
-                    name: "essay_question",
-                    enabled: createQuizForm.querySelector('#essay_question').checked,
-                    number: createQuizForm.querySelector('#add-essay-input').value.trim()
-                }
-            ];
+            // Build question types from selections
+            const questionTypes = Array.from(selectedQuestions.entries()).map(([name, qty]) => ({
+                name,
+                enabled: true,
+                number: String(qty)
+            }));
 
             const progressDiv = createQuizForm.querySelector('#create-cq-progress-div');
             const progressBar = progressDiv.querySelector('.progress-bar');
@@ -338,8 +209,36 @@ async function createQuiz(e) {
 
             // clean environment
             progressDiv.hidden = false;
-            progressBar.style.width = '0%';
+            // Remove duplicate percent labels, keep only one in the progress container
+            const progressContainer = progressBar.parentElement;
+            if (progressContainer) {
+                progressContainer.style.position = 'relative';
+                const labels = progressContainer.querySelectorAll('.progress-percent');
+                for (let i = 1; i < labels.length; i++) labels[i].remove();
+            }
+            window.ProgressUtils.updateProgressWithPercent(progressBar, 0);
+            progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
             progressInfo.innerHTML = '';
+
+            // Step helpers
+            const setBar = (percent) => window.ProgressUtils.updateProgressWithPercent(progressBar, percent);
+            const appendLine = (text) => {
+                const span = document.createElement('span');
+                span.textContent = text;
+                progressInfo.appendChild(span);
+                progressInfo.appendChild(document.createElement('br'));
+                return span;
+            };
+            const replaceLine = (el, text) => { if (el) el.textContent = text; };
+
+            // Build selected question types list for sub-step messaging
+            const selectedTypes = Array.from(selectedQuestions.entries())
+                .filter(([, qty]) => Number(qty) > 0)
+                .map(([type, qty]) => ({ type, qty }));
+            const typeLabel = (t) => {
+                const opt = qTypeSel.querySelector(`option[value="${t}"]`);
+                return opt ? opt.textContent : t;
+            };
 
             const data = {
                 domain,
@@ -348,21 +247,38 @@ async function createQuiz(e) {
                 quiz_type,
                 publish,
                 num_quizzes,
+                quiz_name,
                 questionTypes
             };
 
             try {
-                window.progressAPI.onUpdateProgress((progress) => {
-                    progressBar.style.width = `${progress}%`;
-                });
+                // Step 1: Creating quizzes
+                let step1Line = appendLine('Step 1: Creating quizzes...');
+                let step2Line; // will be set before creating questions
+                let activeRun = true;
+                setBar(0);
+                // Map backend progress to 0-25%
+                if (window.progressAPI && window.progressAPI.onUpdateProgress) {
+                    window.progressAPI.onUpdateProgress((msg) => {
+                        if (!activeRun || !msg || typeof msg !== 'object') return;
+                        if (msg.label === 'Creating quizzes' && typeof msg.processed === 'number' && typeof msg.total === 'number' && msg.total > 0) {
+                            const pct = (msg.processed / msg.total) * 25;
+                            replaceLine(step1Line, `Step 1: Creating quizzes... ${msg.processed}/${msg.total}`);
+                            setBar(pct);
+                        } else if (msg.label === 'Creating questions' && typeof msg.processed === 'number' && typeof msg.total === 'number' && msg.total > 0) {
+                            // Step 2 progress mapped to 25-75%
+                            const pct = 25 + (msg.processed / msg.total) * 50;
+                            if (step2Line) replaceLine(step2Line, `Step 2: Creating Questions... ${msg.processed}/${msg.total}`);
+                            setBar(pct);
+                        }
+                    });
+                }
 
                 // returns the IDs of the quizzes created
                 const createQuizzesResponse = await window.axios.createClassicQuizzes(data);
                 if (createQuizzesResponse.successful.length > 0) {
-                    progressInfo.innerHTML = `Successfully created ${createQuizzesResponse.successful.length} quizzes.`;
-                    responseContainer.innerHTML = '<p>Creating questions in the new quizzes...</p>';
-                    // resetting progress bar
-                    progressBar.style.width = '0%';
+                    replaceLine(step1Line, `Step 1: Created ${createQuizzesResponse.successful.length} quizzes.`);
+                    setBar(25);
 
                     // get the quiz ids from the createQuizzesResponse.successful
                     const quizIDs = createQuizzesResponse.successful.map(quiz => quiz.value.id);
@@ -375,11 +291,18 @@ async function createQuiz(e) {
                         quizzes: quizIDs
                     }
 
+                    // Step 2: Creating Questions (+2a per-type lines)
+                    step2Line = appendLine('Step 2: Creating Questions...');
+                    if (selectedTypes.length > 0) {
+                        selectedTypes.forEach(({ type, qty }) => appendLine(`Step 2a: Creating ${typeLabel(type)} questions... (${qty} per quiz)`));
+                    } else {
+                        appendLine('Step 2a: No question types selected.');
+                    }
+
                     const createQuestionsResponse = await window.axios.createClassicQuestions(quizQuestionData);
                     if (createQuestionsResponse.successful.length > 0) {
                         // update the quizzes after question are created
-                        progressInfo.innerHTML += ` Successfully created ${createQuestionsResponse.successful.length} questions.`;
-                        progressInfo.innerHTML += ` Saving quizzes...`;
+                        appendLine(`Step 2: Questions created for ${createQuestionsResponse.successful.length} quizzes.`);
                         for (let quiz of quizIDs) {
                             try {
                                 await window.axios.updateClassicQuiz({ domain, token, course_id, quiz_id: quiz });
@@ -387,17 +310,37 @@ async function createQuiz(e) {
                                 console.error(`Failed to update quiz ${quiz}: ${error}`);
                             }
                         }
-                        progressBar.style.width = '100%';
+                        // Move bar to 75% after Step 2
+                        setBar(75);
+                        // If user selected publish, publish after questions are created
+                        if (publish) {
+                            appendLine('Step 3: Publishing quizzes...');
+                            for (let quiz of quizIDs) {
+                                try {
+                                    await window.axios.updateClassicQuiz({ domain, token, course_id, quiz_id: quiz, payload: { quiz: { published: true } } });
+                                } catch (error) {
+                                    console.error(`Failed to publish quiz ${quiz}: ${error}`);
+                                }
+                            }
+                            // Nudge bar during publish
+                            setBar(90);
+                        }
+                        // Final step
+                        appendLine('Step 4: Done.');
+                        setBar(100);
+                        activeRun = false;
                     } else {
                         progressInfo.innerHTML += ` Failed to create questions for ${quizIDs.length} quizzes.`;
                         progressBar.parentElement.hidden = true;
                         errorHandler({ message: `${createQuestionsResponse.failed[0].reason}` }, progressInfo);
+                        activeRun = false;
                     }
                 }
                 if (createQuizzesResponse.failed.length > 0) {
                     progressInfo.innerHTML += `Failed to create ${createQuizzesResponse.failed.length} quizzes.`;
                     progressBar.parentElement.hidden = true;
                     errorHandler({ message: `${createQuizzesResponse.failed[0].reason}` }, progressInfo);
+                    activeRun = false;
                 }
 
 

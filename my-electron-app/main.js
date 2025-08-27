@@ -139,8 +139,14 @@ app.whenReady().then(() => {
 
         const updateProgress = () => {
             completedRequests++;
-            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
-        }
+            mainWindow.webContents.send('update-progress', {
+                mode: 'determinate',
+                label: 'Deleting conversations',
+                processed: completedRequests,
+                total: totalRequests,
+                value: completedRequests / totalRequests
+            });
+        };
 
         const request = async (requestData) => {
             try {
@@ -229,7 +235,13 @@ app.whenReady().then(() => {
 
         const updateProgress = () => {
             completedRequests++;
-            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+            mainWindow.webContents.send('update-progress', {
+                mode: 'determinate',
+                label: 'Creating assignments',
+                processed: completedRequests,
+                total: totalRequests,
+                value: completedRequests / totalRequests
+            });
         }
 
         const request = async (requestData) => {
@@ -1371,7 +1383,13 @@ app.whenReady().then(() => {
 
         const updateProgress = () => {
             completedRequests++;
-            mainWindow.webContents.send('update-progress', (completedRequests / totalNumber) * 100);
+            mainWindow.webContents.send('update-progress', {
+                mode: 'determinate',
+                label: 'Creating questions',
+                processed: completedRequests,
+                total: totalNumber,
+                value: completedRequests / totalNumber
+            });
         }
 
         const request = async (requestData) => {
@@ -1856,7 +1874,13 @@ async function createClassicQuizzes(data) {
 
     const updateProgress = () => {
         completedRequests++;
-        mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        mainWindow.webContents.send('update-progress', {
+            mode: 'determinate',
+            label: 'Creating quizzes',
+            processed: completedRequests,
+            total: totalRequests,
+            value: completedRequests / totalRequests
+        });
     };
 
     const request = async (requestData) => {
@@ -1871,15 +1895,21 @@ async function createClassicQuizzes(data) {
     };
 
     const requests = [];
+    const hasQuestions = Array.isArray(data.questionTypes) && data.questionTypes.some(q => q && q.enabled && Number(q.number) > 0);
+    const publishAtCreate = data.publish && !hasQuestions;
     for (let i = 0; i < totalRequests; i++) {
         const requestData = {
             domain: data.domain,
             token: data.token,
             course_id: data.course_id,
             quiz_type: data.quiz_type,
-            publish: data.publish,
+            publish: !!publishAtCreate,
             num_quizzes: data.num_quizzes,
-            quiz_title: `Quiz ${i + 1}`
+            quiz_title: (() => {
+                const base = (data.quiz_name && data.quiz_name.length > 0) ? data.quiz_name : 'Quiz';
+                // If creating multiple, suffix with index; otherwise use as-is
+                return (totalRequests > 1) ? `${base} ${i + 1}` : base;
+            })()
         };
         requests.push({ id: i + 1, request: () => request(requestData) })
     }
