@@ -69,6 +69,48 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.ProgressUtils && window.progressAPI) {
         window.ProgressUtils.autoWireGlobalProgress();
     }
+
+    // Sidebar collapse toggle
+    const toggleBtn = document.getElementById('sidebar-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const content = document.getElementById('endpoint-content');
+    const mainRow = document.getElementById('main-row');
+
+    function setButtonState(collapsed) {
+        toggleBtn.setAttribute('aria-pressed', String(collapsed));
+        toggleBtn.setAttribute('title', collapsed ? 'Show menu' : 'Hide menu');
+        toggleBtn.textContent = collapsed ? '»' : '«';
+    }
+
+    function applySidebarState(collapsed, { animate } = { animate: true }) {
+        if (!mainRow) return;
+        // The CSS transition handles smooth slide; JS only toggles the state class
+        mainRow.classList.toggle('sidebar-collapsed', collapsed);
+        // Update known grid classes for content to ensure correct width for non-supporting browsers
+        if (content) {
+            if (collapsed) {
+                content.classList.remove('col-8');
+                content.classList.add('col-12');
+            } else {
+                content.classList.remove('col-12');
+                content.classList.add('col-8');
+            }
+        }
+        setButtonState(collapsed);
+        localStorage.setItem('sidebarCollapsed', String(collapsed));
+    }
+
+    // Load saved state
+    const saved = localStorage.getItem('sidebarCollapsed');
+    const initialCollapsed = saved === 'true';
+    applySidebarState(initialCollapsed, { animate: false });
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const willCollapse = !mainRow.classList.contains('sidebar-collapsed');
+            applySidebarState(willCollapse, { animate: true });
+        });
+    }
 });
 
 function getSelectedText() {

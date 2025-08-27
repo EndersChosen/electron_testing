@@ -560,6 +560,47 @@ Course module management for organizing content structure.
 - Delete module and all items
 - Move items to another module
 
+### Re-lock Modules
+**Purpose**: Reset module progressions to their default locked state and recalculate them based on current requirements
+
+**Description**: This feature is useful when you've added progression requirements to an active course. Adding requirements to modules won't automatically lock students out of modules they've already unlocked unless you re-lock the modules.
+
+**Usage Options**:
+1. **Re-lock ALL Modules**: Automatically re-locks every module in the course
+2. **Select Specific Modules**: Choose which modules to re-lock individually
+
+**Usage Flow**:
+1. Navigate to Modules → Re-lock Modules
+2. Enter Course ID
+3. Choose your re-lock method:
+   - **All Modules**: Keep "Re-lock ALL modules" checked and click "Fetch Modules"
+   - **Specific Modules**: Uncheck "Re-lock ALL modules", click "Fetch Modules", then select desired modules
+4. Click the re-lock button to execute
+
+**Module Selection Features** (when not re-locking all):
+- **Individual Selection**: Check/uncheck specific modules
+- **Select All**: Quickly select all modules at once
+- **Deselect All**: Quickly deselect all modules
+- **Module Information**: Shows module name and ID for easy identification
+
+**Use Cases**:
+- Added new prerequisite requirements to existing modules
+- Changed module unlock conditions
+- Need to reset student progress for specific modules
+- Course has been modified and progression needs recalculation
+
+**Safety Features**:
+- Shows module count before execution
+- Progress tracking for bulk operations
+- Detailed success/failure reporting
+- Reversible operation (students can re-unlock modules by meeting requirements)
+
+**Important Notes**:
+- This operation affects all enrolled students in the course
+- Students will need to re-meet progression requirements to unlock modules
+- Does not delete student progress, only resets unlock status
+- Consider notifying students before performing this action
+
 ---
 
 ## SIS File Generator

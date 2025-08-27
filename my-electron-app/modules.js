@@ -117,6 +117,50 @@ async function deleteModule(data) {
     }
 }
 
+async function relockModule(data) {
+    let url = `https://${data.domain}/api/v1/courses/${data.course_id}/modules/${data.module_id}/relock`;
+
+    const axiosConfig = {
+        method: 'put',
+        url: url,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        }
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function getModulesSimple(data) {
+    let url = `https://${data.domain}/api/v1/courses/${data.course_id}/modules`;
+
+    const axiosConfig = {
+        method: 'get',
+        url: url,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        }
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
 module.exports = {
-    getModules, deleteModule, createModule
+    getModules, deleteModule, createModule, relockModule, getModulesSimple
 }

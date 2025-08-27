@@ -258,6 +258,16 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:createModules', data);
     },
+    getModulesSimple: async (data) => {
+        console.log('preload.js > getModulesSimple');
+
+        return await ipcRenderer.invoke('axios:getModulesSimple', data);
+    },
+    relockModules: async (data) => {
+        console.log('preload.js > relockModules');
+
+        return await ipcRenderer.invoke('axios:relockModules', data);
+    },
     updateNotifications: async (data) => {
         console.log('preload.js > updateNotifications');
 

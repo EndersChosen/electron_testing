@@ -350,28 +350,39 @@ async function reLockModules(e) {
         reLockModulesForm.innerHTML = `
             <div>
                 <h3>Re-lock Modules</h3>
-                <p>Relocks all modules in a course</p>
+                <p>Resets module progressions to their default locked state and recalculates them based on the current requirements.</p>
             </div>
             <div class="row">
-                <div class="row align-items-center">
-                        <div class="col-2">
-                            <label class="form-label">Course</label>
-                            <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                <div class="row align-items-end">
+                    <div class="col-12 col-sm-6 col-md-5 col-lg-4">
+                        <label class="form-label">Course ID</label>
+                        <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
+                        <div>
+                            <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
                         </div>
-                </div>
-                <div class="col-auto" >
-                    <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+                    </div>
+                    <div class="col-auto ms-2 ms-md-3">
+                        <button id="fetch-modules-btn" class="btn btn-primary mt-2 mt-sm-0">Fetch Modules</button>
+                    </div>
                 </div>
                 <hr class="mt-2">
-                <div class="w-100"></div>
-                <div class="col-auto">
-                    <button id="check-modules-btn" class="btn btn-primary mt-3" disabled>Check</button>
+            </div>
+            <div id="module-selection-container" class="mt-3" hidden>
+                <h5>Select Modules to Re-lock:</h5>
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="select-all-modules-chbx">
+                    <label for="select-all-modules-chbx" class="form-check-label">Select All</label>
                 </div>
+                <div id="modules-list" class="mt-2">
+                    <!-- Module checkboxes will be populated here -->
+                </div>
+            </div>
+            <div class="mt-3">
+                <button id="relock-btn" class="btn btn-warning mt-3" disabled>Re-lock Selected Modules</button>
             </div>
             <div hidden id="relock-progress-div">
                 <p id="relock-progress-info"></p>
                 <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                    
                     <div class="progress-bar" style="width: 0%"></div>
                 </div>
             </div>
@@ -379,7 +390,223 @@ async function reLockModules(e) {
             </div>
         `;
 
-        eContent.append(createModuleDeleteForm);
+        eContent.append(reLockModulesForm);
     }
-    createModuleDeleteForm.hidden = false;
+    reLockModulesForm.hidden = false;
+
+    const courseID = reLockModulesForm.querySelector('#course-id');
+    const relockAllCheckbox = reLockModulesForm.querySelector('#relock-all-modules');
+    const fetchModulesBtn = reLockModulesForm.querySelector('#fetch-modules-btn');
+    // start disabled until a valid course id is entered
+    fetchModulesBtn.disabled = true;
+    const moduleSelectionContainer = reLockModulesForm.querySelector('#module-selection-container');
+    const relockBtn = reLockModulesForm.querySelector('#relock-btn');
+    const selectAllCheckbox = reLockModulesForm.querySelector('#select-all-modules-chbx');
+
+    let allModules = [];
+
+    // Course ID validation
+    courseID.addEventListener('input', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const trimmedValue = courseID.value.trim();
+        const inputChecker = reLockModulesForm.querySelector('#input-checker');
+
+        if (trimmedValue === '') {
+            inputChecker.style.display = 'none';
+            fetchModulesBtn.disabled = true;
+        } else if (!isNaN(Number(trimmedValue)) && Number(trimmedValue) > 0) {
+            inputChecker.style.display = 'none';
+            fetchModulesBtn.disabled = false;
+        } else {
+            inputChecker.style.display = 'inline';
+            fetchModulesBtn.disabled = true;
+        }
+    });
+
+    courseID.addEventListener('change', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        checkCourseID(courseID, reLockModulesForm);
+    });
+
+    // Set initial button and container state
+    relockBtn.textContent = 'Re-lock Selected Modules';
+    relockBtn.style.display = 'inline-block';
+    relockBtn.disabled = true;
+
+    // Fetch modules button
+    fetchModulesBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const course_id = courseID.value.trim();
+
+        const progressDiv = reLockModulesForm.querySelector('#relock-progress-div');
+        const progressInfo = reLockModulesForm.querySelector('#relock-progress-info');
+        const responseContainer = reLockModulesForm.querySelector('#relock-response-container');
+
+        // Clean environment
+        responseContainer.innerHTML = '';
+        progressDiv.hidden = false;
+        progressInfo.innerHTML = 'Fetching modules...';
+
+        const requestData = {
+            domain,
+            token,
+            course_id
+        };
+
+        try {
+            allModules = await window.axios.getModulesSimple(requestData);
+            console.log('Fetched modules:', allModules);
+            progressInfo.innerHTML = `Found ${allModules.length} modules`;
+            progressDiv.hidden = true;
+
+            if (allModules.length === 0) {
+                responseContainer.innerHTML = '<div class="alert alert-info">No modules found in this course.</div>';
+                return;
+            }
+
+            // Show selection area and populate module list
+            moduleSelectionContainer.hidden = false;
+            const modulesList = reLockModulesForm.querySelector('#modules-list');
+            modulesList.innerHTML = '';
+
+            allModules.forEach((module) => {
+                const moduleDiv = document.createElement('div');
+                moduleDiv.className = 'form-check';
+                moduleDiv.innerHTML = `
+                    <input class="form-check-input module-checkbox" type="checkbox" value="${module.id}" id="module-${module.id}">
+                    <label class="form-check-label" for="module-${module.id}">
+                        ${module.name} (ID: ${module.id})
+                    </label>
+                `;
+                modulesList.appendChild(moduleDiv);
+            });
+
+            // Add event listeners for module checkboxes
+            const moduleCheckboxes = modulesList.querySelectorAll('.module-checkbox');
+            moduleCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    // keep select-all checkbox in sync
+                    const total = moduleCheckboxes.length;
+                    const selected = reLockModulesForm.querySelectorAll('.module-checkbox:checked').length;
+                    selectAllCheckbox.checked = selected > 0 && selected === total;
+                    updateRelockButton();
+                });
+            });
+
+            console.log('About to enable relock button');
+            updateRelockButton();
+            console.log('Relock button display:', relockBtn.style.display, 'disabled:', relockBtn.disabled);
+
+        } catch (error) {
+            errorHandler(error, progressInfo);
+        }
+    });
+
+    // Select All checkbox behavior
+    selectAllCheckbox.addEventListener('change', () => {
+        const moduleCheckboxes = reLockModulesForm.querySelectorAll('.module-checkbox');
+        moduleCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+        updateRelockButton();
+    });
+
+    // Update relock button state
+    function updateRelockButton() {
+        const selectedModules = reLockModulesForm.querySelectorAll('.module-checkbox:checked');
+        relockBtn.disabled = selectedModules.length === 0;
+        console.log('Updated relock button - disabled:', relockBtn.disabled);
+    }
+
+    // Re-lock modules button
+    relockBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const course_id = courseID.value.trim();
+
+        const progressDiv = reLockModulesForm.querySelector('#relock-progress-div');
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        const progressInfo = reLockModulesForm.querySelector('#relock-progress-info');
+        const responseContainer = reLockModulesForm.querySelector('#relock-response-container');
+
+        const selectedCheckboxes = reLockModulesForm.querySelectorAll('.module-checkbox:checked');
+        const moduleIds = Array.from(selectedCheckboxes).map(checkbox => parseInt(checkbox.value));
+
+        if (moduleIds.length === 0) {
+            responseContainer.innerHTML = '<div class="alert alert-warning">No modules selected for re-locking.</div>';
+            return;
+        }
+
+        // Clean environment
+        responseContainer.innerHTML = '';
+        progressDiv.hidden = false;
+        progressBar.parentElement.hidden = false;
+        updateProgressWithPercent(progressBar, 0);
+        enhanceProgressBarWithPercent(progressBar);
+        progressInfo.innerHTML = `Re-locking ${moduleIds.length} module(s)...`;
+
+        relockBtn.disabled = true;
+        fetchModulesBtn.disabled = true;
+
+        const requestData = {
+            domain,
+            token,
+            course_id,
+            module_ids: moduleIds
+        };
+
+        window.progressAPI.onUpdateProgress((progress) => {
+            updateProgressWithPercent(progressBar, progress);
+        });
+
+        try {
+            const relockResult = await window.axios.relockModules(requestData);
+
+            const successCount = relockResult.successful.length;
+            const failedCount = relockResult.failed.length;
+
+            if (successCount > 0) {
+                progressInfo.innerHTML = `Successfully re-locked ${successCount} module(s).`;
+
+                if (failedCount > 0) {
+                    progressInfo.innerHTML += ` Failed to re-lock ${failedCount} module(s).`;
+                }
+
+                responseContainer.innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>Re-lock Complete!</strong><br>
+                        Successfully re-locked ${successCount} module(s)${failedCount > 0 ? `, failed ${failedCount}` : ''}.
+                    </div>
+                `;
+            } else {
+                progressInfo.innerHTML = `Failed to re-lock modules.`;
+                responseContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Re-lock Failed!</strong><br>
+                        No modules were successfully re-locked.
+                    </div>
+                `;
+            }
+
+        } catch (error) {
+            errorHandler(error, progressInfo);
+            responseContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Error!</strong><br>
+                    ${error.message || 'An error occurred while re-locking modules.'}
+                </div>
+            `;
+        } finally {
+            relockBtn.disabled = false;
+            fetchModulesBtn.disabled = false;
+        }
+    });
 }

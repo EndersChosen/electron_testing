@@ -40,7 +40,7 @@ let suppressedEmails = [];
 
 const createWindow = () => {
     mainWindow = new BrowserWindow({
-        width: 1200,
+        width: 1400,
         minWidth: 900,
         height: 900,
         webPreferences: {
@@ -727,8 +727,12 @@ app.whenReady().then(() => {
         // creating the course
         let response;
         try {
+            // Indicate starting course creation
+            progressStartIndeterminate('Creating course...');
             response = await createSupportCourse(data);
             console.log('Finished creating course. Checking options....');
+            // Update label after creation
+            mainWindow.webContents.send('update-progress', { label: 'Course created. Processing options...' });
         } catch (error) {
             throw `${error.message}`;
         }
@@ -736,10 +740,37 @@ app.whenReady().then(() => {
         data.course_id = response.id;
         let totalUsers = null;
 
+        // Overall progress accounting across selected content operations
+        const toInt = (v) => Math.max(0, parseInt(v ?? 0, 10) || 0);
+        const counts = {
+            associatedCourses: data.course.blueprint?.state ? toInt(data.course.blueprint.associated_courses) : 0,
+            assignments: data.course.addAssignments?.state ? toInt(data.course.addAssignments.number) : 0,
+            classicQuizzes: data.course.addCQ?.state ? toInt(data.course.addCQ.number) : 0,
+            newQuizzes: data.course.addNQ?.state ? toInt(data.course.addNQ.number) : 0,
+            discussions: data.course.addDiscussions?.state ? toInt(data.course.addDiscussions.number) : 0,
+            pages: data.course.addPages?.state ? toInt(data.course.addPages.number) : 0,
+            modules: data.course.addModules?.state ? toInt(data.course.addModules.number) : 0,
+            sections: data.course.addSections?.state ? toInt(data.course.addSections.number) : 0
+        };
+        const totalOverallUnits = Object.values(counts).reduce((a, b) => a + b, 0);
+        let processedOverallUnits = 0;
+
+        const sendOverall = (label, processedSection, totalSection) => {
+            const percent = totalOverallUnits > 0 ? (processedOverallUnits / totalOverallUnits) * 100 : 0;
+            mainWindow.webContents.send('update-progress', {
+                mode: 'determinate',
+                processed: processedOverallUnits,
+                total: totalOverallUnits,
+                percent,
+                label: label ?? (totalSection > 0 ? `Processing (${processedSection}/${totalSection})...` : 'Processing...')
+            });
+        };
+
         // check other options 
         try {
             if (data.course.blueprint.state) { // do we need to make it a blueprint course 
                 console.log('Enabling blueprint...');
+                mainWindow.webContents.send('update-progress', { label: 'Enabling blueprint...' });
                 await enableBlueprint(data);
                 const associatedCourses = data.course.blueprint.associated_courses;
 
@@ -764,7 +795,23 @@ app.whenReady().then(() => {
 
                 // create the courses to be used to associate
                 console.log('Creating any associated courses...');
-                const newCourses = await batchHandler(requests);
+                mainWindow.webContents.send('update-progress', { label: `Creating ${associatedCourses} associated course(s)...` });
+                // Track progress while creating associated courses
+                let completedRequestsAC = 0;
+                const totalRequestsAC = associatedCourses;
+                let processedAC = 0;
+                const requestWithProgress = (fn) => async () => {
+                    try {
+                        return await fn();
+                    } finally {
+                        completedRequestsAC++;
+                        processedAC++;
+                        processedOverallUnits++;
+                        sendOverall(`Creating associated courses (${processedAC}/${totalRequestsAC})...`, processedAC, totalRequestsAC);
+                    }
+                };
+                const progressWrapped = requests.map((r) => ({ id: r.id, request: requestWithProgress(r.request) }));
+                const newCourses = await batchHandler(progressWrapped);
                 const newCourseIDS = newCourses.successful.map(course => course.value.id);
                 console.log('Finished creating associated courses.')
 
@@ -776,6 +823,7 @@ app.whenReady().then(() => {
                 };
 
                 console.log('Linking associated courses to blueprint...')
+                mainWindow.webContents.send('update-progress', { label: 'Associating courses to blueprint and syncing...' });
                 const associateRequest = await associateCourses(acCourseData); // associate the courses to the BP
                 // await waitFunc(2000);
                 const migrationRequest = await syncBPCourses(acCourseData);
@@ -797,12 +845,14 @@ app.whenReady().then(() => {
 
                 // add users to Canvas
                 console.log('Adding users to Canvas')
+                mainWindow.webContents.send('update-progress', { label: 'Creating users in Canvas...' });
                 const userResponse = await addUsersToCanvas(usersToEnroll);
                 const userIDs = userResponse.successful.map(user => user.value); // store the successfully created user IDs
                 console.log('Finished adding users to Canvas.');
 
                 // enroll users to course
                 console.log('Enrolling users to course.');
+                mainWindow.webContents.send('update-progress', { label: 'Enrolling users to course...' });
                 const enrollResponse = await enrollUsers(usersToEnroll, userIDs);
                 totalUsers = enrollResponse.successful.length;
                 console.log('Finished enrolling users in the course.');
@@ -810,6 +860,7 @@ app.whenReady().then(() => {
 
             if (data.course.addAssignments.state) {     // do we need to add assignments
                 console.log('creating assignments....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addAssignments.number} assignment(s)...` });
 
                 const request = async (requestData) => {
                     try {
@@ -820,7 +871,14 @@ app.whenReady().then(() => {
                 };
 
                 const requests = [];
-                for (let i = 0; i < data.course.addAssignments.number; i++) {
+                const totalRequestsAssignments = data.course.addAssignments.number;
+                let processedAssignments = 0;
+                const updateProgressAssignments = () => {
+                    processedAssignments++;
+                    processedOverallUnits++;
+                    sendOverall(`Creating assignments (${processedAssignments}/${totalRequestsAssignments})...`, processedAssignments, totalRequestsAssignments);
+                };
+                for (let i = 0; i < totalRequestsAssignments; i++) {
                     const requestData = {
                         domain: data.domain,
                         token: data.token,
@@ -833,7 +891,10 @@ app.whenReady().then(() => {
                         peer_reviews: false,
                         anonymous: false
                     };
-                    requests.push({ id: i + 1, request: () => request(requestData) });
+                    const req = async () => {
+                        try { return await request(requestData); } finally { updateProgressAssignments(); }
+                    };
+                    requests.push({ id: i + 1, request: req });
                 }
 
                 const assignmentResponses = await batchHandler(requests);
@@ -843,6 +904,7 @@ app.whenReady().then(() => {
             // Create Classic Quizzes if requested
             if (data.course.addCQ.state && data.course.addCQ.number > 0) {
                 console.log('creating classic quizzes....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addCQ.number} classic quiz(zes)...` });
                 try {
                     await createClassicQuizzes({
                         domain: data.domain,
@@ -861,11 +923,13 @@ app.whenReady().then(() => {
             // Create New Quizzes if requested
             if (data.course.addNQ.state && data.course.addNQ.number > 0) {
                 console.log('creating new quizzes....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addNQ.number} new quiz(zes)...` });
                 const totalRequests = data.course.addNQ.number;
-                let completedRequests = 0;
+                let processedNQ = 0;
                 const updateProgress = () => {
-                    completedRequests++;
-                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                    processedNQ++;
+                    processedOverallUnits++;
+                    sendOverall(`Creating new quizzes (${processedNQ}/${totalRequests})...`, processedNQ, totalRequests);
                 };
 
                 const request = async (requestData) => {
@@ -898,11 +962,13 @@ app.whenReady().then(() => {
             // Create Discussions if requested
             if (data.course.addDiscussions.state && data.course.addDiscussions.number > 0) {
                 console.log('creating discussions....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addDiscussions.number} discussion(s)...` });
                 const totalRequests = data.course.addDiscussions.number;
-                let completedRequests = 0;
+                let processedDiscussions = 0;
                 const updateProgress = () => {
-                    completedRequests++;
-                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                    processedDiscussions++;
+                    processedOverallUnits++;
+                    sendOverall(`Creating discussions (${processedDiscussions}/${totalRequests})...`, processedDiscussions, totalRequests);
                 };
                 const request = async (requestData) => {
                     try {
@@ -932,11 +998,13 @@ app.whenReady().then(() => {
             // Create Pages if requested
             if (data.course.addPages.state && data.course.addPages.number > 0) {
                 console.log('creating pages....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addPages.number} page(s)...` });
                 const totalRequests = data.course.addPages.number;
-                let completedRequests = 0;
+                let processedPages = 0;
                 const updateProgress = () => {
-                    completedRequests++;
-                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                    processedPages++;
+                    processedOverallUnits++;
+                    sendOverall(`Creating pages (${processedPages}/${totalRequests})...`, processedPages, totalRequests);
                 };
                 const request = async (requestData) => {
                     try {
@@ -966,11 +1034,13 @@ app.whenReady().then(() => {
             // Create Modules if requested
             if (data.course.addModules.state && data.course.addModules.number > 0) {
                 console.log('creating modules....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addModules.number} module(s)...` });
                 const totalRequests = data.course.addModules.number;
-                let completedRequests = 0;
+                let processedMods = 0;
                 const updateProgress = () => {
-                    completedRequests++;
-                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                    processedMods++;
+                    processedOverallUnits++;
+                    sendOverall(`Creating modules (${processedMods}/${totalRequests})...`, processedMods, totalRequests);
                 };
                 const request = async (requestData) => {
                     try {
@@ -998,11 +1068,13 @@ app.whenReady().then(() => {
             // Create Sections if requested
             if (data.course.addSections.state && data.course.addSections.number > 0) {
                 console.log('creating sections....');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addSections.number} section(s)...` });
                 const totalRequests = data.course.addSections.number;
-                let completedRequests = 0;
+                let processedSections = 0;
                 const updateProgress = () => {
-                    completedRequests++;
-                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                    processedSections++;
+                    processedOverallUnits++;
+                    sendOverall(`Creating sections (${processedSections}/${totalRequests})...`, processedSections, totalRequests);
                 };
                 const request = async (requestData) => {
                     try {
@@ -1030,7 +1102,7 @@ app.whenReady().then(() => {
             throw error.message;
         }
 
-
+        progressDone();
         return { course_id: data.course_id, status: 200, totalUsersEnrolled: totalUsers };
     });
 
@@ -1080,6 +1152,7 @@ app.whenReady().then(() => {
             // Return the full migration object so callers can inspect workflow_state and other fields
             return migrationRequest;
         } catch (error) {
+            progressDone();
             throw error.message;
         }
     });
@@ -1516,6 +1589,54 @@ app.whenReady().then(() => {
         } catch (error) {
             throw error.message;
         }
+    })
+
+    ipcMain.handle('axios:getModulesSimple', async (event, data) => {
+        console.log('main.js > axios:getModulesSimple');
+
+        try {
+            const courseModules = await modules.getModulesSimple(data);
+            return courseModules;
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
+    ipcMain.handle('axios:relockModules', async (event, data) => {
+        console.log('main.js > axios:relockModules');
+
+        let completedRequests = 0;
+        let totalRequests = data.module_ids.length;
+
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        }
+
+        const request = async (requestData) => {
+            try {
+                return await modules.relockModule(requestData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        }
+
+        const requests = [];
+        for (let i = 0; i < data.module_ids.length; i++) {
+            const requestData = {
+                domain: data.domain,
+                token: data.token,
+                course_id: data.course_id,
+                module_id: data.module_ids[i]
+            };
+            requests.push({ id: i + 1, request: () => request(requestData) });
+        }
+
+        const batchResponse = await batchHandler(requests);
+        console.log('Finished relocking modules.');
+        return batchResponse;
     })
 
     ipcMain.handle('axios:updateNotifications', async (event, data) => {
