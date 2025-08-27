@@ -34,6 +34,7 @@ const discussions = require('./discussions');
 const pages = require('./pages');
 const sections = require('./sections');
 const sisImports = require('./sis_imports');
+const imports = require('./imports');
 
 let mainWindow;
 let suppressedEmails = [];
@@ -462,6 +463,65 @@ app.whenReady().then(() => {
         } catch (error) {
             throw error.message;
         }
+    });
+
+    // New unified imported assets fetch
+    ipcMain.handle('axios:getImportedAssets', async (event, data) => {
+        console.log('main.js > axios:getImportedAssets');
+        try {
+            return await imports.getImportedAssets(data);
+        } catch (error) {
+            // Surface clearer guidance for 404 (likely wrong import id)
+            if (String(error.message).includes('status code 404')) {
+                throw new Error('404 Not Found: The Import ID may be invalid for this course. Use "List Imports" to find a valid Import ID.');
+            }
+            throw error.message;
+        }
+    });
+
+    ipcMain.handle('axios:listContentMigrations', async (event, data) => {
+        console.log('main.js > axios:listContentMigrations');
+        try {
+            return await imports.listContentMigrations(data);
+        } catch (error) {
+            throw error.message;
+        }
+    });
+
+    // Batch delete discussions by ids
+    ipcMain.handle('axios:deleteDiscussions', async (event, data) => {
+        console.log('main.js > axios:deleteDiscussions');
+
+        const totalRequests = data.discussions.length;
+        let completedRequests = 0;
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        };
+
+        const request = async (reqData) => {
+            try {
+                return await discussions.deleteDiscussion(reqData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        };
+
+        const requests = [];
+        for (let i = 0; i < totalRequests; i++) {
+            const reqData = {
+                domain: data.domain,
+                token: data.token,
+                course_id: data.course_id,
+                discussion_id: data.discussions[i]?.id || data.discussions[i]
+            };
+            requests.push({ id: i + 1, request: () => request(reqData) });
+        }
+
+        const batchResponse = await batchHandler(requests);
+        return batchResponse;
     });
 
     ipcMain.handle('axios:keepAssignmentsInGroup', async (event, data) => {

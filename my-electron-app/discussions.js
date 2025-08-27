@@ -28,3 +28,25 @@ async function createDiscussion(data) {
 }
 
 module.exports = { createDiscussion };
+
+// Delete a discussion topic by id
+async function deleteDiscussion(data) {
+    // DELETE /api/v1/courses/:course_id/discussion_topics/:topic_id
+    const axiosConfig = {
+        method: 'delete',
+        url: `https://${data.domain}/api/v1/courses/${data.course_id}/discussion_topics/${data.discussion_id}`,
+        headers: {
+            Authorization: `Bearer ${data.token}`,
+        },
+    };
+
+    try {
+        const request = async () => axios(axiosConfig);
+        const response = await errorCheck(request);
+        return response.data?.id ?? data.discussion_id;
+    } catch (error) {
+        throw error;
+    }
+}
+
+module.exports.deleteDiscussion = deleteDiscussion;

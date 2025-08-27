@@ -104,6 +104,14 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:getImportedAssignments', data);
     },
+    getImportedAssets: async (data) => {
+        console.log('preload > getImportedAssets');
+        return await ipcRenderer.invoke('axios:getImportedAssets', data);
+    },
+    listContentMigrations: async (data) => {
+        console.log('preload > listContentMigrations');
+        return await ipcRenderer.invoke('axios:listContentMigrations', data);
+    },
     getAssignmentsToMove: async (data) => {
         console.log('preload > getAssignmentsToMove');
 
@@ -232,6 +240,10 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > deleteClassicQuizzes');
 
         return await ipcRenderer.invoke('axios:deleteClassicQuizzes', data);
+    },
+    deleteDiscussions: async (data) => {
+        console.log('preload.js > deleteDiscussions');
+        return await ipcRenderer.invoke('axios:deleteDiscussions', data);
     },
     createNQQuestions: async (data) => {
         console.log('preload.js > createNQQuestions');

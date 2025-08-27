@@ -155,6 +155,9 @@ endpointSelect.addEventListener('click', (e) => {
         case 'sis-import-endpoints':
             sisImportsTemplate(e);
             break;
+        case 'imports-endpoints':
+            importsTemplate(e);
+            break;
         default:
             break;
     }
