@@ -68,12 +68,22 @@ async function exportToCSV(data, filePath = 'MyCSV') {
     }
 
     function getHeaders(data) {
-        //console.log('inside getHeaders ', data);
+        // Build a flat list of header paths. Treat null/undefined as primitives
+        // so keys like 'deleted_at' are preserved even when their value is null.
         const nonObjectKeys = [];
+        if (data === null || data === undefined) return nonObjectKeys;
         for (let key in data) {
-            if (typeof (data[key]) === 'object') {
-                for (let newKey of getHeaders(data[key])) {
-                    nonObjectKeys.push(`${key}->${newKey}`);
+            const val = data[key];
+            if (val !== null && typeof val === 'object') {
+                // Recurse only for non-null objects
+                const childKeys = getHeaders(val);
+                if (childKeys.length === 0) {
+                    // Empty object: still include parent key
+                    nonObjectKeys.push(key);
+                } else {
+                    for (let newKey of childKeys) {
+                        nonObjectKeys.push(`${key}->${newKey}`);
+                    }
                 }
             } else {
                 nonObjectKeys.push(key);

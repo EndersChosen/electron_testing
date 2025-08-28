@@ -319,6 +319,15 @@ contextBridge.exposeInMainWorld('fileUpload', {
     getUserIdsFromFile: async () => {
         return await ipcRenderer.invoke('fileUpload:getUserIdsFromFile');
     },
+    pickCsvOrZip: async () => {
+        return await ipcRenderer.invoke('fileUpload:pickCsvOrZip');
+    },
+    readFile: async (fullPath) => {
+        return await ipcRenderer.invoke('fileUpload:readFile', { fullPath });
+    },
+    readFileBuffer: async (fullPath) => {
+        return await ipcRenderer.invoke('fileUpload:readFileBuffer', { fullPath });
+    },
     confirmEmails: async (data) => {
         return await ipcRenderer.invoke('fileUpload:confirmEmails', data);
     },
@@ -327,6 +336,9 @@ contextBridge.exposeInMainWorld('fileUpload', {
     },
     resetEmails: async (data) => {
         return await ipcRenderer.invoke('fileUpload:resetEmails', data);
+    },
+    writeErrorsFile: async (dirPath, baseName, failed) => {
+        return await ipcRenderer.invoke('fileUpload:writeErrorsFile', { dirPath, baseName, failed });
     }
 });
 

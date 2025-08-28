@@ -1959,6 +1959,48 @@ app.whenReady().then(() => {
         const ids = tokens.filter((v) => v && !isNaN(Number(v))).map((v) => v.trim());
         return ids;
     });
+
+    // Let renderer pick a CSV or ZIP and return its full path
+    ipcMain.handle('fileUpload:pickCsvOrZip', async () => {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ['openFile'],
+            filters: [
+                { name: 'CSV or ZIP', extensions: ['csv', 'zip'] },
+                { name: 'All Files', extensions: ['*'] }
+            ],
+            modal: true
+        });
+        if (result.canceled) return null;
+        return result.filePaths[0];
+    });
+
+    ipcMain.handle('fileUpload:readFile', async (event, payload) => {
+        const { fullPath } = payload || {};
+        if (!fullPath) throw new Error('fullPath required');
+        return await fs.promises.readFile(fullPath, 'utf8');
+    });
+
+    ipcMain.handle('fileUpload:readFileBuffer', async (event, payload) => {
+        const { fullPath } = payload || {};
+        if (!fullPath) throw new Error('fullPath required');
+        const buf = await fs.promises.readFile(fullPath);
+        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    });
+
+    // Write a JSON errors file alongside the uploaded file
+    ipcMain.handle('fileUpload:writeErrorsFile', async (event, payload) => {
+        try {
+            const { dirPath, baseName, failed } = payload || {};
+            if (!dirPath || !baseName || !Array.isArray(failed)) throw new Error('dirPath, baseName and failed[] required');
+            const stem = path.basename(baseName, path.extname(baseName));
+            const outPath = path.join(dirPath, `${stem}_restore_errors.json`);
+            await fs.promises.writeFile(outPath, JSON.stringify(failed, null, 2), 'utf8');
+            return outPath;
+        } catch (err) {
+            console.error('writeErrorsFile error:', err);
+            throw err;
+        }
+    });
     //ipcMain.handle('')
     createWindow();
 

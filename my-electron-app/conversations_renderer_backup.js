@@ -1,30 +1,303 @@
 // ****************************************
-//
-// Conversation endpoints
-//
+// Conversation UI dispatcher
 // ****************************************
 async function conversationTemplate(e) {
-    // const eContent = document.querySelector('#endpoint-content');
-    // eContent.innerHTML = '';
-
     switch (e.target.id) {
         case 'delete-conversations-subject':
-            deleteConvos(e);
-            break;
+            return deleteConvos(e);
         case 'download-conversations-csv': // Not Complete
-            downloadConvos(e);
-            break;
+            return downloadConvos(e);
         case 'get-deleted-conversations':
-            getDeletedConversations(e);
-            break;
-        case 'gc-between-users': // Not complete
-            getConvos(e);
-            break;
+            return getDeletedConversations(e);
+        case 'restore-deleted-conversations':
+            return restoreDeletedConversations(e);
         default:
-            break;
+            return;
     }
-};
+}
 
+// ****************************************
+// Restore Deleted Conversations
+// - CSV/ZIP input
+// - Robust CSV parser (quoted newlines, escaped quotes)
+// - Progress and capped inline errors
+// - Full error log written next to source upload
+// ****************************************
+async function restoreDeletedConversations(e) {
+    hideEndpoints(e);
+
+    const eContent = document.querySelector('#endpoint-content');
+    let form = eContent.querySelector('#restore-deleted-conversations-form');
+
+    if (!form) {
+        form = document.createElement('form');
+        form.id = 'restore-deleted-conversations-form';
+        form.innerHTML = `
+            <div>
+                <h3>Restore Deleted Conversations</h3>
+            </div>
+            <div class="row align-items-center mt-2">
+                <div class="col-auto">
+                    <button id="rdc-upload" type="button" class="btn btn-secondary">Choose CSV or ZIP</button>
+                </div>
+                <div class="col-auto">
+                    <span id="rdc-upload-info" class="form-text"></span>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-auto">
+                    <button id="rdc-restore" type="button" class="btn btn-primary" disabled>Restore</button>
+                </div>
+                <div class="col-auto">
+                    <button id="rdc-clear" type="button" class="btn btn-outline-secondary">Clear</button>
+                </div>
+            </div>
+            <div hidden id="rdc-progress-div" class="mt-3">
+                <p id="rdc-progress-info"></p>
+                <div class="progress mt-1" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="rdc-response" class="mt-3"></div>
+        `;
+        eContent.append(form);
+    }
+    form.hidden = false;
+
+    const uploadBtn = form.querySelector('#rdc-upload');
+    const uploadInfo = form.querySelector('#rdc-upload-info');
+    const restoreBtn = form.querySelector('#rdc-restore');
+    const clearBtn = form.querySelector('#rdc-clear');
+    const progressDiv = form.querySelector('#rdc-progress-div');
+    const progressBar = progressDiv.querySelector('.progress-bar');
+    const progressInfo = form.querySelector('#rdc-progress-info');
+    const responseDiv = form.querySelector('#rdc-response');
+
+    let records = [];
+
+    // Robust CSV parser that respects quoted fields with embedded newlines
+    function parseCSV(text) {
+        const rows = [];
+        let row = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === '\r') continue; // normalize CRLF to LF handling
+            if (ch === '"') {
+                if (inQuotes && text[i + 1] === '"') { current += '"'; i++; }
+                else { inQuotes = !inQuotes; }
+            } else if (ch === ',' && !inQuotes) {
+                row.push(current.trim());
+                current = '';
+            } else if (ch === '\n' && !inQuotes) {
+                row.push(current.trim());
+                rows.push(row);
+                row = [];
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+        if (current.length > 0 || row.length > 0) {
+            row.push(current.trim());
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    function normalizeHeader(h) {
+        return (h || '')
+            .replace(/^\uFEFF/, '')
+            .toLowerCase()
+            .replace(/\s+/g, '_');
+    }
+
+    function parseDeletedConvosCSV(text) {
+        const rows = parseCSV(text).filter(r => r && r.length > 0);
+        if (rows.length === 0) return [];
+        const headers = rows[0].map(normalizeHeader);
+        const idx = {
+            user_id: headers.indexOf('user_id'),
+            message_id: (() => {
+                const i = headers.indexOf('id');
+                if (i !== -1) return i;
+                return headers.indexOf('message_id');
+            })(),
+            conversation_id: headers.indexOf('conversation_id')
+        };
+        if (idx.user_id === -1 || idx.message_id === -1 || idx.conversation_id === -1) {
+            throw new Error(`CSV must include headers: user_id, id (or message_id), conversation_id. Found: ${headers.join(', ')}`);
+        }
+        function parseCanvasId(val) {
+            if (val === null || val === undefined) return null;
+            let s = String(val).trim();
+            if (s === '') return null;
+            s = s.replace(/,/g, '');
+            if (/^[+-]?\d+$/.test(s)) {
+                try { return String(BigInt(s)); } catch { return s.replace(/^\+/, ''); }
+            }
+            if (/^[+-]?\d*(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(s)) {
+                const n = Number(s);
+                if (Number.isFinite(n)) return String(Math.trunc(n));
+            }
+            return null;
+        }
+        const out = [];
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.every(cell => String(cell || '').trim() === '')) continue;
+            const user_id = parseCanvasId(row[idx.user_id]);
+            const message_id = parseCanvasId(row[idx.message_id]);
+            const conversation_id = parseCanvasId(row[idx.conversation_id]);
+            if (user_id && message_id && conversation_id) out.push({ user_id, message_id, conversation_id });
+        }
+        return out;
+    }
+
+    if (form.dataset.bound !== 'true') {
+        uploadBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            uploadBtn.disabled = true;
+            uploadInfo.textContent = '';
+            records = [];
+            try {
+                const fullPath = await (window.fileUpload?.pickCsvOrZip?.());
+                if (!fullPath) { uploadBtn.disabled = false; return; }
+                const fileName = fullPath.split(/[\\\/]/).pop();
+                const dirPath = fullPath.slice(0, fullPath.length - fileName.length).replace(/[\\\/]+$/, '');
+                const lower = (fileName || '').toLowerCase();
+                if (lower.endsWith('.zip')) {
+                    if (!window.JSZip) throw new Error('JSZip not available in renderer.');
+                    const buf = await window.fileUpload.readFileBuffer(fullPath);
+                    const zip = await window.JSZip.loadAsync(buf);
+                    const csvFiles = Object.keys(zip.files).filter(n => n.toLowerCase().endsWith('.csv'));
+                    if (csvFiles.length === 0) throw new Error('Zip contains no CSV files.');
+                    let processed = 0;
+                    const total = csvFiles.length;
+                    uploadInfo.textContent = `Processed 0/${total} files`;
+                    for (const name of csvFiles) {
+                        const entry = zip.files[name];
+                        const content = await entry.async('string');
+                        const rows = parseDeletedConvosCSV(content);
+                        if (rows.length > 0) records.push(...rows);
+                        processed++;
+                        uploadInfo.textContent = `Processed ${processed}/${total} files`;
+                    }
+                    uploadInfo.textContent = `Processed ${total}/${total} files`;
+                } else {
+                    const text = await window.fileUpload.readFile(fullPath);
+                    records = parseDeletedConvosCSV(text);
+                    uploadInfo.textContent = `Ready: ${fileName}`;
+                }
+                form.dataset.sourceDir = dirPath;
+                form.dataset.sourceName = fileName;
+                restoreBtn.disabled = records.length === 0;
+            } catch (error) {
+                errorHandler(error, uploadInfo);
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+
+        restoreBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            if (records.length === 0) return;
+
+            const domain = document.querySelector('#domain').value.trim();
+            const token = document.querySelector('#token').value.trim();
+
+            const isNum = (v) => /^\d+$/.test(String(v).trim());
+            const validRecords = records.filter(r => isNum(r.user_id) && isNum(r.message_id) && isNum(r.conversation_id));
+            const skipped = records.length - validRecords.length;
+
+            if (validRecords.length === 0) {
+                progressDiv.hidden = false;
+                progressBar.style.width = '0%';
+                progressInfo.innerHTML = 'No valid rows to process. Ensure CSV has numeric user_id, id, and conversation_id values.';
+                restoreBtn.disabled = false;
+                return;
+            }
+
+            progressDiv.hidden = false;
+            progressBar.style.width = '0%';
+            progressInfo.innerHTML = `Restoring ${validRecords.length} conversation message(s)...${skipped > 0 ? ` (skipping ${skipped} invalid row(s))` : ''}`;
+            responseDiv.innerHTML = '';
+            restoreBtn.disabled = true;
+
+            if (window.progressAPI && window.ProgressUtils) {
+                window.ProgressUtils.autoWireGlobalProgress();
+            } else if (window.progressAPI) {
+                window.progressAPI.onUpdateProgress((progress) => {
+                    if (typeof progress === 'number') {
+                        progressBar.style.width = `${progress}%`;
+                    } else if (progress && typeof progress.value === 'number') {
+                        progressBar.style.width = `${Math.round(progress.value * 100)}%`;
+                    }
+                });
+            }
+
+            try {
+                const result = await window.axios.restoreDeletedConversations({ domain, token, rows: validRecords });
+                const success = result?.successful?.length || 0;
+                const failed = result?.failed?.length || 0;
+                progressBar.style.width = '100%';
+                progressInfo.innerHTML = `Done. Restored ${success}, failed ${failed}.${skipped > 0 ? ` Skipped ${skipped}.` : ''}`;
+                if (failed > 0) {
+                    const ul = document.createElement('ul');
+                    result.failed.slice(0, 5).forEach(f => {
+                        const li = document.createElement('li');
+                        li.textContent = f.reason || 'Unknown error';
+                        ul.appendChild(li);
+                    });
+                    responseDiv.append(ul);
+                    if (result.failed.length > 5) {
+                        const dirPath = form.dataset.sourceDir || '';
+                        const baseName = form.dataset.sourceName || 'restore_upload.csv';
+                        if (dirPath && window.fileUpload?.writeErrorsFile) {
+                            try {
+                                const outPath = await window.fileUpload.writeErrorsFile(dirPath, baseName, result.failed);
+                                const p = document.createElement('p');
+                                p.textContent = `Full error list written to: ${outPath}`;
+                                responseDiv.append(p);
+                            } catch (e) {
+                                const p = document.createElement('p');
+                                p.textContent = `Failed to write errors file: ${e?.message || e}`;
+                                responseDiv.append(p);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                progressBar.parentElement.hidden = true;
+                errorHandler(error, progressInfo);
+            } finally {
+                restoreBtn.disabled = false;
+            }
+        });
+
+        clearBtn.addEventListener('click', (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            records = [];
+            uploadInfo.textContent = '';
+            restoreBtn.disabled = true;
+            responseDiv.innerHTML = '';
+            progressInfo.innerHTML = '';
+            progressBar.style.width = '0%';
+            progressDiv.hidden = true;
+            delete form.dataset.sourceDir;
+            delete form.dataset.sourceName;
+        });
+        form.dataset.bound = 'true';
+    }
+}
+
+// ****************************************
+// Get Deleted Conversations (search + CSV export)
+// ****************************************
 async function getDeletedConversations(e) {
     hideEndpoints(e);
 
@@ -32,242 +305,19 @@ async function getDeletedConversations(e) {
     let form = eContent.querySelector('#get-deleted-conversations-form');
 
     if (!form) {
-        form = document.createElement('form');
-        form.id = 'get-deleted-conversations-form';
-        form.innerHTML = `
-            <div>
-                <h3>Get Deleted Conversations</h3>
-                <p>Fetch deleted conversations for a user, optionally filtered by deleted_before/after.</p>
-            </div>
-            <div class="row align-items-center">
-                <div class="col-auto">
-                    <label for="gdc-user-id" class="form-label">User ID</label>
+        // ****************************************
+        // Delete Conversations (temporarily disabled)
+        // ****************************************
+        async function deleteConvos(e) {
+            hideEndpoints(e);
+            const eContent = document.querySelector('#endpoint-content');
+            eContent.innerHTML = `
+                <div>
+                    <h3>Delete Specific Conversations</h3>
+                    <p class="text-muted">This tool is temporarily disabled in this build.</p>
                 </div>
-                <div class="col-2">
-                    <input id="gdc-user-id" type="text" class="form-control" aria-describedby="gdc-user-help" />
-                </div>
-                <div class="col-auto">
-                    <span id="gdc-user-help" class="form-text" style="display:none;">Must only contain numbers</span>
-                </div>
-            </div>
-        <div class="row align-items-center mt-2">
-                <div class="col-auto">
-                    <label for="gdc-deleted-after" class="form-label">Deleted After</label>
-                </div>
-                <div class="col-auto">
-            <input id="gdc-deleted-after" type="date" class="form-control" />
-                </div>
-                <div class="col-auto">
-                    <label for="gdc-deleted-before" class="form-label">Deleted Before</label>
-                </div>
-                <div class="col-auto">
-            <input id="gdc-deleted-before" type="date" class="form-control" />
-                </div>
-            </div>
-            <div class="row mt-3">
-                <div class="col-auto">
-                    <button id="gdc-search" type="button" class="btn btn-primary" disabled>Get Deleted</button>
-                </div>
-                <div class="col-auto">
-                    <button id="gdc-export-csv" type="button" class="btn btn-secondary" hidden>Export to CSV</button>
-                </div>
-            </div>
-            <!-- Single-user progress moved above the divider -->
-            <div hidden id="gdc-single-progress-div" class="mt-3">
-                <p id="gdc-single-progress-info"></p>
-                <div class="progress mt-1" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-bar" style="width: 0%"></div>
-                </div>
-            </div>
-            <hr class="my-3" />
-            <div class="row align-items-center">
-                <div class="col-auto">
-                    <label class="form-label">Bulk: Upload user list (txt/csv)</label>
-                </div>
-                <div class="col-auto">
-                    <button id="gdc-upload" type="button" class="btn btn-secondary">Choose file</button>
-                </div>
-                <div class="col-auto">
-                    <span id="gdc-upload-info" class="form-text"></span>
-                </div>
-            </div>
-            <div class="row mb-3 mt-2">
-                <div class="col-12">
-                    <label for="gdc-output-path" class="form-label">Output Folder</label>
-                    <div class="input-group">
-                        <input type="text" id="gdc-output-path" class="form-control" placeholder="Select output folder..." readonly>
-                        <button type="button" id="gdc-browse-folder" class="btn btn-outline-secondary">Browse</button>
-                    </div>
-                </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-auto">
-                    <button id="gdc-export-multi" type="button" class="btn btn-primary" disabled>Export for users</button>
-                </div>
-            </div>
-            <!-- Bulk progress -->
-            <div hidden id="gdc-bulk-progress-div" class="mt-3">
-                <p id="gdc-bulk-progress-info"></p>
-                <div class="progress mt-1" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-bar" style="width: 0%"></div>
-                </div>
-            </div>
-            <div id="gdc-response" class="mt-3"></div>
-        `;
-
-        eContent.append(form);
-    }
-    form.hidden = false;
-
-    const userInput = form.querySelector('#gdc-user-id');
-    const searchBtn = form.querySelector('#gdc-search');
-    const singleProgressDiv = form.querySelector('#gdc-single-progress-div');
-    const singleProgressBar = singleProgressDiv.querySelector('.progress-bar');
-    const singleProgressInfo = form.querySelector('#gdc-single-progress-info');
-    const bulkProgressDiv = form.querySelector('#gdc-bulk-progress-div');
-    const bulkProgressBar = bulkProgressDiv.querySelector('.progress-bar');
-    const bulkProgressInfo = form.querySelector('#gdc-bulk-progress-info');
-    const responseDiv = form.querySelector('#gdc-response');
-    const uploadBtn = form.querySelector('#gdc-upload');
-    const uploadInfo = form.querySelector('#gdc-upload-info');
-    const browseFolderBtn = form.querySelector('#gdc-browse-folder');
-    const outputPathInput = form.querySelector('#gdc-output-path');
-    const exportMultiBtn = form.querySelector('#gdc-export-multi');
-    let bulkUserIds = [];
-    let outputFolder = '';
-    const updateExportEnabled = () => {
-        exportMultiBtn.disabled = !(bulkUserIds.length > 0 && !!outputFolder);
-    };
-
-    const toggleBtn = () => {
-        searchBtn.disabled = !(userInput.value && userInput.value.trim() !== '' && !isNaN(Number(userInput.value.trim())));
-        form.querySelector('#gdc-user-help').style.display = searchBtn.disabled ? 'inline' : 'none';
-    };
-    userInput.addEventListener('input', toggleBtn);
-
-    if (form.dataset.bound !== 'true') {
-        searchBtn.addEventListener('click', async (evt) => {
-            evt.preventDefault();
-            evt.stopPropagation();
-
-            searchBtn.disabled = true;
-            responseDiv.innerHTML = '';
-            singleProgressDiv.hidden = false;
-            singleProgressBar.style.width = '0%';
-            singleProgressInfo.innerHTML = 'Fetching deleted conversations...';
-
-            const domain = document.querySelector('#domain').value.trim();
-            const token = document.querySelector('#token').value.trim();
-            const user_id = userInput.value.trim();
-            const deleted_after = form.querySelector('#gdc-deleted-after').value.trim();
-            const deleted_before = form.querySelector('#gdc-deleted-before').value.trim();
-
-            try {
-                const params = { domain, token, user_id };
-                const toStartOfDayISO = (dateStr) => dateStr ? new Date(`${dateStr}T00:00:00`).toISOString() : undefined;
-                const toEndOfDayISO = (dateStr) => dateStr ? new Date(`${dateStr}T23:59:59.999`).toISOString() : undefined;
-                const afterISO = toStartOfDayISO(deleted_after);
-                const beforeISO = toEndOfDayISO(deleted_before);
-                if (afterISO) params.deleted_after = afterISO;
-                if (beforeISO) params.deleted_before = beforeISO;
-
-                const results = await window.axios.getDeletedConversations(params);
-
-                const count = results.length;
-                singleProgressInfo.innerHTML = `Found ${count} deleted conversation(s).`;
-                singleProgressBar.style.width = '100%';
-
-                if (count > 0) {
-                    const exportBtn = form.querySelector('#gdc-export-csv');
-                    exportBtn.hidden = false;
-                    // exportBtn.id = 'gdc-export-csv';
-                    // exportBtn.className = 'btn btn-secondary mt-2';
-                    // exportBtn.textContent = 'Export to CSV';
-                    // responseDiv.append(exportBtn);
-
-                    exportBtn.addEventListener('click', (e2) => {
-                        e2.preventDefault();
-                        e2.stopPropagation();
-                        const fileName = `deleted_conversations_${user_id}.csv`;
-
-                        // Sanitize each record: keep top-level fields; stringify arrays/objects
-                        const sanitized = results.map((item) => {
-                            const row = {};
-                            for (const key of Object.keys(item)) {
-                                const val = item[key];
-                                if (key === 'attachments' && Array.isArray(val)) {
-                                    // Only include id and url for attachments; join as a semicolon-separated list
-                                    const pairs = val.map(att => `${att.id}:${att.url}`).join('; ');
-                                    row[key] = pairs;
-                                } else if (val !== null && typeof val === 'object') {
-                                    // Fallback: stringify objects/arrays
-                                    row[key] = JSON.stringify(val);
-                                } else {
-                                    row[key] = val;
-                                }
-                            }
-                            return row;
-                        });
-
-                        // Ensure headers include all keys (Canvas responses should be consistent,
-                        // but we build a union just in case). csvExporter uses the first row to build headers.
-                        const allKeys = Array.from(new Set(sanitized.flatMap(obj => Object.keys(obj))));
-                        if (sanitized.length > 0) {
-                            const first = sanitized[0];
-                            const headerCompleteFirst = {};
-                            for (const k of allKeys) {
-                                headerCompleteFirst[k] = Object.prototype.hasOwnProperty.call(first, k) ? first[k] : '';
-                            }
-                            const data = [headerCompleteFirst, ...sanitized.slice(1).map(obj => {
-                                const full = {};
-                                for (const k of allKeys) full[k] = Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : '';
-                                return full;
-                            })];
-                            window.csv.sendToCSV({ fileName, data });
-                        }
-                    });
-                }
-            } catch (error) {
-                singleProgressBar.parentElement.hidden = true;
-                errorHandler(error, singleProgressInfo);
-            } finally {
-                searchBtn.disabled = false;
-            }
-        });
-
-        // Handle upload of user list
-        uploadBtn.addEventListener('click', async (evt) => {
-            evt.preventDefault();
-            evt.stopPropagation();
-            uploadBtn.disabled = true;
-            uploadInfo.textContent = '';
-            try {
-                if (window.fileUpload && typeof window.fileUpload.getUserIdsFromFile === 'function') {
-                    const ids = await window.fileUpload.getUserIdsFromFile();
-                    if (ids === 'cancelled') {
-                        uploadInfo.textContent = 'Cancelled.';
-                        return;
-                    }
-                    // Ensure numeric uniqueness
-                    bulkUserIds = Array.from(new Set(ids.map((v) => Number(v)).filter((n) => !isNaN(n))));
-                    uploadInfo.textContent = `Found ${bulkUserIds.length} user(s).`;
-                    updateExportEnabled();
-                } else {
-                    // Fallback: client-side file picker and parser (txt/csv)
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = '.txt,.csv,text/plain,text/csv';
-                    input.onchange = async () => {
-                        try {
-                            const file = input.files && input.files[0];
-                            if (!file) return;
-                            const text = await file.text();
-                            const tokens = text.split(/\r?\n|\r|,|\s+/).filter(Boolean);
-                            const numeric = tokens.map((v) => Number(v)).filter((n) => !isNaN(n));
-                            bulkUserIds = Array.from(new Set(numeric));
-                            uploadInfo.textContent = `Found ${bulkUserIds.length} user(s).`;
-                            updateExportEnabled();
-                        } catch (err) {
+            `;
+        }
                             errorHandler(err, uploadInfo);
                         }
                     };
@@ -355,6 +405,7 @@ async function getDeletedConversations(e) {
 
                         // Build union-of-keys for header consistency per file
                         const allKeys = Array.from(new Set(sanitized.flatMap(obj => Object.keys(obj))));
+                        if (!allKeys.includes('deleted_at')) allKeys.push('deleted_at');
                         const first = sanitized[0];
                         const headerCompleteFirst = {};
                         for (const k of allKeys) headerCompleteFirst[k] = Object.prototype.hasOwnProperty.call(first, k) ? first[k] : '';
@@ -448,62 +499,47 @@ async function deleteConvos(e) {
     deleteSpecificConversationsForm.hidden = false;
 
     const uID = deleteSpecificConversationsForm.querySelector('#user-id');
-    uID.addEventListener('change', (e) => {
+        uploadBtn.addEventListener('click', async (evt) => {
         e.preventDefault();
         e.stopPropagation();
         checkCourseID(uID, deleteSpecificConversationsForm);
     })
 
     // 1. Get messages
-    // 2. Filter messages
-    // 3. Delete messaages ( or cancel )
-    // 4. If filter more go back to 2
-
-
-    // ************************************
-    // starting step 1. Getting messages
-    //
-    // ************************************
-
-    const searchBtn = deleteSpecificConversationsForm.querySelector('#action-btn');
-    searchBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        searchBtn.disabled = true;
-
-
-        const domain = document.querySelector('#domain').value.trim();
-        const apiToken = document.querySelector('#token').value.trim();
-        const convoSubject = deleteSpecificConversationsForm.querySelector('#conversation-subject');
-        const userID = uID.value.trim();
-        const responseContainer = deleteSpecificConversationsForm.querySelector('#response-container');
-        const progressDiv = deleteSpecificConversationsForm.querySelector('#progress-div');
-        const progressBar = progressDiv.querySelector('.progress-bar');
-        const progressInfo = deleteSpecificConversationsForm.querySelector('#progress-info');
-
-        progressBar.parentElement.hidden = true;
-        progressBar.style.width = '0%';
-        progressDiv.hidden = false;
-
-        // console.log(`Subject: ${convoSubject.value}, User_ID: ${userID.value}`);
-
-        // const responseContainer = document.querySelector('#response-container');
-        // responseContainer.innerHTML = 'Searching....';
-
-        const searchData = {
-            domain: domain,
-            token: apiToken,
-            subject: convoSubject.value,
-            user_id: userID
-        };
-
-        console.log(searchData);
-
-        let messages
-        let hasError = false;
-        try {
-            progressInfo.innerHTML = 'Searching....';
-            messages = await window.axios.getConvos(searchData);
+                const fullPath = await (window.fileUpload?.pickCsvOrZip?.());
+                if (!fullPath) { uploadBtn.disabled = false; return; }
+                const fileName = fullPath.split(/[\\/]/).pop();
+                const dirPath = fullPath.slice(0, fullPath.length - fileName.length).replace(/[\\/]+$/, '');
+                const lower = (fileName || '').toLowerCase();
+                if (lower.endsWith('.zip')) {
+                    if (!window.JSZip) throw new Error('JSZip not available in renderer.');
+                    const buf = await window.fileUpload.readFileBuffer(fullPath);
+                    const zip = await window.JSZip.loadAsync(buf);
+                    const csvFiles = Object.keys(zip.files).filter(n => n.toLowerCase().endsWith('.csv'));
+                    if (csvFiles.length === 0) throw new Error('Zip contains no CSV files.');
+                    let processed = 0;
+                    const total = csvFiles.length;
+                    uploadInfo.textContent = `Processed 0/${total} files`;
+                    for (const name of csvFiles) {
+                        const entry = zip.files[name];
+                        const content = await entry.async('string');
+                        const rows = parseDeletedConvosCSV(content);
+                        if (rows.length > 0) records.push(...rows);
+                        processed++;
+                        uploadInfo.textContent = `Processed ${processed}/${total} files`;
+                    }
+                    uploadInfo.textContent = `Processed ${total}/${total} files`;
+                    form.dataset.sourceDir = dirPath;
+                    form.dataset.sourceName = fileName;
+                    restoreBtn.disabled = records.length === 0;
+                } else {
+                    const text = await window.fileUpload.readFile(fullPath);
+                    records = parseDeletedConvosCSV(text);
+                    form.dataset.sourceDir = dirPath;
+                    form.dataset.sourceName = fileName;
+                    uploadInfo.textContent = `Ready: ${fileName}`;
+                    restoreBtn.disabled = records.length === 0;
+                }
         } catch (error) {
             hasError = true;
             errorHandler(error, progressInfo);
