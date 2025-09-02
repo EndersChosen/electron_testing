@@ -94,6 +94,14 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload > getNoDueDateAssignments');
         return await ipcRenderer.invoke('axios:getNoDueDateAssignments', data);
     },
+    getAllAssignmentsForCombined: async (data) => {
+        console.log('preload > getAllAssignmentsForCombined');
+        return await ipcRenderer.invoke('axios:getAllAssignmentsForCombined', data);
+    },
+    cancelAllAssignmentsForCombined: async () => {
+        console.log('preload > cancelAllAssignmentsForCombined');
+        return await ipcRenderer.invoke('axios:cancelAllAssignmentsForCombined');
+    },
     deleteOldAssignments: async (data) => {
         console.log('preload > deleteOldAssignments');
 
@@ -249,6 +257,22 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('preload.js > deleteDiscussions');
         return await ipcRenderer.invoke('axios:deleteDiscussions', data);
     },
+    deleteFolders: async (data) => {
+        console.log('preload.js > deleteFolders');
+        return await ipcRenderer.invoke('axios:deleteFolders', data);
+    },
+    deleteAttachments: async (data) => {
+        console.log('preload.js > deleteAttachments');
+        return await ipcRenderer.invoke('axios:deleteAttachments', data);
+    },
+    deleteGroupCategories: async (data) => {
+        console.log('preload.js > deleteGroupCategories');
+        return await ipcRenderer.invoke('axios:deleteGroupCategories', data);
+    },
+    getFoldersMeta: async (data) => {
+        console.log('preload.js > getFoldersMeta');
+        return await ipcRenderer.invoke('axios:getFoldersMeta', data);
+    },
     createNQQuestions: async (data) => {
         console.log('preload.js > createNQQuestions');
 
@@ -390,6 +414,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     createBulkSISFiles: async (fileTypes, rowCounts, outputPath, createZip, emailDomain, authProviderId, enrollmentOptions) => {
         return await ipcRenderer.invoke('sis:createBulkFiles', fileTypes, rowCounts, outputPath, createZip, emailDomain, authProviderId, enrollmentOptions);
+    },
+    createMultiSISFiles: async (fileConfigurations, outputPath) => {
+        return await ipcRenderer.invoke('sis:createMultiFiles', fileConfigurations, outputPath);
     },
     fetchAuthProviders: async (domain, token, accountId) => {
         return await ipcRenderer.invoke('sis:fetchAuthProviders', domain, token, accountId);

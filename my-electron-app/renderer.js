@@ -82,36 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtn.textContent = collapsed ? '»' : '«';
     }
 
-    function applySidebarState(collapsed, { animate } = { animate: true }) {
-        if (!mainRow) return;
-        // The CSS transition handles smooth slide; JS only toggles the state class
-        mainRow.classList.toggle('sidebar-collapsed', collapsed);
-        // Update known grid classes for content to ensure correct width for non-supporting browsers
-        if (content) {
-            if (collapsed) {
-                content.classList.remove('col-8');
-                content.classList.add('col-12');
-            } else {
-                content.classList.remove('col-12');
-                content.classList.add('col-8');
-            }
-        }
-        setButtonState(collapsed);
-        localStorage.setItem('sidebarCollapsed', String(collapsed));
-    }
-
-    // Load saved state
-    const saved = localStorage.getItem('sidebarCollapsed');
-    const initialCollapsed = saved === 'true';
-    applySidebarState(initialCollapsed, { animate: false });
-
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            const willCollapse = !mainRow.classList.contains('sidebar-collapsed');
-            applySidebarState(willCollapse, { animate: true });
-        });
-    }
-
     // Endpoint search filter
     const searchInput = document.getElementById('endpoint-search');
     if (searchInput) {
@@ -179,6 +149,162 @@ document.addEventListener('DOMContentLoaded', () => {
             t = setTimeout(() => filterEndpoints(val), 100);
         });
     }
+
+    // Resizable sidebar functionality
+    const resizeHandle = document.getElementById('resize-handle');
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    let containerLeft = 0;
+    const minWidth = 0; // Minimum width in pixels (allow any size)
+    const maxWidth = 600; // Maximum width in pixels
+    const collapseThresholdPx = 0; // Collapse only when releasing at the left edge
+
+    function getSidebarWidth() {
+        const el = mainRow || document.documentElement;
+        const computedStyle = getComputedStyle(el);
+        const currentWidth = (computedStyle.getPropertyValue('--sidebar-width') || '').trim();
+        const parsed = parseInt(currentWidth, 10);
+        return Number.isNaN(parsed) ? 300 : parsed;
+    }
+
+    function setSidebarWidth(widthPixels) {
+        // Clamp width between minimum and maximum
+        const clampedWidth = Math.max(minWidth, Math.min(maxWidth, widthPixels));
+        // Apply on the same element where the CSS variable is defined so it takes effect
+        const target = mainRow || document.documentElement;
+        target.style.setProperty('--sidebar-width', `${clampedWidth}px`);
+
+        // Save the width to localStorage
+        localStorage.setItem('sidebarWidth', clampedWidth.toString());
+    }
+
+    function initializeResizer() {
+        if (!resizeHandle) return;
+
+        // Load saved width
+        const savedWidth = localStorage.getItem('sidebarWidth');
+        if (savedWidth) {
+            setSidebarWidth(parseInt(savedWidth));
+        }
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+
+            // If sidebar is collapsed, expand it instead of resizing
+            if (mainRow.classList.contains('sidebar-collapsed')) {
+                applySidebarState(false, { animate: true });
+                return;
+            }
+
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = getSidebarWidth();
+            const rect = mainRow.getBoundingClientRect();
+            containerLeft = rect.left;
+
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            // Add overlay to prevent iframe interference
+            const overlay = document.createElement('div');
+            overlay.id = 'resize-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 9999;
+                cursor: col-resize;
+            `;
+            document.body.appendChild(overlay);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            e.preventDefault();
+            const deltaX = e.clientX - startX;
+            const newWidth = startWidth + deltaX;
+
+            setSidebarWidth(newWidth);
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isResizing) return;
+
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            // Remove overlay
+            const overlay = document.getElementById('resize-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+
+            // If released at the left edge, collapse the sidebar
+            if (e && (e.clientX - containerLeft) <= collapseThresholdPx) {
+                // Store current width before collapsing for restore
+                const currentWidth = getSidebarWidth();
+                localStorage.setItem('sidebarWidthBeforeCollapse', currentWidth.toString());
+                applySidebarState(true, { animate: true });
+            }
+        });
+    }
+
+    // Enhanced sidebar toggle to handle resizing
+    function applySidebarState(collapsed, { animate } = { animate: true }) {
+        console.log('applySidebarState called with collapsed:', collapsed); // Debug log
+        if (!mainRow) {
+            console.log('mainRow not found!'); // Debug log
+            return;
+        }
+        // The CSS transition handles smooth slide; JS only toggles the state class
+        mainRow.classList.toggle('sidebar-collapsed', collapsed);
+        console.log('mainRow classes after toggle:', mainRow.className); // Debug log
+
+        // Update button state
+        const currentToggleBtn = document.getElementById('sidebar-toggle');
+        if (currentToggleBtn) {
+            currentToggleBtn.setAttribute('aria-pressed', String(collapsed));
+            currentToggleBtn.setAttribute('title', collapsed ? 'Show menu' : 'Hide menu');
+            currentToggleBtn.textContent = collapsed ? '»' : '«';
+        }
+
+        localStorage.setItem('sidebarCollapsed', String(collapsed));
+
+        if (collapsed) {
+            // Store current width before collapsing
+            const currentWidth = getSidebarWidth();
+            localStorage.setItem('sidebarWidthBeforeCollapse', currentWidth.toString());
+        } else {
+            // Restore width when expanding, but ensure it's above minimum width
+            const savedWidth = parseInt(localStorage.getItem('sidebarWidthBeforeCollapse')) || 300;
+            const widthToRestore = Math.max(minWidth, savedWidth);
+            setSidebarWidth(widthToRestore);
+        }
+    }
+
+    // Override the existing toggle functionality
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('Toggle button clicked'); // Debug log
+            const willCollapse = !mainRow.classList.contains('sidebar-collapsed');
+            console.log('Will collapse:', willCollapse); // Debug log
+            applySidebarState(willCollapse, { animate: true });
+        });
+    }
+
+    // Initialize the resizer
+    initializeResizer();
+
+    // Load saved state and apply initial sidebar state
+    const saved = localStorage.getItem('sidebarCollapsed');
+    const initialCollapsed = saved === 'true';
+    applySidebarState(initialCollapsed, { animate: false });
 });
 
 function getSelectedText() {

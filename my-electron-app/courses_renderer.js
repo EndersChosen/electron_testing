@@ -347,6 +347,22 @@ async function createSupportCourse(e) {
     const eContent = document.querySelector('#endpoint-content');
     let createSupportCourseForm = eContent.querySelector('#create-support-courses-form');
 
+    // Declare saveTimer and related functions at the top of the function scope
+    const STORAGE_KEY = 'createSupportCourse_defaults';
+    let saveTimer;
+
+    function saveDefaults() {
+        try {
+            const cfg = collectConfigFromForm();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+        } catch { /* no-op */ }
+    }
+
+    function saveDefaultsDebounced() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveDefaults, 200);
+    }
+
     if (!createSupportCourseForm) {
         createSupportCourseForm = document.createElement('form');
         createSupportCourseForm.id = 'create-support-courses-form';
@@ -419,7 +435,7 @@ async function createSupportCourse(e) {
 
                 <!-- Content selection: pick a type and quantity -->
                 <div class="row mt-3">
-                    <div class="col-6">
+                    <div class="col-2">
                         <label for="csc-content-type" class="form-label">Content type</label>
                         <select id="csc-content-type" class="form-select">
                             <option value="assignments">Assignments</option>
@@ -431,10 +447,18 @@ async function createSupportCourse(e) {
                             <option value="sections">Sections</option>
                         </select>
                     </div>
-                    <div class="col-3">
+                    <div class="col-1">
                         <label for="csc-content-qty" class="form-label">Quantity</label>
                         <input id="csc-content-qty" type="text" class="form-control" placeholder="e.g., 5">
                     </div>
+                    <div class="col-1">
+                        <label class="form-label mb-1" for="csc-content-status">Publish</label>
+                        <div class="form-check form-switch">
+                            <input id="csc-content-status" type="checkbox" class="form-check-input" role="switch">
+                            <label class="form-check-label visually-hidden" for="csc-content-status">Publish</label>
+                        </div>
+                    </div>
+                    
                     <div class="col-auto d-flex align-items-end">
                         <button type="button" class="btn btn-secondary me-2" id="csc-content-add">Add/Update</button>
                         <button type="button" class="btn btn-link" id="csc-content-clear">Clear all</button>
@@ -554,6 +578,7 @@ async function createSupportCourse(e) {
     const contentAddBtn = createSupportCourseForm.querySelector('#csc-content-add');
     const contentClearBtn = createSupportCourseForm.querySelector('#csc-content-clear');
     const contentSummary = createSupportCourseForm.querySelector('#csc-content-summary');
+    const contentPublishSwitch = createSupportCourseForm.querySelector('#csc-content-status');
 
     const map = [
         ['assignments', '#course-assignments', '#add-assignments-div', '#course-add-assignments', 'Assignments'],
@@ -565,6 +590,17 @@ async function createSupportCourse(e) {
         ['sections', '#course-add-sections', '#add-sections-div', '#course-add-sections-num', 'Sections'],
     ];
 
+    // Track publish state per content type (persisted via config)
+    let publishByType = {
+        assignments: true,
+        classicQuizzes: true,
+        newQuizzes: true,
+        discussions: true,
+        pages: true,
+        modules: true,   // modules/sections don't truly publish, kept for consistency
+        sections: true
+    };
+
     function renderSummary() {
         const items = [];
         for (const [key, toggleSel, , inputSel, label] of map) {
@@ -572,7 +608,9 @@ async function createSupportCourse(e) {
             const input = createSupportCourseForm.querySelector(inputSel);
             const num = input?.value?.trim();
             if (togg?.checked && isPositiveInt(num)) {
-                items.push(`${label}: ${num}`);
+                const pub = publishByType?.[key];
+                const pubLabel = (key === 'modules' || key === 'sections') ? '' : (pub ? ' (published)' : ' (unpublished)');
+                items.push(`${label}: ${num}${pubLabel}`);
             }
         }
         contentSummary.textContent = items.length ? `Will create → ${items.join(', ')}` : 'No additional content selected.';
@@ -598,12 +636,45 @@ async function createSupportCourse(e) {
         renderSummary();
     }
 
+    // When type changes, reflect saved publish choice for that type
+    function publishApplicable(key) {
+        return !(key === 'modules' || key === 'sections');
+    }
+
+    if (contentTypeSel && contentPublishSwitch) {
+        const syncPublishSwitchState = (key) => {
+            const applicable = publishApplicable(key);
+            const saved = publishByType?.[key];
+            contentPublishSwitch.disabled = !applicable;
+            contentPublishSwitch.checked = applicable && typeof saved === 'boolean' ? saved : false;
+            contentPublishSwitch.title = applicable ? '' : 'Publish is not applicable for Modules and Sections';
+        };
+
+        contentTypeSel.addEventListener('change', () => {
+            const key = contentTypeSel.value;
+            syncPublishSwitchState(key);
+        });
+        // Initialize on load
+        const initKey = contentTypeSel.value;
+        syncPublishSwitchState(initKey);
+        // Keep the map updated if user toggles publish for the current type
+        contentPublishSwitch.addEventListener('change', () => {
+            const key = contentTypeSel.value;
+            if (publishApplicable(key)) {
+                publishByType[key] = !!contentPublishSwitch.checked;
+                renderSummary();
+                if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+            }
+        });
+    }
+
     if (contentAddBtn) {
         contentAddBtn.addEventListener('click', (ev) => {
             ev.preventDefault(); ev.stopPropagation();
             const key = contentTypeSel?.value;
             const qty = contentQtyInput?.value;
             setContent(key, qty);
+            if (contentPublishSwitch && key) publishByType[key] = !!contentPublishSwitch.checked;
             if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
         });
     }
@@ -611,7 +682,10 @@ async function createSupportCourse(e) {
     if (contentClearBtn) {
         contentClearBtn.addEventListener('click', (ev) => {
             ev.preventDefault(); ev.stopPropagation();
-            for (const [key] of map) setContent(key, '');
+            for (const [key] of map) {
+                setContent(key, '');
+                // don't clear publishByType; user choice can persist
+            }
             if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
         });
     }
@@ -794,7 +868,8 @@ async function createSupportCourse(e) {
                 students: createSupportCourseForm.querySelector('#course-add-students')?.value?.trim() || '',
                 teachers: createSupportCourseForm.querySelector('#course-add-teachers')?.value?.trim() || '',
             },
-            content: {}
+            content: {},
+            publishByType: { ...publishByType }
         };
         for (const [key, toggleSel, , inputSel] of map) {
             const togg = createSupportCourseForm.querySelector(toggleSel);
@@ -830,6 +905,16 @@ async function createSupportCourse(e) {
             if (students) students.value = cfg.users?.students || '';
             if (teachers) teachers.value = cfg.users?.teachers || '';
 
+            // restore publish per type
+            if (cfg.publishByType && typeof cfg.publishByType === 'object') {
+                publishByType = { ...publishByType, ...cfg.publishByType };
+                // reflect current type switch
+                if (contentTypeSel && contentPublishSwitch) {
+                    const key = contentTypeSel.value;
+                    if (typeof publishByType[key] === 'boolean') contentPublishSwitch.checked = publishByType[key];
+                }
+            }
+
             // content
             for (const [key] of map) {
                 const qty = cfg.content?.[key];
@@ -837,18 +922,6 @@ async function createSupportCourse(e) {
             }
             renderSummary();
         } catch { /* no-op */ }
-    }
-
-    function saveDefaults() {
-        try {
-            const cfg = collectConfigFromForm();
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-        } catch { /* no-op */ }
-    }
-    let saveTimer;
-    function saveDefaultsDebounced() {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(saveDefaults, 200);
     }
 
     // Load defaults on init
@@ -1033,7 +1106,9 @@ async function createSupportCourse(e) {
                 addSections: {
                     state: courseAddSectionsChbx,
                     number: numOfSections > 0 ? numOfSections : null
-                }
+                },
+                // per-content publish flags
+                contentPublish: { ...publishByType }
             }
         }
 

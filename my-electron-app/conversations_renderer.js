@@ -125,9 +125,20 @@ async function restoreDeletedConversations(e) {
             .replace(/\s+/g, '_');
     }
 
-    function parseDeletedConvosCSV(text) {
+    async function parseDeletedConvosCSV(text, sourceFileName = '') {
+        // For very large files, show progress
+        const isLargeFile = text.length > 5000000; // ~5MB threshold
+        if (isLargeFile) {
+            console.log(`Processing large CSV file: ${sourceFileName} (${Math.round(text.length / 1024 / 1024)}MB)`);
+        }
+
         const rows = parseCSV(text).filter(r => r && r.length > 0);
         if (rows.length === 0) return [];
+
+        if (isLargeFile) {
+            console.log(`Parsed ${rows.length} rows from large file: ${sourceFileName}`);
+        }
+
         const headers = rows[0].map(normalizeHeader);
         const idx = {
             user_id: headers.indexOf('user_id'),
@@ -137,11 +148,11 @@ async function restoreDeletedConversations(e) {
         if (idx.user_id === -1 || idx.message_id === -1 || idx.conversation_id === -1) {
             throw new Error(`CSV must include headers: user_id, id, conversation_id. Found: ${headers.join(', ')}`);
         }
-        
+
         // Debug: Show which column indexes we found
         console.log(`Column indexes detected: user_id=${idx.user_id}, message_id=${idx.message_id}, conversation_id=${idx.conversation_id}`);
         console.log(`Headers: ${headers.join(', ')}`);
-        
+
         function parseCanvasId(val) {
             if (val === null || val === undefined) return null;
             let s = String(val).trim();
@@ -156,30 +167,53 @@ async function restoreDeletedConversations(e) {
             }
             return null;
         }
+
         const out = [];
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || row.every(cell => String(cell || '').trim() === '')) continue;
-            const user_id = parseCanvasId(row[idx.user_id]);
-            const message_id = parseCanvasId(row[idx.message_id]);
-            const conversation_id = parseCanvasId(row[idx.conversation_id]);
-            
-            // Debug logging to see what's happening
-            console.log(`Row ${i}: user_id="${row[idx.user_id]}" -> ${user_id}, message_id="${row[idx.message_id]}" -> ${message_id}, conversation_id="${row[idx.conversation_id]}" -> ${conversation_id}`);
-            
-            // Always add the record, even if some fields are missing
-            out.push({ 
-                user_id: user_id, 
-                message_id: message_id, 
-                conversation_id: conversation_id,
-                _rawRow: {
-                    user_id: row[idx.user_id],
-                    message_id: row[idx.message_id], 
-                    conversation_id: row[idx.conversation_id]
-                },
-                _rowNumber: i
-            });
+        const totalRows = rows.length - 1; // Excluding header
+
+        // Process rows in chunks for large files to avoid blocking UI
+        const chunkSize = isLargeFile ? 1000 : totalRows;
+
+        for (let startIdx = 1; startIdx <= totalRows; startIdx += chunkSize) {
+            const endIdx = Math.min(startIdx + chunkSize, totalRows + 1);
+
+            for (let i = startIdx; i < endIdx; i++) {
+                const row = rows[i];
+                if (!row || row.every(cell => String(cell || '').trim() === '')) continue;
+                const user_id = parseCanvasId(row[idx.user_id]);
+                const message_id = parseCanvasId(row[idx.message_id]);
+                const conversation_id = parseCanvasId(row[idx.conversation_id]);
+
+                // Only log for smaller files or periodically for large files
+                if (!isLargeFile || i % 10000 === 1) {
+                    console.log(`Row ${i}: user_id="${row[idx.user_id]}" -> ${user_id}, message_id="${row[idx.message_id]}" -> ${message_id}, conversation_id="${row[idx.conversation_id]}" -> ${conversation_id}`);
+                }
+
+                // Always add the record, even if some fields are missing
+                out.push({
+                    user_id: user_id,
+                    message_id: message_id,
+                    conversation_id: conversation_id,
+                    _rawRow: {
+                        user_id: row[idx.user_id],
+                        message_id: row[idx.message_id],
+                        conversation_id: row[idx.conversation_id]
+                    },
+                    _rowNumber: i
+                });
+            }
+
+            // For large files, yield control periodically to prevent UI freezing
+            if (isLargeFile && startIdx + chunkSize <= totalRows) {
+                await new Promise(resolve => setTimeout(resolve, 5));
+                console.log(`Processed ${Math.min(endIdx - 1, totalRows)} of ${totalRows} rows in ${sourceFileName}`);
+            }
         }
+
+        if (isLargeFile) {
+            console.log(`Completed processing ${sourceFileName}: ${out.length} valid records`);
+        }
+
         return out;
     }
 
@@ -202,51 +236,86 @@ async function restoreDeletedConversations(e) {
                     const zip = await window.JSZip.loadAsync(buf);
                     const csvFiles = Object.keys(zip.files).filter(n => n.toLowerCase().endsWith('.csv'));
                     if (csvFiles.length === 0) throw new Error('Zip contains no CSV files.');
+
                     let processed = 0;
                     const total = csvFiles.length;
-                    uploadInfo.textContent = `Processed 0/${total} files`;
+                    let totalRecordsLoaded = 0;
+
+                    uploadInfo.textContent = `Processing 0/${total} files...`;
+
+                    // Process files one at a time to avoid call stack issues
                     for (const name of csvFiles) {
-                        const entry = zip.files[name];
-                        const content = await entry.async('string');
-                        const rows = parseDeletedConvosCSV(content);
-                        if (rows.length > 0) {
-                            // Add source file information to each record
-                            const rowsWithSource = rows.map(row => ({
-                                ...row,
-                                _sourceFile: name
-                            }));
-                            records.push(...rowsWithSource);
+                        try {
+                            const entry = zip.files[name];
+                            const content = await entry.async('string');
+                            const rows = await parseDeletedConvosCSV(content, name);
+
+                            if (rows.length > 0) {
+                                // Add source file information to each record
+                                const rowsWithSource = rows.map(row => ({
+                                    ...row,
+                                    _sourceFile: name
+                                }));
+                                records.push(...rowsWithSource);
+                                totalRecordsLoaded += rows.length;
+                            }
+
+                            processed++;
+                            uploadInfo.textContent = `Processing ${processed}/${total} files (${rows.length} records from ${name})`;
+
+                            // Give the UI a chance to update after each file
+                            await new Promise(resolve => setTimeout(resolve, 1));
+                        } catch (error) {
+                            console.error(`Error processing file ${name}:`, error);
+                            processed++;
+                            uploadInfo.textContent = `Processing ${processed}/${total} files (ERROR in ${name})`;
                         }
-                        processed++;
-                        uploadInfo.textContent = `Processed ${processed}/${total} files`;
                     }
-                    
-                    // Remove duplicates based on message_id and user_id combination
-                    const seen = new Set();
+
+                    uploadInfo.textContent = `Completed ${total}/${total} files. Removing duplicates from ${totalRecordsLoaded} records...`;
+
+                    // Use a more memory-efficient approach for very large datasets
+                    const seenMap = new Map();
                     const originalCount = records.length;
-                    records = records.filter(r => {
-                        const key = `${r.message_id}-${r.user_id}`;
-                        if (seen.has(key)) {
-                            return false;
+                    const uniqueRecords = [];
+
+                    // Process in chunks to avoid blocking UI with massive datasets
+                    const chunkSize = 10000;
+                    for (let i = 0; i < records.length; i += chunkSize) {
+                        const chunk = records.slice(i, i + chunkSize);
+
+                        for (const record of chunk) {
+                            const key = `${record.message_id}-${record.user_id}`;
+                            if (!seenMap.has(key)) {
+                                seenMap.set(key, true);
+                                uniqueRecords.push(record);
+                            }
                         }
-                        seen.add(key);
-                        return true;
-                    });
+
+                        // Update progress for large datasets
+                        if (records.length > 50000 && i % (chunkSize * 5) === 0) {
+                            const progress = Math.round((i / records.length) * 100);
+                            uploadInfo.textContent = `Removing duplicates... ${progress}% (${uniqueRecords.length} unique so far)`;
+                            await new Promise(resolve => setTimeout(resolve, 1));
+                        }
+                    }
+
+                    records = uniqueRecords;
                     const duplicatesRemoved = originalCount - records.length;
-                    
-                    uploadInfo.textContent = `Processed ${total}/${total} files${duplicatesRemoved > 0 ? ` (${duplicatesRemoved} duplicates removed)` : ''}`;
+
+                    uploadInfo.textContent = `Completed! Processed ${total} files, loaded ${totalRecordsLoaded} records, ${duplicatesRemoved} duplicates removed. ${records.length} unique records ready.`;
                 } else {
                     const text = await window.fileUpload.readFile(fullPath);
-                    records = parseDeletedConvosCSV(text);
+                    records = await parseDeletedConvosCSV(text);
                     uploadInfo.textContent = `Ready: ${fileName}`;
                 }
                 form.dataset.sourceDir = dirPath;
                 form.dataset.sourceName = fileName;
                 restoreBtn.disabled = records.length === 0;
-                
+
                 // Show summary of loaded records
                 if (records.length > 0) {
-                    uploadInfo.textContent += ` - ${records.length} conversation messages loaded`;
+                    uploadInfo.textContent += ` - Ready to restore ${records.length} conversation messages.`;
                 }
             } catch (error) {
                 errorHandler(error, uploadInfo);
@@ -267,19 +336,19 @@ async function restoreDeletedConversations(e) {
             const validRecords = [];
             const invalidRecords = [];
             const missingFieldRecords = [];
-            
+
             // Enhanced validation with detailed logging
             records.forEach((r, index) => {
                 const userIdValid = r.user_id && isNum(r.user_id);
                 const messageIdValid = r.message_id && isNum(r.message_id);
                 const conversationIdValid = r.conversation_id && isNum(r.conversation_id);
-                
+
                 // Check for missing fields first
                 const missingFields = [];
                 if (!r.user_id) missingFields.push('user_id');
                 if (!r.message_id) missingFields.push('id');
                 if (!r.conversation_id) missingFields.push('conversation_id');
-                
+
                 if (missingFields.length > 0) {
                     missingFieldRecords.push({
                         index: index + 1,
@@ -305,7 +374,7 @@ async function restoreDeletedConversations(e) {
                     });
                 }
             });
-            
+
             const skipped = invalidRecords.length + missingFieldRecords.length;
 
             if (validRecords.length === 0) {
@@ -335,14 +404,105 @@ async function restoreDeletedConversations(e) {
             }
 
             try {
-                console.log(`Sending ${validRecords.length} records to API:`, validRecords);
-                const result = await window.axios.restoreDeletedConversations({ domain, token, rows: validRecords });
+                console.log(`Sending ${validRecords.length} records to API with throttling protection...`);
+
+                // Implement Canvas API throttling protection
+                // Canvas allows ~700 requests per 10-minute window
+                // We'll batch requests and add delays to stay under limits
+                const batchSize = 50; // Smaller batches to avoid overwhelming the API
+                const delayBetweenBatches = 2000; // 2 second delay between batches
+                const maxRetries = 3;
+
+                let allSuccessful = [];
+                let allFailed = []; // Start with empty array, we'll add validation failures later
+                let totalProcessed = 0;
+
+                // Process records in small batches with throttling
+                for (let i = 0; i < validRecords.length; i += batchSize) {
+                    const batch = validRecords.slice(i, i + batchSize);
+                    const batchNumber = Math.floor(i / batchSize) + 1;
+                    const totalBatches = Math.ceil(validRecords.length / batchSize);
+
+                    progressInfo.innerHTML = `Processing batch ${batchNumber}/${totalBatches} (${batch.length} records)...`;
+                    progressBar.style.width = `${Math.round((i / validRecords.length) * 100)}%`;
+
+                    let retryCount = 0;
+                    let batchResult = null;
+
+                    // Retry logic for API failures
+                    while (retryCount <= maxRetries && !batchResult) {
+                        try {
+                            if (retryCount > 0) {
+                                const retryDelay = Math.pow(2, retryCount) * 1000; // Exponential backoff
+                                progressInfo.innerHTML = `Retrying batch ${batchNumber}/${totalBatches} (attempt ${retryCount + 1}/${maxRetries + 1}) - waiting ${retryDelay / 1000}s...`;
+                                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                            }
+
+                            batchResult = await window.axios.restoreDeletedConversations({
+                                domain,
+                                token,
+                                rows: batch
+                            });
+
+                            // Success - add to results
+                            if (batchResult?.successful) allSuccessful.push(...batchResult.successful);
+                            if (batchResult?.failed) allFailed.push(...batchResult.failed);
+
+                        } catch (error) {
+                            retryCount++;
+                            console.log(`Batch ${batchNumber} attempt ${retryCount} failed:`, error);
+
+                            // Check if it's a rate limiting error (Canvas returns 403 for rate limits)
+                            if (error.message && (
+                                error.message.includes('403') ||
+                                error.message.includes('Rate Limit Exceeded') ||
+                                error.message.includes('Forbidden') ||
+                                error.message.includes('rate limit') ||
+                                error.message.includes('throttle') ||
+                                error.status === 403 ||
+                                error.response?.status === 403
+                            )) {
+                                const throttleDelay = 60000; // Wait 1 minute for rate limit
+                                progressInfo.innerHTML = `Rate limited (403 Forbidden) - waiting ${throttleDelay / 1000}s before retry...`;
+                                await new Promise(resolve => setTimeout(resolve, throttleDelay));
+                            }
+
+                            if (retryCount > maxRetries) {
+                                // Mark all records in this batch as failed
+                                batch.forEach(record => {
+                                    allFailed.push({
+                                        message_id: record.message_id,
+                                        user_id: record.user_id,
+                                        conversation_id: record.conversation_id,
+                                        source_file: record._sourceFile || 'Unknown',
+                                        reason: `API error after ${maxRetries} retries: ${error.message || 'Unknown error'}`
+                                    });
+                                });
+                            }
+                        }
+                    }
+
+                    totalProcessed += batch.length;
+
+                    // Add delay between batches to respect rate limits (except for last batch)
+                    if (i + batchSize < validRecords.length) {
+                        progressInfo.innerHTML = `Completed batch ${batchNumber}/${totalBatches}. Waiting ${delayBetweenBatches / 1000}s before next batch...`;
+                        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+                    }
+                }
+
+                // Create result object in expected format
+                const result = {
+                    successful: allSuccessful,
+                    failed: allFailed.filter(f => !f.source_file || f.source_file === 'Unknown' ? !f.reason?.includes('Missing required fields') && !f.reason?.includes('Invalid values') : true)
+                };
+
                 const success = result?.successful?.length || 0;
                 const failed = result?.failed?.length || 0;
                 const totalReturned = success + failed;
                 const missing = validRecords.length - totalReturned;
-                
-                // Create synthetic failed records for the missing ones (silently ignored by API)
+
+                // Create synthetic failed records for any still missing ones (shouldn't happen with new approach)
                 const silentlyFailed = [];
                 if (missing > 0) {
                     // Get the IDs of successful records to identify which ones are missing
@@ -354,7 +514,7 @@ async function restoreDeletedConversations(e) {
                             }
                         });
                     }
-                    
+
                     // Get the IDs of explicitly failed records
                     const explicitlyFailedIds = new Set();
                     if (result?.failed) {
@@ -364,7 +524,7 @@ async function restoreDeletedConversations(e) {
                             }
                         });
                     }
-                    
+
                     // Find records that weren't returned at all
                     validRecords.forEach(record => {
                         const messageId = record.message_id.toString();
@@ -374,54 +534,56 @@ async function restoreDeletedConversations(e) {
                                 user_id: record.user_id,
                                 conversation_id: record.conversation_id,
                                 source_file: record._sourceFile || 'Unknown',
-                                reason: `Silently ignored by API (likely invalid user_id: ${record.user_id})`
+                                reason: `Not processed (likely API issue)`
                             });
                         }
                     });
                 }
-                
+
                 // Add validation failures to the failed records list
-                const validationFailed = [];
-                
+
                 // Add missing field records as failed
                 missingFieldRecords.forEach(inv => {
-                    validationFailed.push({
+                    allFailed.push({
                         message_id: inv.rawValues?.message_id || 'N/A',
-                        user_id: inv.rawValues?.user_id || 'N/A', 
+                        user_id: inv.rawValues?.user_id || 'N/A',
                         conversation_id: inv.rawValues?.conversation_id || 'N/A',
                         source_file: inv.sourceFile || 'Unknown',
                         reason: `Missing required fields: ${inv.missingFields.join(', ')} (Row ${inv.rowNumber})`
                     });
                 });
-                
+
                 // Add invalid value records as failed
                 invalidRecords.forEach(inv => {
-                    const issues = Object.entries(inv.issues).filter(([k,v]) => v !== null).map(([k,v]) => `${k}="${v}"`).join(', ');
-                    validationFailed.push({
+                    const issues = Object.entries(inv.issues).filter(([k, v]) => v !== null).map(([k, v]) => `${k}="${v}"`).join(', ');
+                    allFailed.push({
                         message_id: inv.record.message_id || 'N/A',
                         user_id: inv.record.user_id || 'N/A',
-                        conversation_id: inv.record.conversation_id || 'N/A', 
+                        conversation_id: inv.record.conversation_id || 'N/A',
                         source_file: inv.sourceFile || 'Unknown',
                         reason: `Invalid values: ${issues} (Row ${inv.rowNumber})`
                     });
                 });
-                
-                const totalFailed = failed + silentlyFailed.length + validationFailed.length;
-                
+
+                // Add any silent failures
+                allFailed.push(...silentlyFailed);
+
+                const totalFailed = allFailed.length;
+
                 progressBar.style.width = '100%';
                 progressInfo.innerHTML = `Done. Restored ${success}, failed ${totalFailed}.${skipped > 0 ? ` Skipped ${skipped}.` : ''} (Sent: ${validRecords.length})`;
-                
+
                 // Show failed records (explicit API failures, silent failures, and validation failures)
                 if (totalFailed > 0) {
-                    const allFailedRecords = [...(result?.failed || []), ...silentlyFailed, ...validationFailed];
-                    
+                    const allFailedRecords = allFailed;
+
                     const failedDiv = document.createElement('div');
                     failedDiv.className = 'mt-3';
-                    
+
                     const failedTitle = document.createElement('h5');
                     failedTitle.textContent = `Failed Records (${totalFailed}):`;
                     failedDiv.appendChild(failedTitle);
-                    
+
                     const ul = document.createElement('ul');
                     allFailedRecords.slice(0, 5).forEach(f => {
                         const li = document.createElement('li');
@@ -436,15 +598,15 @@ async function restoreDeletedConversations(e) {
                         ul.appendChild(li);
                     });
                     failedDiv.appendChild(ul);
-                    
+
                     if (allFailedRecords.length > 5) {
                         const moreText = document.createElement('p');
                         moreText.textContent = `...and ${allFailedRecords.length - 5} more failed records`;
                         failedDiv.appendChild(moreText);
                     }
-                    
+
                     responseDiv.appendChild(failedDiv);
-                    
+
                     // Write error file if possible
                     if (allFailedRecords.length > 5) {
                         const dirPath = form.dataset.sourceDir || '';
@@ -463,7 +625,7 @@ async function restoreDeletedConversations(e) {
                         }
                     }
                 }
-                
+
                 // Log details for debugging
                 if (missing > 0) {
                     console.log(`${missing} records were silently ignored by the API:`, silentlyFailed);

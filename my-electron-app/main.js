@@ -29,12 +29,15 @@ const {
 } = require('./courses');
 const quizzes_classic = require('./quizzes_classic');
 const modules = require('./modules');
+const folders = require('./folders');
+const files = require('./files');
 const quizzes_nq = require('./quizzes_nq');
 const discussions = require('./discussions');
 const pages = require('./pages');
 const sections = require('./sections');
 const sisImports = require('./sis_imports');
 const imports = require('./imports');
+const groupCategories = require('./group_categories');
 
 let mainWindow;
 let suppressedEmails = [];
@@ -497,6 +500,49 @@ app.whenReady().then(() => {
         }
     });
 
+    // Unified fetch for combined delete assignments flow
+    // Track cancellable requests by sender
+    const combinedFetchControllers = new Map(); // key: senderId, value: AbortController
+
+    ipcMain.handle('axios:getAllAssignmentsForCombined', async (event, data) => {
+        console.log('main.js > axios:getAllAssignmentsForCombined');
+        try {
+            // Abort any previous fetch for this sender
+            const senderId = event.sender.id;
+            if (combinedFetchControllers.has(senderId)) {
+                try { combinedFetchControllers.get(senderId).abort('superseded'); } catch {}
+            }
+            const controller = new AbortController();
+            combinedFetchControllers.set(senderId, controller);
+            const results = await assignments.getAllAssignmentsForCombined({ ...data, signal: controller.signal });
+            // clear on success
+            if (combinedFetchControllers.get(senderId) === controller) combinedFetchControllers.delete(senderId);
+            return results;
+        } catch (error) {
+            // Clear controller if it belongs to this request
+            try {
+                const senderId = event.sender.id;
+                if (combinedFetchControllers.get(senderId)?.signal?.aborted) combinedFetchControllers.delete(senderId);
+            } catch {}
+            throw error.message || error;
+        }
+    });
+
+    ipcMain.handle('axios:cancelAllAssignmentsForCombined', async (event) => {
+        try {
+            const senderId = event.sender.id;
+            const controller = combinedFetchControllers.get(senderId);
+            if (controller) {
+                controller.abort('user_cancelled');
+                combinedFetchControllers.delete(senderId);
+                return { cancelled: true };
+            }
+            return { cancelled: false };
+        } catch (e) {
+            return { cancelled: false };
+        }
+    });
+
     ipcMain.handle('axios:deleteOldAssignments', async (event, data) => {
         console.log('main.js > axios:deleteOldAssignments');
 
@@ -572,6 +618,146 @@ app.whenReady().then(() => {
 
         const batchResponse = await batchHandler(requests);
         return batchResponse;
+    });
+
+    // Batch delete attachments (files)
+    ipcMain.handle('axios:deleteAttachments', async (event, data) => {
+        console.log('main.js > axios:deleteAttachments');
+
+        const totalRequests = data.attachments.length;
+        let completedRequests = 0;
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        };
+
+        const request = async (reqData) => {
+            try {
+                return await files.deleteFile(reqData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        };
+
+        const requests = [];
+        for (let i = 0; i < totalRequests; i++) {
+            const reqData = {
+                domain: data.domain,
+                token: data.token,
+                file_id: data.attachments[i]?.id || data.attachments[i]
+            };
+            requests.push({ id: i + 1, request: () => request(reqData) });
+        }
+
+        const batchResponse = await batchHandler(requests);
+        return batchResponse;
+    });
+
+    // Batch delete group categories (for Content Tags handling)
+    ipcMain.handle('axios:deleteGroupCategories', async (event, data) => {
+        console.log('main.js > axios:deleteGroupCategories');
+        const totalRequests = data.group_categories.length;
+        let completedRequests = 0;
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        };
+
+        const request = async (reqData) => {
+            try {
+                return await groupCategories.deleteGroupCategory(reqData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        };
+
+        const requests = [];
+        for (let i = 0; i < totalRequests; i++) {
+            const reqData = {
+                domain: data.domain,
+                token: data.token,
+                group_category_id: data.group_categories[i]?.id || data.group_categories[i]
+            };
+            requests.push({ id: i + 1, request: () => request(reqData) });
+        }
+
+        const batchResponse = await batchHandler(requests);
+        return batchResponse;
+    });
+
+    // Batch delete folders by ids
+    ipcMain.handle('axios:deleteFolders', async (event, data) => {
+        console.log('main.js > axios:deleteFolders');
+
+        const totalRequests = data.folders.length;
+        let completedRequests = 0;
+        const updateProgress = () => {
+            completedRequests++;
+            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+        };
+
+        const request = async (reqData) => {
+            try {
+                // Pre-check folder to avoid deleting root folders
+                const info = await folders.getFolder(reqData);
+                // Canvas returns root folders with parent_folder_id null
+                if (
+                    info && (
+                        info.parent_folder_id === null ||
+                        typeof info.parent_folder_id === 'undefined' ||
+                        info.parent_folder_id === 'null'
+                    )
+                ) {
+                    const err = new Error(`Folder ${info.id || reqData.folder_id} is a root folder and cannot be deleted.`);
+                    err.status = 422; // Unprocessable / business rule
+                    throw err;
+                }
+                return await folders.deleteFolder(reqData);
+            } catch (error) {
+                throw error;
+            } finally {
+                updateProgress();
+            }
+        };
+
+        const requests = [];
+        for (let i = 0; i < totalRequests; i++) {
+            const reqData = {
+                domain: data.domain,
+                token: data.token,
+                folder_id: data.folders[i]?.id || data.folders[i]
+            };
+            requests.push({ id: i + 1, request: () => request(reqData) });
+        }
+
+        const batchResponse = await batchHandler(requests);
+        return batchResponse;
+    });
+
+    // Get folder metadata for a list of folder IDs and tag root folders
+    ipcMain.handle('axios:getFoldersMeta', async (event, data) => {
+        console.log('main.js > axios:getFoldersMeta');
+        const ids = (data.folders || []).map(f => (f?.id || f));
+        const requests = ids.map((id, idx) => ({
+            id: idx + 1,
+            request: async () => folders.getFolder({ domain: data.domain, token: data.token, folder_id: id })
+        }));
+        const result = await batchHandler(requests, 35, 200);
+        const meta = [];
+        // successful is array of {id,status,value}
+        for (const s of result.successful) {
+            const f = s.value;
+            meta.push({ id: f.id, parent_folder_id: f.parent_folder_id, isRoot: (f.parent_folder_id === null || f.parent_folder_id === 'null' || typeof f.parent_folder_id === 'undefined') });
+        }
+        // failed items: include ids for visibility
+        for (const f of result.failed) {
+            meta.push({ id: ids[(f.id - 1)] || null, error: f.reason, isRoot: false });
+        }
+        return meta;
     });
 
     ipcMain.handle('axios:keepAssignmentsInGroup', async (event, data) => {
@@ -1009,7 +1195,7 @@ app.whenReady().then(() => {
                         submissionTypes: ["online_upload"],
                         grade_type: "points",
                         points: 10,
-                        publish: "published",
+                        publish: data.course?.contentPublish?.assignments ? "published" : "unpublished",
                         peer_reviews: false,
                         anonymous: false
                     };
@@ -1033,7 +1219,7 @@ app.whenReady().then(() => {
                         token: data.token,
                         course_id: data.course_id,
                         quiz_type: 'assignment',
-                        publish: true,
+                        publish: !!data.course?.contentPublish?.classicQuizzes,
                         num_quizzes: data.course.addCQ.number
                     });
                     console.log('finished creating classic quizzes.');
@@ -1071,7 +1257,7 @@ app.whenReady().then(() => {
                         token: data.token,
                         course_id: data.course_id,
                         quiz_title: `New Quiz ${i + 1}`,
-                        published: true,
+                        published: !!data.course?.contentPublish?.newQuizzes,
                         grading_type: 'points',
                     };
                     requests.push({ id: i + 1, request: () => request(requestData) });
@@ -1109,7 +1295,7 @@ app.whenReady().then(() => {
                         course_id: data.course_id,
                         title: `Discussion ${i + 1}`,
                         message: '',
-                        published: true,
+                        published: !!data.course?.contentPublish?.discussions,
                     };
                     requests.push({ id: i + 1, request: () => request(requestData) });
                 }
@@ -1145,7 +1331,7 @@ app.whenReady().then(() => {
                         course_id: data.course_id,
                         title: `Page ${i + 1}`,
                         body: '',
-                        published: true,
+                        published: !!data.course?.contentPublish?.pages,
                     };
                     requests.push({ id: i + 1, request: () => request(requestData) });
                 }
@@ -2551,6 +2737,63 @@ ipcMain.handle('sis:createBulkFiles', async (event, fileTypes, rowCounts, output
         };
     } catch (error) {
         throw new Error(`Error creating bulk SIS files: ${error.message}`);
+    }
+});
+
+ipcMain.handle('sis:createMultiFiles', async (event, fileConfigurations, outputPath) => {
+    try {
+        const createdFiles = [];
+
+        // Create each file based on its configuration
+        for (const config of fileConfigurations) {
+            const fileName = await sisImports.createSISImportFile(
+                config.fileType,
+                config.rowCount,
+                outputPath,
+                config.emailDomain,
+                config.authProviderId,
+                config.options.enrollmentOptions || {},
+                config.options.userOptions || {},
+                config.options.accountOptions || {},
+                config.options.termOptions || {},
+                config.options.courseOptions || {},
+                config.options.sectionOptions || {},
+                config.options.groupCategoryOptions || {},
+                config.options.groupOptions || {},
+                config.options.groupMembershipOptions || {},
+                config.options.adminOptions || {},
+                config.options.loginOptions || {},
+                config.options.crossListingOptions || {},
+                config.options.userObserverOptions || {},
+                config.options.changeSisIdOptions || {},
+                config.options.differentiationTagSetOptions || {},
+                config.options.differentiationTagOptions || {},
+                config.options.differentiationTagMembershipOptions || {}
+            );
+            createdFiles.push(fileName);
+        }
+
+        // Create ZIP file
+        const JSZip = require('jszip');
+        const zip = new JSZip();
+
+        for (const filePath of createdFiles) {
+            const fileName = path.basename(filePath);
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            zip.file(fileName, fileContent);
+        }
+
+        const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+        const zipPath = path.join(outputPath, 'sis_multi_import_package.zip');
+        fs.writeFileSync(zipPath, zipContent);
+
+        return {
+            success: true,
+            files: createdFiles.map(file => path.basename(file)),
+            zipPath: zipPath
+        };
+    } catch (error) {
+        throw new Error(`Error creating multi SIS files: ${error.message}`);
     }
 });
 

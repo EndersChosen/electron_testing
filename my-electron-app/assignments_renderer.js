@@ -58,66 +58,76 @@ function deleteAssignmentsCombined(e) {
         form = document.createElement('form');
         form.id = 'combined-delete-assignments-form';
         form.innerHTML = `
-            <div>
-                <h3>Delete Assignments (combined filters)</h3>
-                <div class="text-muted">Select one or more filters. We'll find assignments that match ALL selected filters.</div>
+            <div class="mb-3">
+                <h3 class="mb-1">Delete Assignments (combined filters)</h3>
+                <div class="text-muted small">Select one or more filters. We'll find assignments that match ALL selected filters.</div>
             </div>
-            <div class="row align-items-center">
-                <div class="col-auto"><label class="form-label">Course</label></div>
-                <div class="w-100"></div>
-                <div class="col-2">
-                    <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
-                </div>
-                <div class="col-auto">
-                    <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row g-3 align-items-start">
+                        <div class="col-sm-3">
+                            <label for="course-id" class="form-label">Course ID</label>
+                            <input id="course-id" type="text" class="form-control" aria-describedby="course-id-help" inputmode="numeric" />
+                            <div id="course-id-help" class="form-text">Numbers only</div>
+                            <div class="invalid-feedback">Please enter a valid numeric Course ID.</div>
+                        </div>
+                        <div class="col-sm-9">
+                            <label class="form-label">Filters</label>
+                            <div class="row g-2">
+                                <div class="col-auto form-check">
+                                    <input id="f-nonmodule" class="form-check-input" type="checkbox" />
+                                    <label for="f-nonmodule" class="form-check-label">Not in a module</label>
+                                </div>
+                                <div class="col-auto form-check">
+                                    <input id="f-noduedate" class="form-check-input" type="checkbox" />
+                                    <label for="f-noduedate" class="form-check-label">No due date</label>
+                                </div>
+                                <div class="col-auto form-check">
+                                    <input id="f-unpublished" class="form-check-input" type="checkbox" />
+                                    <label for="f-unpublished" class="form-check-label">Unpublished</label>
+                                </div>
+                                <div class="col-auto form-check">
+                                    <input id="f-nosubs" class="form-check-input" type="checkbox" />
+                                    <label for="f-nosubs" class="form-check-label">No submissions</label>
+                                </div>
+                                <div class="w-100"></div>
+                                <div class="col-auto form-check">
+                                    <input id="f-older-than" class="form-check-input" type="checkbox" />
+                                    <label for="f-older-than" class="form-check-label">Older than date (by due date)</label>
+                                </div>
+                                <div class="col-auto">
+                                    <input id="f-older-date" class="form-control" type="date" disabled />
+                                </div>
+                                <div class="w-100"></div>
+                                <div class="col-auto form-check">
+                                    <input id="f-older-created" class="form-check-input" type="checkbox" />
+                                    <label for="f-older-created" class="form-check-label">Older than date (by created at)</label>
+                                </div>
+                                <div class="col-auto">
+                                    <input id="f-older-created-date" class="form-control" type="date" disabled />
+                                </div>
+                                <div class="w-100"></div>
+                                <div class="col-auto form-check form-switch ms-3" id="nosubs-graded-wrap" hidden>
+                                    <input id="f-nosubs-graded" class="form-check-input" type="checkbox" />
+                                    <label for="f-nosubs-graded" class="form-check-label">Include assignments with grades</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto d-flex align-items-end gap-2">
+                            <button id="combined-check-btn" type="button" class="btn btn-primary" disabled>Check</button>
+                            <button id="combined-cancel-btn" type="button" class="btn btn-outline-secondary" disabled>Cancel</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <hr class="mt-2">
-            <div class="row g-3">
-                <div class="col-auto form-check">
-                    <input id="f-nonmodule" class="form-check-input" type="checkbox" />
-                    <label for="f-nonmodule" class="form-check-label">Not in a module</label>
+
+            <div hidden id="combined-progress-div" class="mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+                    <p id="combined-progress-info" class="mb-0">Preparing...</p>
                 </div>
-                <div class="col-auto form-check">
-                    <input id="f-noduedate" class="form-check-input" type="checkbox" />
-                    <label for="f-noduedate" class="form-check-label">No due date</label>
-                </div>
-                <div class="col-auto form-check">
-                    <input id="f-unpublished" class="form-check-input" type="checkbox" />
-                    <label for="f-unpublished" class="form-check-label">Unpublished</label>
-                </div>
-                <div class="col-auto form-check">
-                    <input id="f-nosubs" class="form-check-input" type="checkbox" />
-                    <label for="f-nosubs" class="form-check-label">No submissions</label>
-                </div>
-                <div class="w-100"></div>
-                <div class="col-auto form-check">
-                    <input id="f-older-than" class="form-check-input" type="checkbox" />
-                    <label for="f-older-than" class="form-check-label">Older than date (by due date)</label>
-                </div>
-                <div class="col-auto">
-                    <input id="f-older-date" class="form-control" type="date" disabled />
-                </div>
-                <div class="w-100"></div>
-                <div class="col-auto form-check">
-                    <input id="f-older-created" class="form-check-input" type="checkbox" />
-                    <label for="f-older-created" class="form-check-label">Older than date (by created at)</label>
-                </div>
-                <div class="col-auto">
-                    <input id="f-older-created-date" class="form-control" type="date" disabled />
-                </div>
-                <div class="w-100"></div>
-                <div class="col-auto form-check form-switch ms-3" id="nosubs-graded-wrap" hidden>
-                    <input id="f-nosubs-graded" class="form-check-input" type="checkbox" />
-                    <label for="f-nosubs-graded" class="form-check-label">Include assignments with grades</label>
-                </div>
-            </div>
-            <div class="mt-3">
-                <button id="combined-check-btn" class="btn btn-primary">Check</button>
-            </div>
-            <div hidden id="combined-progress-div" class="mt-3">
-                <p id="combined-progress-info"></p>
-                <div class="progress mt-2" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress mt-3" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                     <div class="progress-bar" style="width: 0%"></div>
                 </div>
             </div>
@@ -126,438 +136,225 @@ function deleteAssignmentsCombined(e) {
         eContent.append(form);
 
         const courseID = form.querySelector('#course-id');
-        courseID.addEventListener('change', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            checkCourseID(courseID, form);
-        });
+    const checkBtn = form.querySelector('#combined-check-btn');
+    const cancelBtn = form.querySelector('#combined-cancel-btn');
+        const progressDiv = form.querySelector('#combined-progress-div');
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        const spinner = progressDiv.querySelector('.spinner-border');
+        const progressInfo = form.querySelector('#combined-progress-info');
+        const responseDiv = form.querySelector('#combined-response-container');
 
         const fNoSubs = form.querySelector('#f-nosubs');
         const gradedWrap = form.querySelector('#nosubs-graded-wrap');
-        fNoSubs.addEventListener('change', () => {
-            gradedWrap.hidden = !fNoSubs.checked;
-        });
-
-        // Toggle date input enablement based on older-than checkbox
         const fOlder = form.querySelector('#f-older-than');
         const fOlderDate = form.querySelector('#f-older-date');
-        fOlder.addEventListener('change', () => {
-            fOlderDate.disabled = !fOlder.checked;
-        });
         const fOlderCreated = form.querySelector('#f-older-created');
         const fOlderCreatedDate = form.querySelector('#f-older-created-date');
-        fOlderCreated.addEventListener('change', () => {
-            fOlderCreatedDate.disabled = !fOlderCreated.checked;
+        const fNonModule = form.querySelector('#f-nonmodule');
+        const fNoDue = form.querySelector('#f-noduedate');
+        const fUnpub = form.querySelector('#f-unpublished');
+
+        const setFiltersDisabled = (disabled) => {
+            [fNonModule, fNoDue, fUnpub, fNoSubs, fOlder, fOlderCreated, fOlderDate, fOlderCreatedDate].forEach(el => {
+                if (el) el.disabled = disabled;
+            });
+        };
+
+        // Initially keep filters disabled until a successful Check completes
+        setFiltersDisabled(true);
+
+        // Enable Check button only when Course ID is numeric
+        courseID.addEventListener('input', () => {
+            const val = courseID.value.trim();
+            const validCourse = /^(\d+)$/.test(val);
+            courseID.classList.toggle('is-invalid', !validCourse && val.length > 0);
+            checkBtn.disabled = !validCourse;
         });
 
-        const checkBtn = form.querySelector('#combined-check-btn');
+    function renderResults(finalAssignments) {
+            responseDiv.innerHTML = '';
+            const details = document.createElement('div');
+            details.id = 'combined-response-details';
+            details.className = 'card';
+        const totalCount = Array.isArray(allAssignmentsCache) ? allAssignmentsCache.length : finalAssignments.length;
+            details.innerHTML = `
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Results</span>
+            <span class="text-muted small">Total: ${finalAssignments.length}/${totalCount}</span>
+                </div>
+                <div class="card-body">
+            <div>Found ${finalAssignments.length} out of ${totalCount} assignments matching the selected filters.</div>
+                </div>
+                <div class="card-footer d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary" id="combined-clear-btn">Clear</button>
+                    <button type="button" class="btn btn-danger" id="combined-remove-btn" ${finalAssignments.length < 1 ? 'disabled' : ''}>Delete</button>
+                </div>`;
+            responseDiv.appendChild(details);
+
+            const clearBtn = details.querySelector('#combined-clear-btn');
+            const removeBtn = details.querySelector('#combined-remove-btn');
+            clearBtn.addEventListener('click', (e2) => {
+                e2.preventDefault();
+                e2.stopPropagation();
+                form.querySelector('#course-id').value = '';
+                responseDiv.innerHTML = '';
+                progressDiv.hidden = true;
+            });
+            removeBtn.addEventListener('click', async (e2) => {
+                e2.preventDefault();
+                e2.stopPropagation();
+                details.innerHTML = '';
+                progressBar.parentElement.hidden = false;
+                progressInfo.innerHTML = `Removing ${finalAssignments.length} assignments...`;
+                const domain = document.querySelector('#domain').value.trim();
+                const token = document.querySelector('#token').value.trim();
+                const cid = form.querySelector('#course-id').value.trim();
+                const payload = {
+                    domain,
+                    token,
+                    course_id: cid,
+                    number: finalAssignments.length,
+                    assignments: finalAssignments.map(a => ({ id: a.id, name: a.name }))
+                };
+                window.progressAPI.onUpdateProgress((p) => updateProgressWithPercent(progressBar, p));
+                try {
+                    const result = await window.axios.deleteAssignments(payload);
+                    if (result.successful?.length > 0) progressInfo.innerHTML = `Successfully removed ${result.successful.length} assignments.`;
+                    if (result.failed?.length > 0) progressInfo.innerHTML += ` Failed to remove ${result.failed.length} assignments.`;
+                } catch (err) {
+                    errorHandler(err, progressInfo);
+                }
+            });
+        }
+
+        const updateCount = () => {
+            if (!allAssignmentsCache) return;
+            const useNonModule = fNonModule.checked;
+            const useNoDue = fNoDue.checked;
+            const useUnpub = fUnpub.checked;
+            const useNoSubs = fNoSubs.checked;
+            const includeGraded = form.querySelector('#f-nosubs-graded').checked;
+            const useOlder = fOlder.checked;
+            const useOlderCreated = fOlderCreated.checked;
+            const olderDateVal = fOlderDate.value;
+            const olderCreatedDateVal = fOlderCreatedDate.value;
+
+            let filtered = allAssignmentsCache;
+            if (useNonModule) {
+                filtered = filtered.filter(a => {
+                    const inCore = Array.isArray(a.modules) && a.modules.length > 0;
+                    const inQuiz = Array.isArray(a.quiz?.modules) && a.quiz.modules.length > 0;
+                    const inDisc = Array.isArray(a.discussion?.modules) && a.discussion.modules.length > 0;
+                    return !(inCore || inQuiz || inDisc);
+                });
+            }
+            if (useNoDue) filtered = filtered.filter(a => !a.dueAt);
+            if (useUnpub) filtered = filtered.filter(a => !a.published);
+            if (useNoSubs) {
+                filtered = filtered.filter(a => includeGraded ? !a.hasSubmittedSubmissions : !(a.hasSubmittedSubmissions || a.gradedSubmissionsExist));
+            }
+            if (useOlder && olderDateVal) {
+                const cutoff = new Date(olderDateVal);
+                filtered = filtered.filter(a => a.dueAt && new Date(a.dueAt) < cutoff);
+            }
+            if (useOlderCreated && olderCreatedDateVal) {
+                const cutoff = new Date(olderCreatedDateVal);
+                filtered = filtered.filter(a => a.createdAt && new Date(a.createdAt) < cutoff);
+            }
+
+            renderResults(filtered.map(a => ({ id: a._id || a.id, name: a.name })));
+        };
+
+        // Cancel fetch
+        cancelBtn.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            try {
+                await window.axios.cancelAllAssignmentsForCombined();
+            } catch {}
+            cancelBtn.disabled = true;
+            setFiltersDisabled(false);
+            if (spinner) spinner.hidden = true;
+            progressInfo.innerHTML = '<span class="text-warning">Cancelled.</span>';
+        });
+        
+        // Check button triggers the fetch and keeps filters disabled until completion
         checkBtn.addEventListener('click', async (ev) => {
             ev.preventDefault();
             ev.stopPropagation();
 
-            const domain = document.querySelector('#domain').value.trim();
-            const token = document.querySelector('#token').value.trim();
-            const cid = courseID.value.trim();
-            if (!cid || isNaN(Number(cid))) {
-                form.querySelector('#input-checker').style.display = 'inline';
+            const val = courseID.value.trim();
+            const validCourse = /^(\d+)$/.test(val);
+            if (!validCourse) {
+                courseID.classList.add('is-invalid');
                 return;
-            } else {
-                form.querySelector('#input-checker').style.display = 'none';
             }
 
-            const useNonModule = form.querySelector('#f-nonmodule').checked;
-            const useNoDue = form.querySelector('#f-noduedate').checked;
-            const useUnpub = form.querySelector('#f-unpublished').checked;
-            const useNoSubs = fNoSubs.checked;
-            const includeGraded = form.querySelector('#f-nosubs-graded').checked; // only relevant if No submissions is on
-            const useOlder = fOlder.checked;
-            const olderDateVal = fOlderDate.value; // yyyy-mm-dd
-            const useOlderCreated = fOlderCreated.checked;
-            const olderCreatedDateVal = fOlderCreatedDate.value; // yyyy-mm-dd
-
-            const selectedCount = [useNonModule, useNoDue, useUnpub, useNoSubs, useOlder, useOlderCreated].filter(Boolean).length;
-            const responseDiv = form.querySelector('#combined-response-container');
-            const progressDiv = form.querySelector('#combined-progress-div');
-            const progressBar = progressDiv.querySelector('.progress-bar');
-            const progressInfo = form.querySelector('#combined-progress-info');
-
+            // reset UI state
             responseDiv.innerHTML = '';
             progressDiv.hidden = false;
             progressBar.parentElement.hidden = true;
             updateProgressWithPercent(progressBar, 0);
             if (typeof enhanceProgressBarWithPercent === 'function') enhanceProgressBarWithPercent(progressBar);
-            progressInfo.innerHTML = 'Checking...';
-
-            if (selectedCount === 0) {
-                progressInfo.innerHTML = '<span style="color: red;">Select at least one filter.</span>';
-                return;
-            }
-
-            if (useOlder && !olderDateVal) {
-                progressInfo.innerHTML = '<span style="color: red;">Select a date for the "Older than" filter.</span>';
-                return;
-            }
-            if (useOlderCreated && !olderCreatedDateVal) {
-                progressInfo.innerHTML = '<span style="color: red;">Select a date for the "Older than (created at)" filter.</span>';
-                return;
-            }
-
-            // Only disable the button once we know we're executing a real check
+            if (spinner) spinner.hidden = false;
+            progressInfo.innerHTML = 'Loading assignments...';
+            setFiltersDisabled(true);
             checkBtn.disabled = true;
+            cancelBtn.disabled = false;
+
+            const domain = document.querySelector('#domain').value.trim();
+            const token = document.querySelector('#token').value.trim();
+            const cid = val;
+
+            // Always re-query on Check
             try {
-                // Fetch selected sets in parallel
-                const promises = [];
-                if (useNonModule) {
-                    promises.push(window.axios.getNonModuleAssignments({ domain, token, course: cid }));
-                } else { promises.push(Promise.resolve(null)); }
-                if (useNoDue) {
-                    promises.push(window.axios.getNoDueDateAssignments({ domain, token, course_id: cid }));
-                } else { promises.push(Promise.resolve(null)); }
-                if (useUnpub) {
-                    promises.push(window.axios.getUnpublishedAssignments({ domain, token, course: cid }));
-                } else { promises.push(Promise.resolve(null)); }
-                if (useNoSubs) {
-                    promises.push(window.axios.getNoSubmissionAssignments({ domain, token, course_id: cid, graded: includeGraded }));
-                } else { promises.push(Promise.resolve(null)); }
-                if (useOlder) {
-                    promises.push(window.axios.getOldAssignments({ domain, token, course_id: cid, date_filter: olderDateVal, date_type: 'dueAt' }));
-                } else { promises.push(Promise.resolve(null)); }
-                if (useOlderCreated) {
-                    promises.push(window.axios.getOldAssignments({ domain, token, course_id: cid, date_filter: olderCreatedDateVal, date_type: 'createdAt' }));
-                } else { promises.push(Promise.resolve(null)); }
-
-                const [nonModule, noDue, unpub, noSubs, oldDue, oldCreated] = await Promise.all(promises);
-
-                // Normalize to { id, name }
-                const norm = (arr, shape) => {
-                    if (!arr) return null;
-                    if (shape === 'edges') {
-                        return arr.map(edge => ({ id: edge.node._id, name: edge.node.name }));
-                    }
-                    if (shape === 'nodes') {
-                        return arr.map(n => ({ id: n._id, name: n.name }));
-                    }
-                    // already mapped arrays of {id, name}
-                    return arr.map(a => ({ id: a.id ?? a._id ?? a, name: a.name }));
-                };
-
-                const sets = [];
-                if (useNonModule) sets.push(new Map(norm(nonModule, 'mapped').map(a => [String(a.id), a])));
-                if (useNoDue) sets.push(new Map(norm(noDue, 'mapped').map(a => [String(a.id), a])));
-                if (useUnpub) sets.push(new Map(norm(unpub, 'nodes').map(a => [String(a.id), a])));
-                if (useNoSubs) sets.push(new Map(norm(noSubs, 'edges').map(a => [String(a.id), a])));
-                if (useOlder) sets.push(new Map(norm(oldDue, 'nodes').map(a => [String(a.id), a])));
-                if (useOlderCreated) sets.push(new Map(norm(oldCreated, 'nodes').map(a => [String(a.id), a])));
-
-                // Compute intersection by id
-                let finalAssignments = [];
-                if (sets.length === 1) {
-                    finalAssignments = Array.from(sets[0].values());
-                } else {
-                    // start with smallest set to optimize
-                    sets.sort((a, b) => a.size - b.size);
-                    const [first, ...rest] = sets;
-                    for (const [id, obj] of first.entries()) {
-                        if (rest.every(s => s.has(id))) finalAssignments.push(obj);
-                    }
-                }
-
+                const all = await window.axios.getAllAssignmentsForCombined({ domain, token, course_id: cid });
+                allAssignmentsCache = all;
                 progressInfo.innerHTML = 'Done';
-
-                const details = document.createElement('div');
-                details.id = 'combined-response-details';
-                details.innerHTML = `
-                    <div class="row align-items-center">
-                        <div class="col-auto">Found ${finalAssignments.length} assignments matching all selected filters.</div>
-                        <div class="w-100"></div>
-                        <div class="col-2"><button id="combined-remove-btn" type="button" class="btn btn-danger">Remove</button></div>
-                        <div class="col-2"><button id="combined-cancel-btn" type="button" class="btn btn-secondary">Cancel</button></div>
-                    </div>
-                `;
-                responseDiv.appendChild(details);
-
-                // Re-enable check so filters can be adjusted and re-run
+                if (spinner) spinner.hidden = true;
+                setFiltersDisabled(false);
+                cancelBtn.disabled = true;
                 checkBtn.disabled = false;
-
-                const cancelBtn = details.querySelector('#combined-cancel-btn');
-                cancelBtn.addEventListener('click', (ev2) => {
-                    ev2.preventDefault();
-                    ev2.stopPropagation();
-                    courseID.value = '';
-                    responseDiv.innerHTML = '';
-                    checkBtn.disabled = false;
-                });
-
-                const removeBtn = details.querySelector('#combined-remove-btn');
-                if (finalAssignments.length < 1) removeBtn.disabled = true;
-                removeBtn.addEventListener('click', async (ev2) => {
-                    ev2.preventDefault();
-                    ev2.stopPropagation();
-
-                    details.innerHTML = '';
-                    progressBar.parentElement.hidden = false;
-                    progressInfo.innerHTML = `Removing ${finalAssignments.length} assignments...`;
-
-                    const payload = {
-                        domain,
-                        token,
-                        course_id: cid,
-                        number: finalAssignments.length,
-                        assignments: finalAssignments.map(a => ({ id: a.id, name: a.name }))
-                    };
-
-                    window.progressAPI.onUpdateProgress((p) => {
-                        updateProgressWithPercent(progressBar, p);
-                    });
-
-                    try {
-                        const result = await window.axios.deleteAssignments(payload);
-                        if (result.successful?.length > 0) {
-                            progressInfo.innerHTML = `Successfully removed ${result.successful.length} assignments.`;
-                        }
-                        if (result.failed?.length > 0) {
-                            progressInfo.innerHTML += ` Failed to remove ${result.failed.length} assignments.`;
-                        }
-                    } catch (err) {
-                        errorHandler(err, progressInfo);
-                    } finally {
-                        checkBtn.disabled = false;
-                    }
-                });
-
+                renderResults(all.map(a => ({ id: a._id || a.id, name: a.name })));
             } catch (error) {
-                errorHandler(error, form.querySelector('#combined-progress-info'));
+                if (String(error).includes('canceled') || String(error).includes('abort')) {
+                    progressInfo.innerHTML = '<span class="text-warning">Cancelled.</span>';
+                } else {
+                    errorHandler(error, progressInfo);
+                }
                 checkBtn.disabled = false;
-            } finally {
-                // no-op
             }
         });
-    }
+    // Listen for filter changes to update counts live
+    fNonModule?.addEventListener('change', updateCount);
+    fNoDue?.addEventListener('change', updateCount);
+    fUnpub?.addEventListener('change', updateCount);
 
+        fNoSubs.addEventListener('change', () => {
+            gradedWrap.hidden = !fNoSubs.checked;
+            updateCount();
+        });
+
+        // Toggle date input enablement based on older-than checkbox
+        fNonModule?.addEventListener('change', updateCount);
+        fNoDue?.addEventListener('change', updateCount);
+        fUnpub?.addEventListener('change', updateCount);
+        fOlder.addEventListener('change', () => {
+            fOlderDate.disabled = !fOlder.checked;
+            updateCount();
+        });
+        fOlderDate.addEventListener('input', updateCount);
+        fOlderCreated.addEventListener('change', () => {
+            fOlderCreatedDate.disabled = !fOlderCreated.checked;
+            updateCount();
+        });
+        fOlderCreatedDate.addEventListener('input', updateCount);
+
+    // Store fetched assignments in memory; re-fetched on each Check press
+    let allAssignmentsCache = null;
+    let cacheKey = null; // kept for potential future use
+    }
     form.hidden = false;
-}
-
-function assignmentCreator(e) {
-    let emptyGroups = [];
-    hideEndpoints(e)
-
-    const eContent = document.querySelector('#endpoint-content');
-    let assignmentCreatorForm = eContent.querySelector('#assignment-creator-form');
-
-    if (!assignmentCreatorForm) {
-        // const assignmentCreatorHeader = document.createElement('div');
-        // assignmentCreatorHeader.id = 'assignment-creator-header';
-        // assignmentCreatorHeader.innerHTML = '<h3>Create Assignments</h3>'
-
-        assignmentCreatorForm = document.createElement('form');
-        assignmentCreatorForm.id = 'assignment-creator-form';
-        assignmentCreatorForm.innerHTML = `
-            <div>
-                <h3>Create Assignments</h3>
-            </div>
-            <div class="row">
-                <div class="row align-items-center">
-                    <div class="col-2">
-                        <label class="form-label">Course</label>
-                        <input id="course-id" type="text" class="form-control" aria-describedby="input-checker" />
-                    </div>
-                    <div class="col-auto" >
-                        <span id="input-checker" class="form-text" style="display: none;">Must only contain numbers</span>
-                    </div>
-                    <div class="col-2">
-                        <label class="form-label">How many</label>
-                        <input id="assignment-number" type="text" class="form-control" value="1">
-                    </div>
-                    <div class="col-2">
-                        <label class="form-label">Points</label>
-                        <input id="assignment-points" type="text" class="form-control" value="10">
-                    </div>
-                </div>
-                <hr class="mt-2">
-                <div class="row">
-                    <div>
-                        <h5>Assignment Settings</h5>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="assignment-publish" class="form-check-input" type="checkbox" role="switch" checked>
-                            <label for="assignment-publish" class="form-check-label">Publish</label>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="assignment-peer" class="form-check-input" type="checkbox" role="switch">
-                            <label for="assignment-peer" class="form-check-label">Peer Reviews</label>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <input id="assignment-anonymous" class="form-check-input" type="checkbox" role="switch">
-                            <label for="assignment-anonymous" class="form-check-label">Anonymous</label>
-                        </div>
-                        <div class="row justify-content-start align-items-baseline" >
-                            <label for="assignment-grade-type" class="form-label col-auto">Display Grade as</label>
-                            <select id="assignment-grade-type" class="form-select col-auto custom-select-width">
-                                <option value="points" selected>Points</option>
-                                <option value="percent">Percent</option>
-                                <option value="letter">Letter</option>
-                                <option value="gpa_scale">GPA Scale</option>
-                                <option value="pass_fail">Complete/Incomplete</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="submission-types">
-                        <h5>Submission Types</h5>
-                        <div class="col-auto form-check form-switch" >
-                            <label for="submission-none" class="form-label">No Submission</label>
-                            <input id="submission-none" class="form-check-input" type="checkbox" role="switch" />
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <label for="submission-on_paper" class="form-label">On Paper</label>
-                            <input id="submission-on_paper" class="form-check-input" type="checkbox" role="switch" />
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <label for="submission-online_upload" class="form-label">File Upload</label>
-                            <input id="submission-online_upload" class="form-check-input" type="checkbox" role="switch" checked/>
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <label for="submission-online_text_entry" class="form-label">Text Entry</label>
-                            <input id="submission-online_text_entry" class="form-check-input" type="checkbox" role="switch" />
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <label for="submission-online_url" class="form-label">Website URL</label>
-                            <input id="submission-online_url" class="form-check-input" type="checkbox" role="switch" />
-                        </div>
-                        <div class="col-auto form-check form-switch" >
-                            <label for="submission-media_recording" class="form-label">Media recording</label>
-                            <input id="submission-media_recording" class="form-check-input" type="checkbox" role="switch" />
-                        </div>
-                    </div>
-                </div>
-                <div class="w-100"></div>
-                <div class="col-auto">
-                    <button id="action-btn" class="btn btn-primary mt-3">Create</button>
-                </div>
-            </div>
-            <div hidden id="assignment-creator-progress-div">
-                <p id="assignment-creator-progress-info"></p>
-                <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-
-                    <div class="progress-bar" style="width: 0%"></div>
-                </div>
-            </div>
-            <div id="assignment-creator-response-container" class="mt-3">
-            </div>
-        `;
-        eContent.append(assignmentCreatorForm);
-
-        // Enhance the progress bar with percent label
-        const progressBar = assignmentCreatorForm.querySelector('.progress-bar');
-        if (progressBar) {
-            enhanceProgressBarWithPercent(progressBar);
-        }
-
-        // Wire up listeners ONCE when the form is created
-        const submissionTypes = assignmentCreatorForm.querySelector('#submission-types');
-
-        function uncheckAllSubmissions() {
-            submissionTypes.querySelector('#submission-none').checked = false;
-            submissionTypes.querySelector('#submission-on_paper').checked = false;
-            submissionTypes.querySelector('#submission-online_upload').checked = false;
-            submissionTypes.querySelector('#submission-online_text_entry').checked = false;
-            submissionTypes.querySelector('#submission-online_url').checked = false;
-            submissionTypes.querySelector('#submission-media_recording').checked = false;
-        }
-
-        function handleSubmissionTypes(ev) {
-            if (ev.target.id === 'submission-none' || ev.target.id === 'submission-on_paper') {
-                uncheckAllSubmissions();
-                ev.target.checked = true;
-            } else {
-                submissionTypes.querySelector('#submission-none').checked = false;
-                submissionTypes.querySelector('#submission-on_paper').checked = false;
-            }
-        }
-        submissionTypes.addEventListener('change', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-
-            handleSubmissionTypes(ev);
-        });
-
-        const courseID = assignmentCreatorForm.querySelector('#course-id');
-        courseID.addEventListener('change', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-
-            checkCourseID(courseID, assignmentCreatorForm);
-        });
-
-        const assignmentCreateBtn = assignmentCreatorForm.querySelector('#action-btn');
-        assignmentCreateBtn.addEventListener('click', async function (ev) {
-            ev.stopPropagation();
-            ev.preventDefault();
-
-            assignmentCreateBtn.disabled = true;
-
-            // get values and inputs
-            const assigmentCreatorResponseContainer = assignmentCreatorForm.querySelector('#assignment-creator-response-container');
-            const domain = document.querySelector('#domain');
-            const apiToken = document.querySelector('#token');
-            const checkedSubTypes = submissionTypes.querySelectorAll('input[type="checkbox"]:checked');
-            const checkedSubmissionTypes = Array.from(checkedSubTypes).map((subType) => {
-                return subType.id.split('-')[1];
-            });
-            const assignmentNumber = assignmentCreatorForm.querySelector('#assignment-number').value.trim();
-            const assignmentPoints = assignmentCreatorForm.querySelector('#assignment-points');
-            const publish = assignmentCreatorForm.querySelector('#assignment-publish').checked;
-            const peerReviews = assignmentCreatorForm.querySelector('#assignment-peer').checked;
-            const anonymous = assignmentCreatorForm.querySelector('#assignment-anonymous').checked;
-            const gradeType = assignmentCreatorForm.querySelector('#assignment-grade-type').value;
-
-            const assignmentCreatorProgressDiv = assignmentCreatorForm.querySelector('#assignment-creator-progress-div');
-            const assignmentCreatorProgressBar = assignmentCreatorProgressDiv.querySelector('.progress-bar');
-            const assignmentCreatorProgressInfo = assignmentCreatorForm.querySelector('#assignment-creator-progress-info');
-
-            // clean environment
-            assignmentCreatorProgressDiv.hidden = false;
-            updateProgressWithPercent(assignmentCreatorProgressBar, 0);
-            enhanceProgressBarWithPercent(assignmentCreatorProgressBar);
-            assignmentCreatorProgressInfo.innerHTML = '';
-
-            // data to be used to create assignments
-            const requestData = {
-                domain: domain.value.trim(),
-                token: apiToken.value.trim(),
-                course_id: courseID.value.trim(),
-                number: parseInt(assignmentNumber),
-                name: 'Assignment',
-                points: parseInt(assignmentPoints.value.trim()),
-                publish: publish ? 'published' : 'unpublished',
-                peer_reviews: peerReviews,
-                anonymous: anonymous,
-                grade_type: gradeType,
-                submissionTypes: checkedSubmissionTypes
-            }
-
-
-            window.progressAPI.onUpdateProgress((progress) => {
-                updateProgressWithPercent(assignmentCreatorProgressBar, progress);
-            });
-
-            try {
-                const createAssignmentResponse = await window.axios.createAssignments(requestData);
-                if (createAssignmentResponse.successful.length > 0) {
-                    assignmentCreatorProgressInfo.innerHTML = `Successfully created ${createAssignmentResponse.successful.length} assignments.`;
-                }
-                if (createAssignmentResponse.failed.length > 0) {
-                    assignmentCreatorProgressInfo.innerHTML += `Failed to create ${createAssignmentResponse.failed.length} assignments.`;
-                    assignmentCreatorProgressBar.parentElement.hidden = true;
-                    errorHandler({ message: `${createAssignmentResponse.failed[0].reason}` }, assignmentCreatorProgressInfo);
-                }
-            } catch (error) {
-                assignmentCreatorProgressBar.parentElement.hidden = true;
-                errorHandler(error, assignmentCreatorProgressInfo);
-            } finally {
-                assignmentCreateBtn.disabled = false;
-            }
-        });
-    }
-    assignmentCreatorForm.hidden = false;
 }
 
 function noSubmissionAssignments(e) {
@@ -2623,6 +2420,63 @@ function deleteNoDueDateAssignments(e) {
         eContent.append(form);
     }
     form.hidden = false;
+
+    function renderResults(finalAssignments) {
+        // wipe and render results card with count and delete capability
+        const responseDiv = form.querySelector('#combined-response-container');
+        responseDiv.innerHTML = '';
+        const details = document.createElement('div');
+        details.id = 'combined-response-details';
+        details.className = 'card';
+        details.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Results</span>
+                <span class="text-muted small">Total: ${finalAssignments.length}</span>
+            </div>
+            <div class="card-body">
+                <div>Found ${finalAssignments.length} assignments matching the selected filters.</div>
+            </div>
+            <div class="card-footer d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" id="combined-clear-btn">Clear</button>
+                <button type="button" class="btn btn-danger" id="combined-remove-btn" ${finalAssignments.length < 1 ? 'disabled' : ''}>Delete</button>
+            </div>`;
+        responseDiv.appendChild(details);
+
+        const clearBtn = details.querySelector('#combined-clear-btn');
+        const removeBtn = details.querySelector('#combined-remove-btn');
+        clearBtn.addEventListener('click', (e2) => {
+            e2.preventDefault();
+            e2.stopPropagation();
+            form.querySelector('#course-id').value = '';
+            responseDiv.innerHTML = '';
+            progressDiv.hidden = true;
+        });
+        removeBtn.addEventListener('click', async (e2) => {
+            e2.preventDefault();
+            e2.stopPropagation();
+            details.innerHTML = '';
+            progressBar.parentElement.hidden = false;
+            progressInfo.innerHTML = `Removing ${finalAssignments.length} assignments...`;
+            const domain = document.querySelector('#domain').value.trim();
+            const token = document.querySelector('#token').value.trim();
+            const cid = form.querySelector('#course-id').value.trim();
+            const payload = {
+                domain,
+                token,
+                course_id: cid,
+                number: finalAssignments.length,
+                assignments: finalAssignments.map(a => ({ id: a.id, name: a.name }))
+            };
+            window.progressAPI.onUpdateProgress((p) => updateProgressWithPercent(progressBar, p));
+            try {
+                const result = await window.axios.deleteAssignments(payload);
+                if (result.successful?.length > 0) progressInfo.innerHTML = `Successfully removed ${result.successful.length} assignments.`;
+                if (result.failed?.length > 0) progressInfo.innerHTML += ` Failed to remove ${result.failed.length} assignments.`;
+            } catch (err) {
+                errorHandler(err, progressInfo);
+            }
+        });
+    }
 
     const courseID = form.querySelector('#course-id');
     courseID.addEventListener('change', (ev) => {

@@ -36,20 +36,27 @@ function generateDate(daysFromNow = 0) {
 
 // CSV Generators
 function generateUsersCSV(rowCount, emailDomain = '@school.edu', authProviderId = '', userOptions = {}) {
-    const headers = 'user_id,login_id,authentication_provider_id,password,first_name,last_name,short_name,email,status';
+    const headers = 'user_id,login_id,authentication_provider_id,password,first_name,last_name,short_name,email,status,integration_id';
     const rows = [headers];
 
     const statuses = ['active', 'suspended', 'deleted'];
 
     for (let i = 0; i < rowCount; i++) {
+        // Use specific values if provided, otherwise generate random ones
         const { firstName, lastName } = generateRandomName();
-        const email = generateRandomEmail(firstName, lastName, emailDomain);
-        const userId = generateRandomId('U', 6);
-        const loginId = `${firstName.toLowerCase()}${lastName.toLowerCase()}${Math.floor(Math.random() * 100)}`;
-        const shortName = `${firstName} ${lastName.charAt(0)}.`;
-        const status = userOptions.specificStatus || 'active';
 
-        const row = `${userId},${loginId},${authProviderId},temppass123,${firstName},${lastName},${shortName},${email},${status}`;
+        const userId = userOptions.specificUserId || generateRandomId('U', 6);
+        const loginId = userOptions.specificLoginId || `${firstName.toLowerCase()}${lastName.toLowerCase()}${Math.floor(Math.random() * 100)}`;
+        const authProviderIdToUse = userOptions.specificAuthProviderId || authProviderId;
+        const password = userOptions.specificPassword || 'temppass123';
+        const firstNameToUse = userOptions.specificFirstName || firstName;
+        const lastNameToUse = userOptions.specificLastName || lastName;
+        const shortName = userOptions.specificShortName || `${firstNameToUse} ${lastNameToUse.charAt(0)}.`;
+        const email = userOptions.specificEmail || generateRandomEmail(firstNameToUse, lastNameToUse, emailDomain);
+        const status = userOptions.specificStatus || 'active';
+        const integrationId = userOptions.specificIntegrationId || '';
+
+        const row = `${userId},${loginId},${authProviderIdToUse},${password},${firstNameToUse},${lastNameToUse},${shortName},${email},${status},${integrationId}`;
         rows.push(row);
     }
 
@@ -63,21 +70,11 @@ function generateAccountsCSV(rowCount, accountOptions = {}) {
     const departments = ['Humanities', 'Sciences', 'Engineering', 'Business', 'Arts', 'Social Sciences'];
 
     for (let i = 0; i < rowCount; i++) {
-        let accountId = '';
-        let parentId = '';
-
-        // Use specific account ID if provided
-        if (accountOptions.specificAccountId) {
-            if (rowCount > 1) {
-                accountId = `${accountOptions.specificAccountId}_${i + 1}`;
-            } else {
-                accountId = accountOptions.specificAccountId;
-            }
-        } else {
-            accountId = generateRandomId('A', 4);
-        }
+        // Use specific values if provided, otherwise generate random ones
+        const accountId = accountOptions.specificAccountId || generateRandomId('A', 4);
 
         // Use specific parent account ID if provided
+        let parentId = '';
         if (accountOptions.specificParentAccountId) {
             parentId = accountOptions.specificParentAccountId;
         } else {
@@ -85,7 +82,7 @@ function generateAccountsCSV(rowCount, accountOptions = {}) {
             parentId = i === 0 ? '' : generateRandomId('A', 4);
         }
 
-        const name = departments[i % departments.length] + (i > 5 ? ` ${Math.floor(i / 6) + 1}` : '');
+        const name = accountOptions.specificName || (departments[i % departments.length] + (i > 5 ? ` ${Math.floor(i / 6) + 1}` : ''));
         const status = accountOptions.specificStatus || 'active';
 
         const row = `${accountId},${parentId},${name},${status}`;
@@ -96,17 +93,18 @@ function generateAccountsCSV(rowCount, accountOptions = {}) {
 }
 
 function generateTermsCSV(rowCount, termOptions = {}) {
-    const headers = 'term_id,name,status,start_date,end_date';
+    const headers = 'term_id,name,status,start_date,end_date,integration_id';
     const rows = [headers];
 
     const seasons = ['Fall', 'Spring', 'Summer', 'Winter'];
     const currentYear = new Date().getFullYear();
 
     for (let i = 0; i < rowCount; i++) {
-        const termId = generateRandomId('T', 4);
+        // Use specific values if provided, otherwise generate random ones
+        const termId = termOptions.specificTermId || generateRandomId('T', 4);
         const season = seasons[i % seasons.length];
         const year = currentYear + Math.floor(i / 4);
-        const name = `${season} ${year}`;
+        const name = termOptions.specificName || `${season} ${year}`;
 
         // Generate realistic start and end dates
         let startDate = '';
@@ -116,10 +114,10 @@ function generateTermsCSV(rowCount, termOptions = {}) {
             // Leave dates empty if noDates option is set
             startDate = '';
             endDate = '';
-        } else if (termOptions.specificStartDate && termOptions.specificEndDate) {
+        } else if (termOptions.specificStartDate || termOptions.specificEndDate) {
             // Use specific dates if provided
-            startDate = termOptions.specificStartDate;
-            endDate = termOptions.specificEndDate;
+            startDate = termOptions.specificStartDate || '';
+            endDate = termOptions.specificEndDate || '';
         } else {
             // Default behavior - generate based on season
             if (season === 'Fall') {
@@ -135,7 +133,8 @@ function generateTermsCSV(rowCount, termOptions = {}) {
         }
 
         const status = termOptions.specificStatus || 'active';
-        const row = `${termId},${name},${status},${startDate},${endDate}`;
+        const integrationId = termOptions.specificIntegrationId || '';
+        const row = `${termId},${name},${status},${startDate},${endDate},${integrationId}`;
         rows.push(row);
     }
 
@@ -143,24 +142,33 @@ function generateTermsCSV(rowCount, termOptions = {}) {
 }
 
 function generateCoursesCSV(rowCount, courseOptions = {}) {
-    const headers = 'course_id,short_name,long_name,account_id,term_id,status';
+    const headers = 'course_id,short_name,long_name,account_id,term_id,status,integration_id,start_date,end_date,course_format,blueprint_course_id,grade_passback_setting,homeroom_course,friendly_name';
     const rows = [headers];
 
     for (let i = 0; i < rowCount; i++) {
-        const courseId = generateRandomId('C', 6);
+        // Use specific course_id if provided, otherwise generate random one
+        const courseId = courseOptions.specificCourseId || generateRandomId('C', 6);
+
+        // Generate or use specific course details
         const subject = subjects[Math.floor(Math.random() * subjects.length)];
         const courseNumber = 100 + Math.floor(Math.random() * 400);
-        const shortName = `${subject.replace(/\s+/g, '').toUpperCase()}${courseNumber}`;
-        const longName = `${subject} ${courseNumber}: Introduction to ${subject}`;
+        const shortName = courseOptions.specificShortName || `${subject.replace(/\s+/g, '').toUpperCase()}${courseNumber}`;
+        const longName = courseOptions.specificLongName || `${subject} ${courseNumber}: Introduction to ${subject}`;
 
-        // Use specific account_id if provided
+        // Use specific values or generate defaults
         const accountId = courseOptions.specificAccountId || generateRandomId('A', 4);
         const termId = courseOptions.specificTermId || generateRandomId('T', 4);
-
-        // Use specific status if provided
         const status = courseOptions.specificStatus || 'active';
+        const integrationId = courseOptions.specificIntegrationId || '';
+        const startDate = courseOptions.specificStartDate || '';
+        const endDate = courseOptions.specificEndDate || '';
+        const courseFormat = courseOptions.specificFormat || '';
+        const blueprintId = courseOptions.specificBlueprintId || '';
+        const gradePassback = courseOptions.specificGradePassback || '';
+        const homeroom = courseOptions.specificHomeroom || '';
+        const friendlyName = courseOptions.specificFriendlyName || '';
 
-        const row = `${courseId},${shortName},"${longName}",${accountId},${termId},${status}`;
+        const row = `${courseId},${shortName},"${longName}",${accountId},${termId},${status},${integrationId},${startDate},${endDate},${courseFormat},${blueprintId},${gradePassback},${homeroom},${friendlyName}`;
         rows.push(row);
     }
 
@@ -168,21 +176,21 @@ function generateCoursesCSV(rowCount, courseOptions = {}) {
 }
 
 function generateSectionsCSV(rowCount, sectionOptions = {}) {
-    const headers = 'section_id,course_id,name,status,start_date,end_date';
+    const headers = 'section_id,course_id,name,status,start_date,end_date,integration_id';
     const rows = [headers];
 
     for (let i = 0; i < rowCount; i++) {
-        const sectionId = generateRandomId('S', 6);
-
-        // Use specific course_id if provided
+        // Use specific values if provided, otherwise generate random ones
+        const sectionId = sectionOptions.specificSectionId || generateRandomId('S', 6);
         const courseId = sectionOptions.specificCourseId || generateRandomId('C', 6);
         const sectionNumber = Math.floor(i / 3) + 1;
-        const name = `Section ${sectionNumber}`;
-
-        // Use specific status if provided
+        const name = sectionOptions.specificName || `Section ${sectionNumber}`;
         const status = sectionOptions.specificStatus || 'active';
+        const integrationId = sectionOptions.specificIntegrationId || '';
+        const startDate = sectionOptions.specificStartDate || '';
+        const endDate = sectionOptions.specificEndDate || '';
 
-        const row = `${sectionId},${courseId},${name},${status},,`;
+        const row = `${sectionId},${courseId},${name},${status},${startDate},${endDate},${integrationId}`;
         rows.push(row);
     }
 
@@ -190,76 +198,23 @@ function generateSectionsCSV(rowCount, sectionOptions = {}) {
 }
 
 function generateEnrollmentsCSV(rowCount, enrollmentOptions = {}) {
-    const headers = 'course_id,user_id,role,section_id,status';
+    const headers = 'course_id,user_id,role,section_id,status,user_integration_id,role_id,root_account';
     const rows = [headers];
 
-    const roles = ['student', 'teacher', 'ta'];
-    const roleWeights = [0.85, 0.10, 0.05]; // 85% students, 10% teachers, 5% TAs
+    const roles = ['student', 'teacher', 'ta', 'observer', 'designer'];
 
     for (let i = 0; i < rowCount; i++) {
-        let courseId = '';
-        let sectionId = '';
-        let userId = '';
-        let role = '';
-
-        // Extract options with defaults for backward compatibility
-        const enrollmentType = enrollmentOptions.enrollmentType || 'mixed';
-        const specificId = enrollmentOptions.specificId || '';
-        const roleType = enrollmentOptions.roleType || 'mixed';
-        const specificUserId = enrollmentOptions.specificUserId || '';
-
-        // Determine course_id and section_id based on enrollment type
-        switch (enrollmentType) {
-            case 'course':
-                // Use specific course ID, generate random section IDs
-                courseId = specificId || generateRandomId('C', 6);
-                sectionId = generateRandomId('S', 6);
-                break;
-            case 'section':
-                // Use specific section ID, leave course_id empty (section-based enrollment)
-                courseId = '';
-                sectionId = specificId || generateRandomId('S', 6);
-                break;
-            case 'mixed':
-            default:
-                // Original behavior - random course and section IDs
-                courseId = generateRandomId('C', 6);
-                sectionId = generateRandomId('S', 6);
-                break;
-        }
-
-        // Determine user ID
-        if (specificUserId) {
-            // Use specific user ID, optionally with row number for multiple users
-            if (rowCount > 1) {
-                userId = `${specificUserId}_${i + 1}`;
-            } else {
-                userId = specificUserId;
-            }
-        } else {
-            // Generate random user ID
-            userId = generateRandomId('U', 6);
-        }
-
-        // Determine role
-        if (roleType && roleType !== 'mixed') {
-            // Use specific role
-            role = roleType;
-        } else {
-            // Weighted random role selection
-            const rand = Math.random();
-            role = 'student';
-            if (rand < roleWeights[2]) {
-                role = 'ta';
-            } else if (rand < roleWeights[1] + roleWeights[2]) {
-                role = 'teacher';
-            }
-        }
-
-        // Use specific status if provided
+        // Use specific values if provided, otherwise generate random ones
+        const courseId = enrollmentOptions.specificCourseId || generateRandomId('C', 6);
+        const userId = enrollmentOptions.specificUserId || generateRandomId('U', 6);
+        const role = enrollmentOptions.specificRole || roles[Math.floor(Math.random() * roles.length)];
+        const sectionId = enrollmentOptions.specificSectionId || generateRandomId('S', 6);
         const status = enrollmentOptions.specificStatus || 'active';
+        const userIntegrationId = enrollmentOptions.specificUserIntegrationId || '';
+        const roleId = enrollmentOptions.specificRoleId || '';
+        const rootAccount = enrollmentOptions.specificRootAccount || '';
 
-        const row = `${courseId},${userId},${role},${sectionId},${status}`;
+        const row = `${courseId},${userId},${role},${sectionId},${status},${userIntegrationId},${roleId},${rootAccount}`;
         rows.push(row);
     }
 

@@ -910,6 +910,68 @@ async function deleteAssignmentGroupWithAssignments(data) {
     }
 }
 
+// Unified fetch for combined-filters workflow: returns array of nodes with
+// {_id, name, published, dueAt, createdAt, hasSubmittedSubmissions, gradedSubmissionsExist,
+//   modules { _id id name }, quiz { modules { _id id name } }, discussion { modules { _id id name } }}
+async function getAllAssignmentsForCombined(data) {
+    // data: { domain, token, course_id }
+    const query = `
+        query AllAssignmentsForCombined($courseId: ID, $nextPage: String) {
+            course(id: $courseId) {
+                assignmentsConnection(first: 500, after: $nextPage, filter: {gradingPeriodId: null}) {
+                    nodes {
+                        _id
+                        name
+                        published
+                        dueAt
+                        createdAt
+                        hasSubmittedSubmissions
+                        gradedSubmissionsExist
+                        modules { _id id name }
+                        quiz { modules { _id id name } }
+                        discussion { modules { _id id name } }
+                    }
+                    pageInfo { endCursor hasNextPage }
+                }
+            }
+        }`;
+
+    const variables = { courseId: data.course_id, nextPage: "" };
+    const axiosConfig = {
+        method: 'post',
+        url: `https://${data.domain}/api/graphql`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`,
+            'Content-Type': 'application/json'
+        },
+        signal: data.signal,
+        data: { query, variables }
+    };
+
+    let next_page = true;
+    const all = [];
+    while (next_page) {
+        try {
+            const request = async () => axios(axiosConfig);
+            const response = await errorCheck(request);
+            if (response.data.data.course?.assignmentsConnection.nodes) {
+                all.push(...response.data.data.course.assignmentsConnection.nodes);
+                if (response.data.data.course.assignmentsConnection.pageInfo.hasNextPage) {
+                    variables.nextPage = response.data.data.course.assignmentsConnection.pageInfo.endCursor;
+                } else {
+                    next_page = false;
+                }
+            } else {
+                let newError = { status: 'Unknown', message: "Error course ID couldn't be found." };
+                throw newError;
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+    return all;
+}
+
 // async function deleteUnPublishedAssignments(data) {
 //     console.log('Deleting unpublished assignments');
 //     const assignments = await getAssignments(data.domain, data.course, data.token);
@@ -1199,5 +1261,5 @@ async function getAssignmentsInModules(data) {
 // }) ();
 
 module.exports = {
-    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups, getAssignmentsInGroup, getNoDueDateAssignments, getAssignmentsInModules
+    createAssignments, deleteAssignments, getAssignments, getNoSubmissionAssignments, getUnpublishedAssignments, deleteNoSubmissionAssignments, getNonModuleAssignments, getAssignmentsToMove, moveAssignmentToGroup, getOldAssignmentsGraphQL, getImportedAssignments, deleteAssignmentGroupWithAssignments, getAssignmentsInOtherGroups, getAssignmentsInGroup, getNoDueDateAssignments, getAssignmentsInModules, getAllAssignmentsForCombined
 }

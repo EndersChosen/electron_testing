@@ -23,10 +23,20 @@ async function createSingleSISFile(e) {
         createSISForm.innerHTML = `
             <div>
                 <h3>Create Single SIS Import File</h3>
-                <p class="text-muted">Generate a single CSV file for SIS import with random sample data.</p>
+                <p class="text-muted">Generate a single CSV file for SIS import with random sample data, or build a collection of files for zip export.</p>
             </div>
             <div class="row mb-3">
-                <div class="col-4">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="multi-file-mode">
+                        <label class="form-check-label" for="multi-file-mode">
+                            <strong>Multi-file mode:</strong> Add multiple file configurations to generate a zip package
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-3">
                     <label for="file-type" class="form-label">File Type</label>
                     <select id="file-type" class="form-select" required>
                         <option value="">Select file type...</option>
@@ -49,444 +59,45 @@ async function createSingleSISFile(e) {
                         <option value="admins">Admins</option>
                     </select>
                 </div>
-                <div class="col-4">
+                <div class="col-2">
                     <label for="row-count" class="form-label">Number of Rows</label>
                     <input type="number" id="row-count" class="form-control" min="1" max="10000" value="10" required>
                     <div class="form-text">How many data rows to generate (1-10,000)</div>
                 </div>
-                <div class="col-4">
+                <div class="col-3">
                     <label for="email-domain" class="form-label">Email Domain</label>
                     <input type="text" id="email-domain" class="form-control" value="@school.edu" placeholder="@school.edu">
                     <div class="form-text">Domain for generated email addresses</div>
                 </div>
             </div>
-            <div class="row mb-3" id="auth-provider-row" style="display: none;">
-                <div class="col-8">
-                    <label for="auth-provider" class="form-label">Authentication Provider</label>
-                    <select id="auth-provider" class="form-select">
-                        <option value="">None (Default Canvas Authentication)</option>
-                    </select>
-                    <div class="form-text">Authentication provider for user logins (applies to Users and Logins CSV types)</div>
+            
+            <!-- CSV Field Options Section -->
+            <div class="row mb-3" id="csv-options-section" style="display: none;">
+                <div class="col-12 mb-3">
+                    <h5 class="text-primary">CSV Field Options</h5>
+                    <p class="text-muted small">Select fields to customize for your CSV. Required fields will be auto-generated if not specified.</p>
                 </div>
-                <div class="col-4">
-                    <button type="button" id="fetch-auth-providers" class="btn btn-outline-info mt-4">
-                        Fetch Providers
-                    </button>
-                    <div class="form-text">Uses domain and token from main form</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="enrollment-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Enrollment Options</h5>
-                </div>
-                <div class="col-3">
-                    <label for="enrollment-type" class="form-label">Enrollment Type</label>
-                    <select id="enrollment-type" class="form-select">
-                        <option value="mixed">Mixed (Random IDs)</option>
-                        <option value="course">Course-based</option>
-                        <option value="section">Section-based</option>
-                    </select>
-                    <div class="form-text">Course/section assignment</div>
-                </div>
-                <div class="col-3">
-                    <label for="specific-id" class="form-label">Course/Section ID</label>
-                    <input type="text" id="specific-id" class="form-control" placeholder="e.g., MATH101 or SEC001">
-                    <div class="form-text">Leave empty for random IDs</div>
-                </div>
-                <div class="col-3">
-                    <label for="role-type" class="form-label">Role Type</label>
-                    <select id="role-type" class="form-select">
-                        <option value="mixed">Mixed (Random)</option>
-                        <option value="student">Student</option>
-                        <option value="teacher">Teacher</option>
-                        <option value="ta">Teaching Assistant</option>
-                    </select>
-                    <div class="form-text">User role assignment</div>
-                </div>
-                <div class="col-3">
-                    <label for="specific-user-id" class="form-label">User ID</label>
-                    <input type="text" id="specific-user-id" class="form-control" placeholder="e.g., USER123">
-                    <div class="form-text">Leave empty for random IDs</div>
-                </div>
-                <div class="col-3">
-                    <label for="enrollment-status" class="form-label">Status</label>
-                    <select id="enrollment-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                        <option value="completed">Completed</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                    <div class="form-text">Enrollment status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="users-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Users Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="user-status" class="form-label">Status</label>
-                    <select id="user-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="suspended">Suspended</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">User account status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="account-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Account Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="parent-account-id" class="form-label">Parent Account ID</label>
-                    <input type="text" id="parent-account-id" class="form-control" placeholder="e.g., ROOT_ACCOUNT or PARENT_123">
-                    <div class="form-text">Leave empty for random parent IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="account-status" class="form-label">Status</label>
-                    <select id="account-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="suspended">Suspended</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Account status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="terms-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Terms Options</h5>
-                </div>
-                <div class="col-12 mb-2">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="terms-no-dates">
-                        <label class="form-check-label" for="terms-no-dates">
-                            Don't include dates in CSV (leave start_date and end_date empty)
-                        </label>
+                
+                <!-- Field Selection Controls -->
+                <div class="row mt-3">
+                    <div class="col-3">
+                        <label for="csv-field-select" class="form-label">Field to Customize</label>
+                        <select id="csv-field-select" class="form-select">
+                            <option value="">Select a field...</option>
+                        </select>
+                    </div>
+                    <div class="col-3">
+                        <label for="csv-field-value" class="form-label">Value</label>
+                        <input id="csv-field-value" type="text" class="form-control" placeholder="Enter value...">
+                    </div>
+                    <div class="col-auto d-flex align-items-end">
+                        <button type="button" class="btn btn-secondary me-2" id="csv-field-add">Add/Update</button>
+                        <button type="button" class="btn btn-link" id="csv-field-clear">Clear all</button>
                     </div>
                 </div>
-                <div class="col-6">
-                    <label for="term-start-date" class="form-label">Start Date</label>
-                    <input type="datetime-local" id="term-start-date" class="form-control">
-                    <div class="form-text">Leave empty for season-based dates</div>
-                </div>
-                <div class="col-6">
-                    <label for="term-end-date" class="form-label">End Date</label>
-                    <input type="datetime-local" id="term-end-date" class="form-control">
-                    <div class="form-text">Leave empty for season-based dates</div>
-                </div>
-                <div class="col-6">
-                    <label for="term-status" class="form-label">Status</label>
-                    <select id="term-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                    <div class="form-text">Term status</div>
-                </div>
+                <div id="csv-field-summary" class="form-text mt-1"></div>
             </div>
-            <div class="row mb-3" id="courses-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Courses Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="course-status" class="form-label">Status</label>
-                    <select id="course-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                    <div class="form-text">Course status</div>
-                </div>
-                <div class="col-6">
-                    <label for="course-account-id" class="form-label">Account ID</label>
-                    <input type="text" id="course-account-id" class="form-control" placeholder="e.g., ACCT123">
-                    <div class="form-text">Leave empty for random account IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="course-term-id" class="form-label">Term ID</label>
-                    <input type="text" id="course-term-id" class="form-control" placeholder="e.g., TERM123">
-                    <div class="form-text">Leave empty for random term IDs</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="sections-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Sections Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="section-course-id" class="form-label">Course ID</label>
-                    <input type="text" id="section-course-id" class="form-control" placeholder="e.g., MATH101">
-                    <div class="form-text">Leave empty for random course IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="section-status" class="form-label">Status</label>
-                    <select id="section-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                    <div class="form-text">Section status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="group-categories-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Group Categories Options</h5>
-                    <div class="alert alert-info" style="font-size: 0.9em; padding: 8px 12px; margin-bottom: 15px;">
-                        <strong>Scope Selection:</strong> Group categories can be scoped to either an Account OR a Course, but not both. 
-                        If both fields are filled, Account ID takes priority and Course ID will be ignored.
-                    </div>
-                </div>
-                <div class="col-4">
-                    <label for="group-category-account-id" class="form-label">Account ID</label>
-                    <input type="text" id="group-category-account-id" class="form-control" placeholder="e.g., MAIN_ACCOUNT">
-                    <div class="form-text">Leave empty for random account IDs</div>
-                    <div class="form-text text-warning" id="account-priority-warning" style="display: none;">
-                        <small><strong>Account ID takes priority</strong> - Course ID will be ignored</small>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <label for="group-category-course-id" class="form-label">Course ID</label>
-                    <input type="text" id="group-category-course-id" class="form-control" placeholder="e.g., MATH101">
-                    <div class="form-text">Leave empty for random course IDs</div>
-                    <div class="form-text text-muted" id="course-disabled-warning" style="display: none;">
-                        <small><em>Course ID ignored when Account ID is specified</em></small>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <label for="group-category-status" class="form-label">Status</label>
-                    <select id="group-category-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Group category status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="groups-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Groups Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="group-account-id" class="form-label">Account ID</label>
-                    <input type="text" id="group-account-id" class="form-control" placeholder="e.g., MAIN_ACCOUNT">
-                    <div class="form-text">Leave empty for random account IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="group-status" class="form-label">Status</label>
-                    <select id="group-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="available">Available</option>
-                        <option value="closed">Closed</option>
-                        <option value="completed">Completed</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Group status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="group-memberships-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Group Memberships Options</h5>
-                </div>
-                <div class="col-4">
-                    <label for="group-membership-group-id" class="form-label">Group ID</label>
-                    <input type="text" id="group-membership-group-id" class="form-control" placeholder="e.g., GROUP_001">
-                    <div class="form-text">Leave empty for random group IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="group-membership-user-id" class="form-label">User ID</label>
-                    <input type="text" id="group-membership-user-id" class="form-control" placeholder="e.g., USER123">
-                    <div class="form-text">Leave empty for random user IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="group-membership-status" class="form-label">Status</label>
-                    <select id="group-membership-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="accepted">Accepted</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Membership status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="admins-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Admins Options</h5>
-                </div>
-                <div class="col-3">
-                    <label for="admin-user-id" class="form-label">User ID</label>
-                    <input type="text" id="admin-user-id" class="form-control" placeholder="e.g., USER123">
-                    <div class="form-text">Leave empty for random user IDs</div>
-                </div>
-                <div class="col-3">
-                    <label for="admin-account-id" class="form-label">Account ID</label>
-                    <input type="text" id="admin-account-id" class="form-control" placeholder="e.g., MAIN_ACCOUNT">
-                    <div class="form-text">Leave empty for random account IDs</div>
-                </div>
-                <div class="col-3">
-                    <label for="admin-role" class="form-label">Role</label>
-                    <select id="admin-role" class="form-select">
-                        <option value="">Random Role</option>
-                        <option value="AccountAdmin">Account Admin</option>
-                        <option value="CustomAdmin">Custom Admin</option>
-                        <option value="SubAccountAdmin">Sub Account Admin</option>
-                    </select>
-                    <div class="form-text">Admin role</div>
-                </div>
-                <div class="col-3">
-                    <label for="admin-status" class="form-label">Status</label>
-                    <select id="admin-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Admin status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="logins-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Logins Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="login-user-id" class="form-label">User ID</label>
-                    <input type="text" id="login-user-id" class="form-control" placeholder="e.g., USER123">
-                    <div class="form-text">Leave empty for random user IDs</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="cross-listings-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Cross-listings Options</h5>
-                </div>
-                <div class="col-4">
-                    <label for="cross-listing-course-id" class="form-label">Course ID</label>
-                    <input type="text" id="cross-listing-course-id" class="form-control" placeholder="e.g., MATH101">
-                    <div class="form-text">Leave empty for random course IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="cross-listing-section-id" class="form-label">Section ID</label>
-                    <input type="text" id="cross-listing-section-id" class="form-control" placeholder="e.g., SEC001">
-                    <div class="form-text">Leave empty for random section IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="cross-listing-status" class="form-label">Status</label>
-                    <select id="cross-listing-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Cross-listing status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="user-observers-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>User Observers Options</h5>
-                </div>
-                <div class="col-4">
-                    <label for="user-observer-observer-id" class="form-label">Observer ID</label>
-                    <input type="text" id="user-observer-observer-id" class="form-control" placeholder="e.g., OBS123">
-                    <div class="form-text">Leave empty for random observer IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="user-observer-student-id" class="form-label">Student ID</label>
-                    <input type="text" id="user-observer-student-id" class="form-control" placeholder="e.g., STU456">
-                    <div class="form-text">Leave empty for random student IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="user-observer-status" class="form-label">Status</label>
-                    <select id="user-observer-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Observer relationship status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="change-sis-id-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Change SIS ID Options</h5>
-                </div>
-                <div class="col-4">
-                    <label for="change-sis-old-id" class="form-label">Old ID</label>
-                    <input type="text" id="change-sis-old-id" class="form-control" placeholder="e.g., OLD123">
-                    <div class="form-text">Leave empty for random old IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="change-sis-new-id" class="form-label">New ID</label>
-                    <input type="text" id="change-sis-new-id" class="form-control" placeholder="e.g., NEW123">
-                    <div class="form-text">Leave empty for random new IDs</div>
-                </div>
-                <div class="col-4">
-                    <label for="change-sis-type" class="form-label">Type</label>
-                    <select id="change-sis-type" class="form-select">
-                        <option value="">Random Type</option>
-                        <option value="user">User</option>
-                        <option value="course">Course</option>
-                        <option value="section">Section</option>
-                        <option value="account">Account</option>
-                    </select>
-                    <div class="form-text">SIS ID change type</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="differentiation-tag-sets-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Differentiation Tag Sections Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="diff-tag-set-course-id" class="form-label">Course ID</label>
-                    <input type="text" id="diff-tag-set-course-id" class="form-control" placeholder="e.g., MATH101">
-                    <div class="form-text">Leave empty for random course IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="diff-tag-set-status" class="form-label">Status</label>
-                    <select id="diff-tag-set-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Tag set status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="differentiation-tags-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Differentiation Tags Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="diff-tag-course-id" class="form-label">Course ID</label>
-                    <input type="text" id="diff-tag-course-id" class="form-control" placeholder="e.g., MATH101">
-                    <div class="form-text">Leave empty for random course IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="diff-tag-status" class="form-label">Status</label>
-                    <select id="diff-tag-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Tag status</div>
-                </div>
-            </div>
-            <div class="row mb-3" id="differentiation-tag-membership-options-row" style="display: none;">
-                <div class="col-12">
-                    <h5>Differentiation Tag Memberships Options</h5>
-                </div>
-                <div class="col-6">
-                    <label for="diff-tag-member-user-id" class="form-label">User ID</label>
-                    <input type="text" id="diff-tag-member-user-id" class="form-control" placeholder="e.g., USER123">
-                    <div class="form-text">Leave empty for random user IDs</div>
-                </div>
-                <div class="col-6">
-                    <label for="diff-tag-member-status" class="form-label">Status</label>
-                    <select id="diff-tag-member-status" class="form-select">
-                        <option value="">Random Status</option>
-                        <option value="active">Active</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
-                    <div class="form-text">Membership status</div>
-                </div>
-            </div>
+
             <div class="row mb-3">
                 <div class="col-12">
                     <label for="output-path" class="form-label">Output Folder</label>
@@ -499,7 +110,19 @@ async function createSingleSISFile(e) {
             <div class="row">
                 <div class="col-12">
                     <button type="submit" id="generate-single-file" class="btn btn-primary">Generate CSV File</button>
+                    <button type="button" id="add-to-list" class="btn btn-success ms-2" style="display: none;">Add to List</button>
                     <button type="button" id="preview-data" class="btn btn-outline-info ms-2">Preview Sample Data</button>
+                    <button type="button" id="generate-zip-package" class="btn btn-warning ms-2" style="display: none;">Generate Zip Package</button>
+                    <button type="button" id="clear-file-list" class="btn btn-outline-danger ms-2" style="display: none;">Clear List</button>
+                </div>
+            </div>
+            <div id="file-list-container" class="mt-4" style="display: none;">
+                <h5>Files to Generate</h5>
+                <div id="file-list" class="border rounded p-3 bg-light">
+                    <p class="text-muted mb-0">No files added yet. Configure a file above and click "Add to List".</p>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">Files will be generated and packaged into a zip file when you click "Generate Zip Package".</small>
                 </div>
             </div>
             <div id="preview-container" class="mt-4" style="display: none;">
@@ -525,364 +148,470 @@ async function createSingleSISFile(e) {
             }
         });
 
-        // Show/hide auth provider selector and enrollment options based on file type
-        document.getElementById('file-type').addEventListener('change', (e) => {
-            const authProviderRow = document.getElementById('auth-provider-row');
-            const enrollmentOptionsRow = document.getElementById('enrollment-options-row');
-            const usersOptionsRow = document.getElementById('users-options-row');
-            const accountOptionsRow = document.getElementById('account-options-row');
-            const termsOptionsRow = document.getElementById('terms-options-row');
-            const coursesOptionsRow = document.getElementById('courses-options-row');
-            const sectionsOptionsRow = document.getElementById('sections-options-row');
-            const groupCategoriesOptionsRow = document.getElementById('group-categories-options-row');
-            const groupsOptionsRow = document.getElementById('groups-options-row');
-            const groupMembershipsOptionsRow = document.getElementById('group-memberships-options-row');
-            const adminsOptionsRow = document.getElementById('admins-options-row');
-            const loginsOptionsRow = document.getElementById('logins-options-row');
-            const crossListingsOptionsRow = document.getElementById('cross-listings-options-row');
-            const userObserversOptionsRow = document.getElementById('user-observers-options-row');
-            const changeSisIdOptionsRow = document.getElementById('change-sis-id-options-row');
-            const differentiationTagSetsOptionsRow = document.getElementById('differentiation-tag-sets-options-row');
-            const differentiationTagsOptionsRow = document.getElementById('differentiation-tags-options-row');
-            const differentiationTagMembershipOptionsRow = document.getElementById('differentiation-tag-membership-options-row');
+        // Multi-file mode toggle
+        let fileConfigurations = []; // Store file configurations for multi-file mode
 
-            if (e.target.value === 'users' || e.target.value === 'logins') {
-                authProviderRow.style.display = 'block';
-            } else {
-                authProviderRow.style.display = 'none';
-            }
+        document.getElementById('multi-file-mode').addEventListener('change', (e) => {
+            const isMultiMode = e.target.checked;
+            const generateSingleBtn = document.getElementById('generate-single-file');
+            const addToListBtn = document.getElementById('add-to-list');
+            const generateZipBtn = document.getElementById('generate-zip-package');
+            const clearListBtn = document.getElementById('clear-file-list');
+            const fileListContainer = document.getElementById('file-list-container');
 
-            if (e.target.value === 'users') {
-                usersOptionsRow.style.display = 'block';
+            if (isMultiMode) {
+                generateSingleBtn.style.display = 'none';
+                addToListBtn.style.display = 'inline-block';
+                generateZipBtn.style.display = 'inline-block';
+                clearListBtn.style.display = 'inline-block';
+                fileListContainer.style.display = 'block';
             } else {
-                usersOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'enrollments') {
-                enrollmentOptionsRow.style.display = 'block';
-                // Initialize Course/Section ID field visibility based on current enrollment type
-                const enrollmentType = document.getElementById('enrollment-type').value;
-                const specificIdColumn = document.getElementById('specific-id').closest('.col-3');
-                if (enrollmentType === 'mixed') {
-                    specificIdColumn.style.display = 'none';
-                } else {
-                    specificIdColumn.style.display = 'block';
-                }
-            } else {
-                enrollmentOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'accounts') {
-                accountOptionsRow.style.display = 'block';
-            } else {
-                accountOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'terms') {
-                termsOptionsRow.style.display = 'block';
-            } else {
-                termsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'courses') {
-                coursesOptionsRow.style.display = 'block';
-            } else {
-                coursesOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'sections') {
-                sectionsOptionsRow.style.display = 'block';
-            } else {
-                sectionsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'group_categories') {
-                groupCategoriesOptionsRow.style.display = 'block';
-            } else {
-                groupCategoriesOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'groups') {
-                groupsOptionsRow.style.display = 'block';
-            } else {
-                groupsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'group_memberships') {
-                groupMembershipsOptionsRow.style.display = 'block';
-            } else {
-                groupMembershipsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'admins') {
-                adminsOptionsRow.style.display = 'block';
-            } else {
-                adminsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'logins') {
-                loginsOptionsRow.style.display = 'block';
-            } else {
-                loginsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'xlists') {
-                crossListingsOptionsRow.style.display = 'block';
-            } else {
-                crossListingsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'user_observers') {
-                userObserversOptionsRow.style.display = 'block';
-            } else {
-                userObserversOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'change_sis_id') {
-                changeSisIdOptionsRow.style.display = 'block';
-            } else {
-                changeSisIdOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'differentiation_tag_sets') {
-                differentiationTagSetsOptionsRow.style.display = 'block';
-            } else {
-                differentiationTagSetsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'differentiation_tags') {
-                differentiationTagsOptionsRow.style.display = 'block';
-            } else {
-                differentiationTagsOptionsRow.style.display = 'none';
-            }
-
-            if (e.target.value === 'differentiation_tag_membership') {
-                differentiationTagMembershipOptionsRow.style.display = 'block';
-            } else {
-                differentiationTagMembershipOptionsRow.style.display = 'none';
+                generateSingleBtn.style.display = 'inline-block';
+                addToListBtn.style.display = 'none';
+                generateZipBtn.style.display = 'none';
+                clearListBtn.style.display = 'none';
+                fileListContainer.style.display = 'none';
             }
         });
 
-        // Show/hide Course/Section ID field based on enrollment type
-        document.getElementById('enrollment-type').addEventListener('change', (e) => {
-            const specificIdColumn = document.getElementById('specific-id').closest('.col-3');
-
-            if (e.target.value === 'mixed') {
-                // Hide Course/Section ID field for mixed mode since random IDs are used
-                specificIdColumn.style.display = 'none';
-            } else {
-                // Show Course/Section ID field for course-based and section-based modes
-                specificIdColumn.style.display = 'block';
-            }
-        });
-
-        // Fetch authentication providers
-        document.getElementById('fetch-auth-providers').addEventListener('click', async () => {
-            const button = document.getElementById('fetch-auth-providers');
-            const select = document.getElementById('auth-provider');
-
-            // Get domain and token from main form
-            const domain = document.getElementById('domain').value;
-            const token = document.getElementById('token').value;
-
-            if (!domain || !token) {
-                showResult('Please enter Canvas domain and token in the main form first.', 'warning');
-                return;
-            }
-
-            try {
-                button.disabled = true;
-                button.textContent = 'Fetching...';
-
-                const providers = await window.electronAPI.fetchAuthProviders(domain, token);
-
-                // Clear existing options except the default
-                select.innerHTML = '<option value="">None (Default Canvas Authentication)</option>';
-
-                // Add fetched providers
-                providers.forEach(provider => {
-                    const option = document.createElement('option');
-                    option.value = provider.id;
-                    option.textContent = provider.display_name;
-                    select.appendChild(option);
-                });
-
-                showResult(`Found ${providers.length} authentication provider(s).`, 'success');
-
-            } catch (error) {
-                showResult(`Error fetching authentication providers: ${error.message}`, 'danger');
-            } finally {
-                button.disabled = false;
-                button.textContent = 'Fetch Providers';
-            }
-        });
-
-        // Group Categories field interaction handling
-        const accountIdField = document.getElementById('group-category-account-id');
-        const courseIdField = document.getElementById('group-category-course-id');
-        const accountWarning = document.getElementById('account-priority-warning');
-        const courseWarning = document.getElementById('course-disabled-warning');
-
-        function updateGroupCategoryFields() {
-            const accountValue = accountIdField.value.trim();
-            const courseValue = courseIdField.value.trim();
-
-            if (accountValue && courseValue) {
-                // Both fields filled - show priority warning
-                accountWarning.style.display = 'block';
-                courseWarning.style.display = 'block';
-                courseIdField.style.opacity = '0.6';
-            } else if (accountValue) {
-                // Only account filled
-                accountWarning.style.display = 'none';
-                courseWarning.style.display = 'none';
-                courseIdField.style.opacity = '1';
-            } else {
-                // Account empty or both empty
-                accountWarning.style.display = 'none';
-                courseWarning.style.display = 'none';
-                courseIdField.style.opacity = '1';
-            }
-        }
-
-        accountIdField.addEventListener('input', updateGroupCategoryFields);
-        courseIdField.addEventListener('input', updateGroupCategoryFields);
-
-        document.getElementById('preview-data').addEventListener('click', async () => {
+        // Add to list functionality
+        document.getElementById('add-to-list').addEventListener('click', () => {
             const fileType = document.getElementById('file-type').value;
-            const rowCount = Math.min(5, parseInt(document.getElementById('row-count').value) || 5);
+            const rowCount = parseInt(document.getElementById('row-count').value);
             const emailDomain = document.getElementById('email-domain').value.trim() || '@school.edu';
-            const authProviderId = document.getElementById('auth-provider').value || '';
-
-            // Get enrollment options
-            const enrollmentOptions = {};
-            if (fileType === 'enrollments') {
-                enrollmentOptions.enrollmentType = document.getElementById('enrollment-type').value || 'mixed';
-                enrollmentOptions.specificId = document.getElementById('specific-id').value.trim() || '';
-                enrollmentOptions.roleType = document.getElementById('role-type').value || 'mixed';
-                enrollmentOptions.specificUserId = document.getElementById('specific-user-id').value.trim() || '';
-                enrollmentOptions.specificStatus = document.getElementById('enrollment-status').value || '';
-            }
-
-            // Get users options
-            const userOptions = {};
-            if (fileType === 'users') {
-                userOptions.specificStatus = document.getElementById('user-status').value || '';
-            }
-
-            // Get account options
-            const accountOptions = {};
-            if (fileType === 'accounts') {
-                accountOptions.specificParentAccountId = document.getElementById('parent-account-id').value.trim() || '';
-                accountOptions.specificStatus = document.getElementById('account-status').value || '';
-            }
-
-            // Get terms options
-            const termOptions = {};
-            if (fileType === 'terms') {
-                termOptions.noDates = document.getElementById('terms-no-dates').checked;
-                termOptions.specificStatus = document.getElementById('term-status').value || '';
-
-                if (!termOptions.noDates) {
-                    const startDate = document.getElementById('term-start-date').value;
-                    const endDate = document.getElementById('term-end-date').value;
-                    if (startDate && endDate) {
-                        // Convert to the format expected by the backend (with seconds)
-                        termOptions.specificStartDate = startDate.replace('T', ' ') + ':00';
-                        termOptions.specificEndDate = endDate.replace('T', ' ') + ':00';
-                    }
-                }
-            }
-
-            // Get courses options
-            const courseOptions = {};
-            if (fileType === 'courses') {
-                courseOptions.specificStatus = document.getElementById('course-status').value || '';
-                courseOptions.specificAccountId = document.getElementById('course-account-id').value.trim() || '';
-                courseOptions.specificTermId = document.getElementById('course-term-id').value.trim() || '';
-            }
-
-            // Get sections options
-            const sectionOptions = {};
-            if (fileType === 'sections') {
-                sectionOptions.specificCourseId = document.getElementById('section-course-id').value.trim() || '';
-                sectionOptions.specificStatus = document.getElementById('section-status').value || '';
-            }
-
-            // Get group categories options
-            const groupCategoryOptions = {};
-            if (fileType === 'group_categories') {
-                groupCategoryOptions.specificAccountId = document.getElementById('group-category-account-id').value.trim() || '';
-                groupCategoryOptions.specificCourseId = document.getElementById('group-category-course-id').value.trim() || '';
-                groupCategoryOptions.specificStatus = document.getElementById('group-category-status').value || '';
-            }
-
-            // Get groups options
-            const groupOptions = {};
-            if (fileType === 'groups') {
-                groupOptions.specificAccountId = document.getElementById('group-account-id').value.trim() || '';
-                groupOptions.specificStatus = document.getElementById('group-status').value || '';
-            }
-
-            // Get group memberships options
-            const groupMembershipOptions = {};
-            if (fileType === 'group_memberships') {
-                groupMembershipOptions.specificGroupId = document.getElementById('group-membership-group-id').value.trim() || '';
-                groupMembershipOptions.specificUserId = document.getElementById('group-membership-user-id').value.trim() || '';
-                groupMembershipOptions.specificStatus = document.getElementById('group-membership-status').value || '';
-            }
-
-            // Get admins options
-            const adminOptions = {};
-            if (fileType === 'admins') {
-                adminOptions.specificUserId = document.getElementById('admin-user-id').value.trim() || '';
-                adminOptions.specificAccountId = document.getElementById('admin-account-id').value.trim() || '';
-                adminOptions.specificRole = document.getElementById('admin-role').value || '';
-                adminOptions.specificStatus = document.getElementById('admin-status').value || '';
-            }
-
-            // Get logins options
-            const loginOptions = {};
-            if (fileType === 'logins') {
-                loginOptions.specificUserId = document.getElementById('login-user-id').value.trim() || '';
-            }
-
-            // Get cross-listings options
-            const crossListingOptions = {};
-            if (fileType === 'xlists') {
-                crossListingOptions.specificCourseId = document.getElementById('cross-listing-course-id').value.trim() || '';
-                crossListingOptions.specificSectionId = document.getElementById('cross-listing-section-id').value.trim() || '';
-                crossListingOptions.specificStatus = document.getElementById('cross-listing-status').value || '';
-            }
-
-            // Get user observers options
-            const userObserverOptions = {};
-            if (fileType === 'user_observers') {
-                userObserverOptions.specificObserverId = document.getElementById('user-observer-observer-id').value.trim() || '';
-                userObserverOptions.specificStudentId = document.getElementById('user-observer-student-id').value.trim() || '';
-                userObserverOptions.specificStatus = document.getElementById('user-observer-status').value || '';
-            }
-
-            // Get change SIS ID options
-            const changeSisIdOptions = {};
-            if (fileType === 'change_sis_id') {
-                changeSisIdOptions.specificOldId = document.getElementById('change-sis-old-id').value.trim() || '';
-                changeSisIdOptions.specificNewId = document.getElementById('change-sis-new-id').value.trim() || '';
-                changeSisIdOptions.specificType = document.getElementById('change-sis-type').value || '';
-            }
+            const authProviderId = ''; // Removed auth provider functionality
 
             if (!fileType) {
                 showResult('Please select a file type first.', 'warning');
                 return;
             }
 
+            // Gather all the options (same logic as in preview/submit)
+            const allOptions = gatherAllOptions(fileType);
+
+            // Create configuration object
+            const config = {
+                id: Date.now(), // Simple unique ID
+                fileType,
+                rowCount,
+                emailDomain,
+                authProviderId,
+                options: allOptions,
+                displayName: getFileTypeDisplayName(fileType)
+            };
+
+            fileConfigurations.push(config);
+            updateFileList();
+            showResult(`Added ${config.displayName} file to list (${rowCount} rows)`, 'success');
+        });
+
+        // Clear file list
+        document.getElementById('clear-file-list').addEventListener('click', () => {
+            fileConfigurations = [];
+            updateFileList();
+            showResult('File list cleared', 'info');
+        });
+
+        // Generate zip package
+        document.getElementById('generate-zip-package').addEventListener('click', async () => {
+            if (fileConfigurations.length === 0) {
+                showResult('Please add at least one file to the list first.', 'warning');
+                return;
+            }
+
+            const outputPath = document.getElementById('output-path').value;
+            if (!outputPath) {
+                showResult('Please select an output folder.', 'warning');
+                return;
+            }
+
             try {
-                const allOptions = { enrollmentOptions, userOptions, accountOptions, termOptions, courseOptions, sectionOptions, groupCategoryOptions, groupOptions, groupMembershipOptions, adminOptions, loginOptions, crossListingOptions, userObserverOptions, changeSisIdOptions };
-                const previewData = await window.electronAPI.previewSISData(fileType, rowCount, emailDomain, authProviderId, allOptions);
-                document.getElementById('preview-content').textContent = previewData;
-                document.getElementById('preview-container').style.display = 'block';
+                const button = document.getElementById('generate-zip-package');
+                button.disabled = true;
+                button.textContent = 'Generating...';
+
+                const result = await window.electronAPI.createMultiSISFiles(fileConfigurations, outputPath);
+                showResult(`Successfully created ${result.files.length} files and zip package at ${result.zipPath}`, 'success');
+
+                button.disabled = false;
+                button.textContent = 'Generate Zip Package';
             } catch (error) {
-                showResult(`Error generating preview: ${error.message}`, 'danger');
+                showResult(`Error creating files: ${error.message}`, 'danger');
+                document.getElementById('generate-zip-package').disabled = false;
+                document.getElementById('generate-zip-package').textContent = 'Generate Zip Package';
+            }
+        });
+
+        function updateFileList() {
+            const fileList = document.getElementById('file-list');
+
+            if (fileConfigurations.length === 0) {
+                fileList.innerHTML = '<p class="text-muted mb-0">No files added yet. Configure a file above and click "Add to List".</p>';
+                return;
+            }
+
+            const listItems = fileConfigurations.map(config => `
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                    <div>
+                        <strong>${config.displayName}</strong> - ${config.rowCount} rows
+                        <br><small class="text-muted">Email: ${config.emailDomain}</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-file-btn" data-file-id="${config.id}">Remove</button>
+                </div>
+            `).join('');
+
+            fileList.innerHTML = listItems;
+        }
+
+        // Add event delegation for remove buttons
+        document.getElementById('file-list').addEventListener('click', (event) => {
+            if (event.target.classList.contains('remove-file-btn')) {
+                const fileId = parseInt(event.target.getAttribute('data-file-id'));
+                fileConfigurations = fileConfigurations.filter(config => config.id !== fileId);
+                updateFileList();
+                showResult('File removed from list', 'info');
+            }
+        });
+
+        function getFileTypeDisplayName(fileType) {
+            const typeMap = {
+                'users': 'Users',
+                'accounts': 'Accounts',
+                'terms': 'Terms',
+                'courses': 'Courses',
+                'sections': 'Sections',
+                'enrollments': 'Enrollments',
+                'group_categories': 'Group Categories',
+                'groups': 'Groups',
+                'group_memberships': 'Group Memberships',
+                'differentiation_tag_sets': 'Differentiation Tag Sets',
+                'differentiation_tags': 'Differentiation Tags',
+                'differentiation_tag_membership': 'Differentiation Tag Membership',
+                'xlists': 'Cross-listings (Xlists)',
+                'user_observers': 'User Observers',
+                'logins': 'Logins',
+                'change_sis_id': 'Change SIS ID',
+                'admins': 'Admins'
+            };
+            return typeMap[fileType] || fileType;
+        }
+
+        function gatherAllOptions(fileType) {
+            // Use the selectedFields object to create options
+            const options = {};
+
+            // Special-case key mapping where generator expects different option names
+            // Only diverges for a few courses fields to match sis_imports.js
+            const specialCoursesMap = {
+                course_format: 'specificFormat',
+                blueprint_course_id: 'specificBlueprintId',
+                grade_passback_setting: 'specificGradePassback',
+                homeroom_course: 'specificHomeroom',
+            };
+
+            Object.entries(selectedFields).forEach(([fieldKey, fieldValue]) => {
+                let optionKey;
+                if (fileType === 'courses' && specialCoursesMap[fieldKey]) {
+                    optionKey = specialCoursesMap[fieldKey];
+                } else {
+                    // Default conversion: snake_case -> specificCamelCase
+                    optionKey = `specific${fieldKey
+                        .replace(/_(.)/g, (_, letter) => letter.toUpperCase())
+                        .replace(/^([a-z])/, (m, c) => c.toUpperCase())}`;
+                }
+                options[optionKey] = fieldValue;
+            });
+
+            return {
+                enrollmentOptions: fileType === 'enrollments' ? options : {},
+                userOptions: fileType === 'users' ? options : {},
+                accountOptions: fileType === 'accounts' ? options : {},
+                termOptions: fileType === 'terms' ? options : {},
+                courseOptions: fileType === 'courses' ? options : {},
+                sectionOptions: fileType === 'sections' ? options : {},
+                groupCategoryOptions: fileType === 'group_categories' ? options : {},
+                groupOptions: fileType === 'groups' ? options : {},
+                groupMembershipOptions: fileType === 'group_memberships' ? options : {},
+            };
+        }
+
+        // Show/hide CSV options based on file type
+        document.getElementById('file-type').addEventListener('change', (e) => {
+            const csvOptionsSection = document.getElementById('csv-options-section');
+
+            if (e.target.value) {
+                csvOptionsSection.style.display = 'block';
+                updateFieldOptionsDropdown(e.target.value);
+            } else {
+                csvOptionsSection.style.display = 'none';
+            }
+        });
+
+        // CSV Field Selection Handlers
+        let selectedFields = {}; // Store field selections for current file type
+
+        function updateFieldOptionsDropdown(fileType) {
+            const fieldSelect = document.getElementById('csv-field-select');
+            const fieldSummary = document.getElementById('csv-field-summary');
+
+            if (!fieldSelect) {
+                console.error('csv-field-select element not found!');
+                return;
+            }
+
+            // Clear existing options
+            fieldSelect.innerHTML = '<option value="">Select a field...</option>';
+            selectedFields = {}; // Reset selections when file type changes
+
+            // Define field options for each CSV type (based on official Canvas documentation)
+            const fieldOptions = {
+                'users': [
+                    { value: 'user_id', label: 'User ID', placeholder: 'e.g., U123456' },
+                    { value: 'login_id', label: 'Login ID', placeholder: 'e.g., jsmith' },
+                    { value: 'authentication_provider_id', label: 'Auth Provider ID', placeholder: 'e.g., google' },
+                    { value: 'password', label: 'Password', placeholder: 'Leave empty for auto-generation' },
+                    { value: 'first_name', label: 'First Name', placeholder: 'e.g., John' },
+                    { value: 'last_name', label: 'Last Name', placeholder: 'e.g., Doe' },
+                    { value: 'full_name', label: 'Full Name', placeholder: 'e.g., John Doe' },
+                    { value: 'sortable_name', label: 'Sortable Name', placeholder: 'e.g., Doe, John' },
+                    { value: 'short_name', label: 'Short Name', placeholder: 'e.g., John' },
+                    { value: 'email', label: 'Email', placeholder: 'e.g., john.doe@school.edu' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted, suspended' },
+                    { value: 'integration_id', label: 'Integration ID', placeholder: 'e.g., SIS_USER_123' }
+                ],
+                'accounts': [
+                    { value: 'account_id', label: 'Account ID', placeholder: 'e.g., A001' },
+                    { value: 'parent_account_id', label: 'Parent Account ID', placeholder: 'e.g., A001' },
+                    { value: 'name', label: 'Account Name', placeholder: 'e.g., Mathematics Department' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' }
+                ],
+                'terms': [
+                    { value: 'term_id', label: 'Term ID', placeholder: 'e.g., T001' },
+                    { value: 'name', label: 'Term Name', placeholder: 'e.g., Fall 2024' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' },
+                    { value: 'start_date', label: 'Start Date', placeholder: 'e.g., 2013-1-03 00:00:00' },
+                    { value: 'end_date', label: 'End Date', placeholder: 'e.g., 2013-05-03 00:00:00-06:00' }
+                ],
+                'courses': [
+                    { value: 'course_id', label: 'Course ID', placeholder: 'e.g., E411208' },
+                    { value: 'short_name', label: 'Short Name', placeholder: 'e.g., ENG115' },
+                    { value: 'long_name', label: 'Long Name', placeholder: 'e.g., English 115: Intro to English' },
+                    { value: 'account_id', label: 'Account ID', placeholder: 'e.g., A002' },
+                    { value: 'term_id', label: 'Term ID', placeholder: 'e.g., Fall2011' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted, completed, published' },
+                    { value: 'integration_id', label: 'Integration ID', placeholder: 'e.g., SIS_COURSE_123' },
+                    { value: 'start_date', label: 'Start Date', placeholder: 'e.g., 2013-01-03 00:00:00' },
+                    { value: 'end_date', label: 'End Date', placeholder: 'e.g., 2013-05-03 00:00:00-06:00' },
+                    { value: 'course_format', label: 'Course Format', placeholder: 'on_campus, online, blended' },
+                    { value: 'blueprint_course_id', label: 'Blueprint Course ID', placeholder: 'SIS ID of a Blueprint course or "dissociate"' },
+                    { value: 'grade_passback_setting', label: 'Grade Passback Setting', placeholder: 'nightly_sync, not_set' },
+                    { value: 'homeroom_course', label: 'Homeroom Course', placeholder: 'true, false' },
+                    { value: 'friendly_name', label: 'Friendly Name', placeholder: 'Elementary-friendly course name' }
+                ],
+                'sections': [
+                    { value: 'section_id', label: 'Section ID', placeholder: 'e.g., S001' },
+                    { value: 'course_id', label: 'Course ID', placeholder: 'e.g., E411208' },
+                    { value: 'name', label: 'Section Name', placeholder: 'e.g., Section 1' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted, completed' },
+                    { value: 'start_date', label: 'Start Date', placeholder: 'e.g., 2013-1-03 00:00:00' },
+                    { value: 'end_date', label: 'End Date', placeholder: 'e.g., 2013-05-03 00:00:00-06:00' },
+                    { value: 'integration_id', label: 'Integration ID', placeholder: 'e.g., SIS_SEC_123' }
+                ],
+                'enrollments': [
+                    { value: 'course_id', label: 'Course ID', placeholder: 'e.g., E411208' },
+                    { value: 'user_id', label: 'User ID', placeholder: 'e.g., 01103' },
+                    { value: 'role', label: 'Role', placeholder: 'student, teacher, ta, observer, designer' },
+                    { value: 'section_id', label: 'Section ID', placeholder: 'e.g., 1B' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted, completed, inactive' },
+                    { value: 'user_integration_id', label: 'User Integration ID', placeholder: 'e.g., SIS_USER_123' },
+                    { value: 'role_id', label: 'Role ID', placeholder: 'e.g., CUSTOM_ROLE_123' },
+                    { value: 'root_account', label: 'Root Account', placeholder: 'e.g., school.instructure.com' },
+                    { value: 'associated_user_id', label: 'Associated User ID', placeholder: 'e.g., observer parent user' },
+                    { value: 'limit_section_privileges', label: 'Limit Section Privileges', placeholder: 'true, false' }
+                ],
+                'group_categories': [
+                    { value: 'group_category_id', label: 'Group Category ID', placeholder: 'e.g., GC08' },
+                    { value: 'account_id', label: 'Account ID', placeholder: 'e.g., A001' },
+                    { value: 'course_id', label: 'Course ID', placeholder: 'e.g., course123' },
+                    { value: 'category_name', label: 'Category Name', placeholder: 'e.g., First Group Category' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' }
+                ],
+                'groups': [
+                    { value: 'group_id', label: 'Group ID', placeholder: 'e.g., G411208' },
+                    { value: 'group_category_id', label: 'Group Category ID', placeholder: 'e.g., GC08' },
+                    { value: 'account_id', label: 'Account ID', placeholder: 'e.g., A001' },
+                    { value: 'name', label: 'Group Name', placeholder: 'e.g., Group1' },
+                    { value: 'status', label: 'Status', placeholder: 'available, closed, completed, deleted' },
+                    { value: 'max_membership', label: 'Max Membership', placeholder: 'e.g., 5' }
+                ],
+                'group_memberships': [
+                    { value: 'group_id', label: 'Group ID', placeholder: 'e.g., G411208' },
+                    { value: 'user_id', label: 'User ID', placeholder: 'e.g., U001' },
+                    { value: 'status', label: 'Status', placeholder: 'accepted, deleted' }
+                ],
+                'admins': [
+                    { value: 'user_id', label: 'User ID', placeholder: 'e.g., E411208' },
+                    { value: 'account_id', label: 'Account ID', placeholder: 'e.g., 01103' },
+                    { value: 'role', label: 'Role', placeholder: 'e.g., AccountAdmin' },
+                    { value: 'role_id', label: 'Role ID', placeholder: 'e.g., custom_role_id' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' }
+                ],
+                'logins': [
+                    { value: 'user_id', label: 'User ID', placeholder: 'e.g., 01103' },
+                    { value: 'login_id', label: 'Login ID', placeholder: 'e.g., bsmith01' },
+                    { value: 'authentication_provider_id', label: 'Auth Provider ID', placeholder: 'e.g., google' },
+                    { value: 'password', label: 'Password', placeholder: 'Leave empty for auto-generation' },
+                    { value: 'existing_user_id', label: 'Existing User ID', placeholder: 'e.g., existing_123' },
+                    { value: 'existing_integration_id', label: 'Existing Integration ID', placeholder: 'e.g., existing_int_123' },
+                    { value: 'existing_canvas_user_id', label: 'Existing Canvas User ID', placeholder: 'e.g., 98' },
+                    { value: 'email', label: 'Email', placeholder: 'e.g., bob.smith@myschool.edu' }
+                ],
+                'xlists': [
+                    { value: 'xlist_course_id', label: 'Cross-list Course ID', placeholder: 'e.g., E411208' },
+                    { value: 'section_id', label: 'Section ID', placeholder: 'e.g., 1B' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' }
+                ],
+                'user_observers': [
+                    { value: 'observer_id', label: 'Observer ID', placeholder: 'e.g., u411208' },
+                    { value: 'student_id', label: 'Student ID', placeholder: 'e.g., u411222' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' }
+                ],
+                'change_sis_id': [
+                    { value: 'old_id', label: 'Old ID', placeholder: 'e.g., u001' },
+                    { value: 'new_id', label: 'New ID', placeholder: 'e.g., u001a' },
+                    { value: 'old_integration_id', label: 'Old Integration ID', placeholder: 'e.g., integration01' },
+                    { value: 'new_integration_id', label: 'New Integration ID', placeholder: 'e.g., int01' },
+                    { value: 'type', label: 'Type', placeholder: 'user, course, section, account, term' }
+                ],
+                'differentiation_tag_sets': [
+                    { value: 'tag_set_id', label: 'Tag Set ID', placeholder: 'e.g., TS08' },
+                    { value: 'course_id', label: 'Course ID', placeholder: 'e.g., C001' },
+                    { value: 'set_name', label: 'Set Name', placeholder: 'e.g., First Tag Set' },
+                    { value: 'status', label: 'Status', placeholder: 'active, deleted' }
+                ],
+                'differentiation_tags': [
+                    { value: 'tag_id', label: 'Tag ID', placeholder: 'e.g., T01' },
+                    { value: 'tag_set_id', label: 'Tag Set ID', placeholder: 'e.g., TS08' },
+                    { value: 'course_id', label: 'Course ID', placeholder: 'e.g., C001' },
+                    { value: 'name', label: 'Tag Name', placeholder: 'e.g., Tag1' },
+                    { value: 'status', label: 'Status', placeholder: 'available, deleted' }
+                ],
+                'differentiation_tag_membership': [
+                    { value: 'tag_id', label: 'Tag ID', placeholder: 'e.g., T01' },
+                    { value: 'user_id', label: 'User ID', placeholder: 'e.g., U001' },
+                    { value: 'status', label: 'Status', placeholder: 'accepted, deleted' }
+                ]
+            };
+
+            // Add options for the selected file type
+            const options = fieldOptions[fileType] || [];
+            options.forEach(option => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option.value;
+                optionElement.textContent = option.label;
+                optionElement.dataset.placeholder = option.placeholder;
+                fieldSelect.appendChild(optionElement);
+            });
+
+            renderFieldSummary();
+        }
+
+        function renderFieldSummary() {
+            const fieldSummary = document.getElementById('csv-field-summary');
+            const entries = Object.entries(selectedFields);
+
+            if (entries.length === 0) {
+                fieldSummary.textContent = 'No fields customized. All fields will use auto-generated values.';
+            } else {
+                const summaryText = entries.map(([field, value]) => {
+                    const fieldSelect = document.getElementById('csv-field-select');
+                    const option = Array.from(fieldSelect.options).find(opt => opt.value === field);
+                    const label = option ? option.textContent : field;
+                    return `${label}: "${value}"`;
+                }).join(', ');
+                fieldSummary.textContent = `Customized fields → ${summaryText}`;
+            }
+        }
+
+        function addOrUpdateField(fieldKey, fieldValue) {
+            if (fieldValue && fieldValue.trim()) {
+                selectedFields[fieldKey] = fieldValue.trim();
+            } else {
+                delete selectedFields[fieldKey];
+            }
+            renderFieldSummary();
+        }
+
+        // CSV Field Selection Event Handlers
+        document.getElementById('csv-field-select').addEventListener('change', (e) => {
+            const fieldValue = document.getElementById('csv-field-value');
+            const selectedOption = e.target.selectedOptions[0];
+
+            if (e.target.value) {
+                fieldValue.placeholder = selectedOption.dataset.placeholder || 'Enter value...';
+                fieldValue.value = selectedFields[e.target.value] || '';
+                fieldValue.disabled = false;
+            } else {
+                fieldValue.placeholder = 'Select a field first...';
+                fieldValue.value = '';
+                fieldValue.disabled = true;
+            }
+        });
+
+        document.getElementById('csv-field-add').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const fieldSelect = document.getElementById('csv-field-select');
+            const fieldValue = document.getElementById('csv-field-value');
+
+            if (fieldSelect.value && fieldValue.value.trim()) {
+                addOrUpdateField(fieldSelect.value, fieldValue.value);
+                // Keep the field selected but clear the value for next entry
+                fieldValue.value = '';
+            }
+        });
+
+        document.getElementById('csv-field-clear').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            selectedFields = {};
+            document.getElementById('csv-field-value').value = '';
+            renderFieldSummary();
+        });
+
+        document.getElementById('preview-data').addEventListener('click', async () => {
+            const fileType = document.getElementById('file-type').value;
+            const rowCount = Math.min(5, parseInt(document.getElementById('row-count').value) || 5);
+            const emailDomain = document.getElementById('email-domain').value.trim() || '@school.edu';
+            const authProviderId = ''; // Removed auth provider functionality
+
+            // Use the proper field mapping function
+            const allOptions = gatherAllOptions(fileType);
+
+            try {
+                const csvContent = await window.electronAPI.previewSISData(
+                    fileType,
+                    rowCount,
+                    emailDomain,
+                    authProviderId,
+                    allOptions
+                );
+
+                // Display the CSV content directly
+                const previewContainer = document.getElementById('preview-container');
+                const previewContent = document.getElementById('preview-content');
+
+                if (csvContent && csvContent.trim()) {
+                    previewContent.textContent = csvContent;
+                    previewContainer.style.display = 'block';
+                } else {
+                    showResult('No preview data generated.', 'warning');
+                }
+            } catch (error) {
+                console.error('Preview error:', error);
+                showResult(`Preview error: ${error.message}`, 'danger');
             }
         });
 
@@ -893,166 +622,30 @@ async function createSingleSISFile(e) {
             const rowCount = parseInt(document.getElementById('row-count').value);
             const outputPath = document.getElementById('output-path').value;
             const emailDomain = document.getElementById('email-domain').value.trim() || '@school.edu';
-            const authProviderId = document.getElementById('auth-provider').value || '';
+            const authProviderId = ''; // Removed auth provider functionality
 
-            // Get enrollment options
-            const enrollmentOptions = {};
-            if (fileType === 'enrollments') {
-                enrollmentOptions.enrollmentType = document.getElementById('enrollment-type').value || 'mixed';
-                enrollmentOptions.specificId = document.getElementById('specific-id').value.trim() || '';
-                enrollmentOptions.roleType = document.getElementById('role-type').value || 'mixed';
-                enrollmentOptions.specificUserId = document.getElementById('specific-user-id').value.trim() || '';
-                enrollmentOptions.specificStatus = document.getElementById('enrollment-status').value || '';
-            }
-
-            // Get users options
-            const userOptions = {};
-            if (fileType === 'users') {
-                userOptions.specificStatus = document.getElementById('user-status').value || '';
-            }
-
-            // Get account options
-            const accountOptions = {};
-            if (fileType === 'accounts') {
-                accountOptions.specificParentAccountId = document.getElementById('parent-account-id').value.trim() || '';
-                accountOptions.specificStatus = document.getElementById('account-status').value || '';
-            }
-
-            // Get terms options
-            const termOptions = {};
-            if (fileType === 'terms') {
-                termOptions.noDates = document.getElementById('terms-no-dates').checked;
-                termOptions.specificStatus = document.getElementById('term-status').value || '';
-
-                if (!termOptions.noDates) {
-                    const startDate = document.getElementById('term-start-date').value;
-                    const endDate = document.getElementById('term-end-date').value;
-                    if (startDate && endDate) {
-                        // Convert to the format expected by the backend (with seconds)
-                        termOptions.specificStartDate = startDate.replace('T', ' ') + ':00';
-                        termOptions.specificEndDate = endDate.replace('T', ' ') + ':00';
-                    }
-                }
-            }
-
-            // Get courses options
-            const courseOptions = {};
-            if (fileType === 'courses') {
-                courseOptions.specificStatus = document.getElementById('course-status').value || '';
-                courseOptions.specificAccountId = document.getElementById('course-account-id').value.trim() || '';
-                courseOptions.specificTermId = document.getElementById('course-term-id').value.trim() || '';
-            }
-
-            // Get sections options
-            const sectionOptions = {};
-            if (fileType === 'sections') {
-                sectionOptions.specificCourseId = document.getElementById('section-course-id').value.trim() || '';
-                sectionOptions.specificStatus = document.getElementById('section-status').value || '';
-            }
-
-            // Get group categories options
-            const groupCategoryOptions = {};
-            if (fileType === 'group_categories') {
-                groupCategoryOptions.specificAccountId = document.getElementById('group-category-account-id').value.trim() || '';
-                groupCategoryOptions.specificCourseId = document.getElementById('group-category-course-id').value.trim() || '';
-                groupCategoryOptions.specificStatus = document.getElementById('group-category-status').value || '';
-            }
-
-            // Get groups options
-            const groupOptions = {};
-            if (fileType === 'groups') {
-                groupOptions.specificAccountId = document.getElementById('group-account-id').value.trim() || '';
-                groupOptions.specificStatus = document.getElementById('group-status').value || '';
-            }
-
-            // Get group memberships options
-            const groupMembershipOptions = {};
-            if (fileType === 'group_memberships') {
-                groupMembershipOptions.specificGroupId = document.getElementById('group-membership-group-id').value.trim() || '';
-                groupMembershipOptions.specificUserId = document.getElementById('group-membership-user-id').value.trim() || '';
-                groupMembershipOptions.specificStatus = document.getElementById('group-membership-status').value || '';
-            }
-
-            // Get admins options
-            const adminOptions = {};
-            if (fileType === 'admins') {
-                adminOptions.specificUserId = document.getElementById('admin-user-id').value.trim() || '';
-                adminOptions.specificAccountId = document.getElementById('admin-account-id').value.trim() || '';
-                adminOptions.specificRole = document.getElementById('admin-role').value || '';
-                adminOptions.specificStatus = document.getElementById('admin-status').value || '';
-            }
-
-            // Get logins options
-            const loginOptions = {};
-            if (fileType === 'logins') {
-                loginOptions.specificUserId = document.getElementById('login-user-id').value.trim() || '';
-            }
-
-            // Get cross-listings options
-            const crossListingOptions = {};
-            if (fileType === 'xlists') {
-                crossListingOptions.specificCourseId = document.getElementById('cross-listing-course-id').value.trim() || '';
-                crossListingOptions.specificSectionId = document.getElementById('cross-listing-section-id').value.trim() || '';
-                crossListingOptions.specificStatus = document.getElementById('cross-listing-status').value || '';
-            }
-
-            // Get user observers options
-            const userObserverOptions = {};
-            if (fileType === 'user_observers') {
-                userObserverOptions.specificObserverId = document.getElementById('user-observer-observer-id').value.trim() || '';
-                userObserverOptions.specificStudentId = document.getElementById('user-observer-student-id').value.trim() || '';
-                userObserverOptions.specificStatus = document.getElementById('user-observer-status').value || '';
-            }
-
-            // Get change SIS ID options
-            const changeSisIdOptions = {};
-            if (fileType === 'change_sis_id') {
-                changeSisIdOptions.specificOldId = document.getElementById('change-sis-old-id').value.trim() || '';
-                changeSisIdOptions.specificNewId = document.getElementById('change-sis-new-id').value.trim() || '';
-                changeSisIdOptions.specificType = document.getElementById('change-sis-type').value || '';
-            }
-
-            // Get differentiation tag sets options
-            const differentiationTagSetOptions = {};
-            if (fileType === 'differentiation_tag_sets') {
-                differentiationTagSetOptions.specificCourseId = document.getElementById('diff-tag-set-course-id').value.trim() || '';
-                differentiationTagSetOptions.specificStatus = document.getElementById('diff-tag-set-status').value || '';
-            }
-
-            // Get differentiation tags options
-            const differentiationTagOptions = {};
-            if (fileType === 'differentiation_tags') {
-                differentiationTagOptions.specificCourseId = document.getElementById('diff-tag-course-id').value.trim() || '';
-                differentiationTagOptions.specificStatus = document.getElementById('diff-tag-status').value || '';
-            }
-
-            // Get differentiation tag membership options
-            const differentiationTagMembershipOptions = {};
-            if (fileType === 'differentiation_tag_membership') {
-                differentiationTagMembershipOptions.specificUserId = document.getElementById('diff-tag-member-user-id').value.trim() || '';
-                differentiationTagMembershipOptions.specificStatus = document.getElementById('diff-tag-member-status').value || '';
-            }
-
-            if (!fileType || !rowCount || !outputPath) {
-                showResult('Please fill in all required fields.', 'warning');
-                return;
-            }
+            // Use the proper field mapping function
+            const allOptions = gatherAllOptions(fileType);
 
             try {
-                const button = document.getElementById('generate-single-file');
-                button.disabled = true;
-                button.textContent = 'Generating...';
+                const result = await window.electronAPI.createSISFile(
+                    fileType,
+                    rowCount,
+                    outputPath,
+                    emailDomain,
+                    authProviderId,
+                    allOptions
+                );
 
-                const allOptions = { enrollmentOptions, userOptions, accountOptions, termOptions, courseOptions, sectionOptions, groupCategoryOptions, groupOptions, groupMembershipOptions, adminOptions, loginOptions, crossListingOptions, userObserverOptions, changeSisIdOptions, differentiationTagSetOptions, differentiationTagOptions, differentiationTagMembershipOptions };
-                const result = await window.electronAPI.createSISFile(fileType, rowCount, outputPath, emailDomain, authProviderId, allOptions);
-                showResult(`Successfully created ${result.fileName} with ${rowCount} rows at ${result.filePath}`, 'success');
-
-                button.disabled = false;
-                button.textContent = 'Generate CSV File';
+                // createSISFile returns an object with success, fileName and filePath
+                if (result.success) {
+                    showResult(`SIS file generated successfully: ${result.fileName} at ${result.filePath}`, 'success');
+                } else {
+                    showResult(`Error generating SIS file: ${result.error || 'Unknown error'}`, 'danger');
+                }
             } catch (error) {
-                showResult(`Error creating file: ${error.message}`, 'danger');
-                document.getElementById('generate-single-file').disabled = false;
-                document.getElementById('generate-single-file').textContent = 'Generate CSV File';
+                console.error('Generation error:', error);
+                showResult(`Generation error: ${error.message}`, 'danger');
             }
         });
 
@@ -1075,7 +668,55 @@ async function createSingleSISFile(e) {
             }, 5000);
         }
     }
-}
+
+    function displayPreviewData(data, headers) {
+        const previewContainer = document.getElementById('preview-container');
+        const previewContent = document.getElementById('preview-content');
+
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            previewContent.textContent = 'No preview data available.';
+            previewContainer.style.display = 'block';
+            return;
+        }
+
+        // Create a table for better display
+        let tableHTML = '<table class="table table-striped table-sm"><thead><tr>';
+
+        // Add headers
+        if (headers && headers.length > 0) {
+            headers.forEach(header => {
+                tableHTML += `<th>${header}</th>`;
+            });
+        } else if (data[0]) {
+            Object.keys(data[0]).forEach(key => {
+                tableHTML += `<th>${key}</th>`;
+            });
+        }
+
+        tableHTML += '</tr></thead><tbody>';
+
+        // Add data rows
+        data.forEach(row => {
+            tableHTML += '<tr>';
+            if (headers && headers.length > 0) {
+                headers.forEach(header => {
+                    tableHTML += `<td>${row[header] || ''}</td>`;
+                });
+            } else {
+                Object.values(row).forEach(value => {
+                    tableHTML += `<td>${value || ''}</td>`;
+                });
+            }
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table>';
+
+        previewContent.innerHTML = tableHTML;
+        previewContainer.style.display = 'block';
+    }
+
+} // end createSingleSISFile
 
 async function createBulkSISFiles(e) {
     hideEndpoints(e);
