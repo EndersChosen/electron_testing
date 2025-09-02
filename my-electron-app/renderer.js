@@ -66,8 +66,9 @@ function setupMenuHandlers() {
 document.addEventListener('DOMContentLoaded', () => {
     setupMenuHandlers();
     // Auto-attach global progress listener if containers exist
-    if (window.ProgressUtils && window.progressAPI) {
-        window.ProgressUtils.autoWireGlobalProgress();
+    // Do not auto-wire global progress to avoid cross-form bleed
+    if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+        window.progressAPI.removeAllProgressListeners();
     }
 
     // Sidebar collapse toggle

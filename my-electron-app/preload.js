@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld('axios', {
         console.log('Inside preload axios:resetCommChannelsByPattern');
         return await ipcRenderer.invoke('axios:resetCommChannelsByPattern', data);
     },
+    cancelResetCommChannelsByPattern: async () => {
+        console.log('Inside preload axios:cancelResetCommChannelsByPattern');
+        return await ipcRenderer.invoke('axios:cancelResetCommChannelsByPattern');
+    },
     createAssignments: async (data) => {
         console.log('inside preload createAssignments');
 
@@ -208,6 +212,10 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:resetEmails', data);
     },
+    cancelResetEmails: async () => {
+        console.log('preload.js > cancelResetEmails');
+        return await ipcRenderer.invoke('axios:cancelResetEmails');
+    },
     createSupportCourse: async (data) => {
         console.log('preload.js > createSupportCourse');
 
@@ -373,8 +381,16 @@ contextBridge.exposeInMainWorld('dataUpdate', {
 // (Removed duplicate exposeInMainWorld('fileUpload') to avoid overriding methods)
 
 contextBridge.exposeInMainWorld('progressAPI', {
-    // Forwards any progress payload from main (number or object)
-    onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_event, payload) => callback(payload))
+    // Subscribe to progress; returns an unsubscribe function
+    onUpdateProgress: (callback) => {
+        const handler = (_event, payload) => callback(payload);
+        ipcRenderer.on('update-progress', handler);
+        return () => ipcRenderer.removeListener('update-progress', handler);
+    },
+    // Clear all progress listeners (useful when switching forms)
+    removeAllProgressListeners: () => {
+        ipcRenderer.removeAllListeners('update-progress');
+    }
 });
 
 contextBridge.exposeInMainWorld('testAPI', {

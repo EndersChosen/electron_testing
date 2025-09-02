@@ -7,12 +7,22 @@
 async function commChannelTemplate(e) {
     switch (e.target.id) {
         case 'check-commchannel':
+            // Clear any global progress listeners when switching forms
+            if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+                window.progressAPI.removeAllProgressListeners();
+            }
             checkComm(e);
             break;
         case 'reset-commchannel':
+            if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+                window.progressAPI.removeAllProgressListeners();
+            }
             resetComm(e);
             break;
         case 'unconfirm-commchannels':
+            if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+                window.progressAPI.removeAllProgressListeners();
+            }
             unconfirmed(e);
             break;
         case 'download-conversations-csv':
@@ -295,6 +305,7 @@ function resetComm(e) {
             <button id="reset-upload-btn" class="btn btn-primary mt-3" hidden>Upload</button>
             <button id="reset-single-btn" class="btn btn-primary mt-3" hidden>Reset</button>
             <button id="reset-pattern-btn" class="btn btn-primary mt-3" hidden>Reset by Pattern</button>
+            <button id="reset-cancel-btn" class="btn btn-outline-secondary mt-3" hidden>Cancel</button>
         </div>
         <div hidden id="progress-div">
             <p id="progress-info"></p>
@@ -328,6 +339,7 @@ function resetComm(e) {
     const resetBtn = resetCommForm.querySelector('#reset-single-btn');
     const resetPatternBtn = resetCommForm.querySelector('#reset-pattern-btn');
     const uploadBtn = resetCommForm.querySelector('#reset-upload-btn');
+    const cancelBtn = resetCommForm.querySelector('#reset-cancel-btn');
     const resetSingleInput = resetCommForm.querySelector('#reset-single-input');
     const resetPatternInput = resetCommForm.querySelector('#reset-pattern-input');
     const resetSingleDiv = resetCommForm.querySelector('#reset-single-div');
@@ -403,6 +415,8 @@ function resetComm(e) {
                 uploadContainer.hidden = false;
                 handleResetOptions(allBtns, uploadBtn);
             }
+            // Cancel button is visible for pattern or upload modes
+            cancelBtn.hidden = !(document.querySelector('#reset-pattern-emails').checked || document.querySelector('#reset-upload-input').checked);
         }
 
     });
@@ -437,7 +451,7 @@ function resetComm(e) {
 
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
-        const resetValue = resetSingleInput.value.trim();
+        const resetValue = resetSingleInput.value.trim().toLowerCase();
         const regionVal = resetCommForm.querySelector('#region').value;
 
         const requestData = {
@@ -485,6 +499,8 @@ function resetComm(e) {
         e.stopPropagation();
 
         resetPatternBtn.disabled = true;
+        cancelBtn.hidden = false;
+        cancelBtn.disabled = false;
 
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
@@ -509,20 +525,20 @@ function resetComm(e) {
 
         try {
             const response = await window.axios.resetCommChannelsByPattern(requestData);
-            const totalProcessed = response.length;
+            const totalProcessed = Array.isArray(response) ? response.length : 0;
 
             progresDiv.hidden = true;
 
             patternContainer.innerHTML = `<h5>Pattern Reset Results</h5>`;
             patternContainer.innerHTML += `<p>Pattern: <strong>${resetPattern}</strong></p>`;
 
-            if (response.totalProcessed === 0) {
+            if (totalProcessed === 0) {
                 patternContainer.innerHTML += `<p>No emails found matching the pattern.</p>`;
             } else {
-                const totalBounceReset = response.reduce((sum, item) => sum + item.bounce.reset, 0);
-                const totalSuppressionReset = response.reduce((sum, item) => sum + item.suppression.reset, 0);
+                const totalBounceReset = response.reduce((sum, item) => sum + (item?.bounce?.reset || 0), 0);
+                const totalSuppressionReset = response.reduce((sum, item) => sum + (item?.suppression?.reset || 0), 0);
 
-                patternContainer.innerHTML += `<p>Total emails processed: ${totalProcessed}</p>`;
+                patternContainer.innerHTML += `<p>Total unique emails processed: ${totalProcessed}</p>`;
 
                 patternContainer.innerHTML += `<h6>Bounce List</h6>`;
                 if (totalBounceReset > 0) {
@@ -537,11 +553,6 @@ function resetComm(e) {
                 } else {
                     patternContainer.innerHTML += `<p>No emails were found on the suppression list.</p>`;
                 }
-
-                if (response.failed && response.failed.length > 0) {
-                    patternContainer.innerHTML += `<h6>Errors</h6>`;
-                    patternContainer.innerHTML += `<p>${response.failed.length} email(s) failed to process.</p>`;
-                }
             }
         } catch (error) {
             progresDiv.hidden = true;
@@ -554,6 +565,8 @@ function resetComm(e) {
             resetPatternBtn.disabled = false;
             // Reset UI state
             resetProgressBar();
+            cancelBtn.hidden = true;
+            cancelBtn.disabled = true;
         };
     });
 
@@ -562,6 +575,8 @@ function resetComm(e) {
         e.stopPropagation();
 
         uploadBtn.disabled = true;
+        cancelBtn.hidden = false;
+        cancelBtn.disabled = false;
 
         const domain = document.querySelector('#domain').value.trim();
         const token = document.querySelector('#token').value.trim();
@@ -573,15 +588,30 @@ function resetComm(e) {
             region: regionVal
         };
 
-        if (window.ProgressUtils && window.progressAPI) {
-            window.ProgressUtils.attachGlobalProgressListener({ container: progresDiv });
+        // Wire determinate progress from main: show percent and counts
+        let unsubscribeProgress = null;
+        if (window.progressAPI) {
+            unsubscribeProgress = window.progressAPI.onUpdateProgress((payload) => {
+                if (!payload || typeof payload !== 'object') return;
+                const { mode, value, processed, total } = payload;
+                if (mode === 'determinate' && typeof value === 'number') {
+                    if (progressBar) progressBar.style.width = `${Math.round(value * 100)}%`;
+                    if (typeof processed === 'number' && typeof total === 'number') {
+                        const pct = Math.round(value * 100);
+                        progressInfo.textContent = `${pct}% (${processed}/${total}) Processed`;
+                    } else {
+                        progressInfo.textContent = `${Math.round(value * 100)}% Processed`;
+                    }
+                }
+            });
         }
 
         try {
             progresDiv.hidden = false;
-            // Use progress bar (indeterminate) and processed count
-            useProgressBarIndeterminate();
-            progressInfo.textContent = 'Processing... Processed: 0';
+            // Start with determinate bar at 0%, will be updated by main
+            resetProgressBar();
+            progressBar.parentElement.hidden = false;
+            progressInfo.textContent = '0% (0/0) Processed';
             uploadContainer.innerHTML = "Working...";
             const response = await window.axios.resetEmails(requestData);
             progresDiv.hidden = true;
@@ -642,16 +672,35 @@ function resetComm(e) {
             }
 
         } catch (error) {
-            if (error.message.toLowerCase().includes('cancelled')) {
+            if (String(error.message || error).toLowerCase().includes('cancelled')) {
                 progresDiv.hidden = true;
-                uploadContainer.innerHTML = 'Upload was cancelled.';
+                uploadContainer.innerHTML = 'Processing was cancelled.';
             } else {
                 errorHandler(error, uploadContainer);
             }
         } finally {
             uploadBtn.disabled = false;
             resetProgressBar();
+            if (typeof unsubscribeProgress === 'function') {
+                unsubscribeProgress();
+            }
+            cancelBtn.hidden = true;
+            cancelBtn.disabled = true;
         };
+    });
+
+    // Cancel button handler for long-running resets
+    cancelBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cancelBtn.disabled = true;
+        try {
+            // Try both possible operations; backend ignores if not running
+            await Promise.race([
+                window.axios.cancelResetEmails?.(),
+                window.axios.cancelResetCommChannelsByPattern?.()
+            ]);
+        } catch (_) { /* ignore */ }
     });
 }
 
@@ -932,9 +981,17 @@ function unconfirmed(e) {
         // Determinate: show progress bar, hide spinner
         if (loadingWheel) loadingWheel.hidden = true;
         if (progressBarWrapper) progressBarWrapper.hidden = false;
-        window.progressAPI.onUpdateProgress((progress) => {
-            progressBar.style.width = `${progress}%`;
-        });
+        let unsubscribeProgress = null;
+        if (window.progressAPI) {
+            unsubscribeProgress = window.progressAPI.onUpdateProgress((payload) => {
+                if (payload && typeof payload === 'object' && typeof payload.value === 'number') {
+                    progressBar.style.width = `${Math.round(payload.value * 100)}%`;
+                } else if (typeof payload === 'number') {
+                    // backward compatibility with numeric payloads
+                    progressBar.style.width = `${Math.round(payload)}%`;
+                }
+            });
+        }
 
         try {
             const result = await window.axios.confirmEmails(requestData);
@@ -949,6 +1006,7 @@ function unconfirmed(e) {
             errorHandler(error, progressInfo);
         } finally {
             confirmBtn.disabled = false;
+            if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
         }
 
     }

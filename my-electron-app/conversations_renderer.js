@@ -36,6 +36,10 @@ async function conversationTemplate(e) {
 // - Full error log written next to source upload
 // ****************************************
 async function restoreDeletedConversations(e) {
+    // Clear any global progress listeners from prior forms
+    if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+        window.progressAPI.removeAllProgressListeners();
+    }
     hideEndpoints(e);
 
     const eContent = document.querySelector('#endpoint-content');
@@ -391,9 +395,7 @@ async function restoreDeletedConversations(e) {
             responseDiv.innerHTML = '';
             restoreBtn.disabled = true;
 
-            if (window.progressAPI && window.ProgressUtils) {
-                window.ProgressUtils.autoWireGlobalProgress();
-            } else if (window.progressAPI) {
+            if (window.progressAPI) {
                 window.progressAPI.onUpdateProgress((progress) => {
                     if (typeof progress === 'number') {
                         progressBar.style.width = `${progress}%`;
@@ -656,6 +658,9 @@ async function restoreDeletedConversations(e) {
 }
 
 async function getDeletedConversations(e) {
+    if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+        window.progressAPI.removeAllProgressListeners();
+    }
     hideEndpoints(e);
 
     const eContent = document.querySelector('#endpoint-content');
@@ -957,13 +962,16 @@ async function getDeletedConversations(e) {
 
             for (const uid of bulkUserIds) {
                 try {
+                    console.log(`[GDC-Bulk] Starting user ${uid} export`);
                     const params = { domain, token, user_id: String(uid) };
                     const afterISO = toStartOfDayISO(deleted_after);
                     const beforeISO = toEndOfDayISO(deleted_before);
+                    console.log(`[GDC-Bulk] Bounds for user ${uid}: after=${afterISO || 'none'} before=${beforeISO || 'none'}`);
                     if (afterISO) params.deleted_after = afterISO;
                     if (beforeISO) params.deleted_before = beforeISO;
 
                     const results = await window.axios.getDeletedConversations(params);
+                    console.log(`[GDC-Bulk] Completed user ${uid}: ${results.length} rows`);
 
                     if (results.length > 0) {
                         // Sanitize rows (attachments handled, JSON stringify objects)
@@ -1003,6 +1011,7 @@ async function getDeletedConversations(e) {
                     }
                 } catch (err) {
                     // count as skipped on error
+                    console.warn(`[GDC-Bulk] Error for user ${uid}: ${err?.message || err}`);
                     skipped++;
                 } finally {
                     completed++;
@@ -1019,6 +1028,9 @@ async function getDeletedConversations(e) {
 }
 
 async function deleteConvos(e) {
+    if (window.progressAPI && window.progressAPI.removeAllProgressListeners) {
+        window.progressAPI.removeAllProgressListeners();
+    }
     hideEndpoints(e);
 
     const eContent = document.querySelector('#endpoint-content');
@@ -1222,9 +1234,7 @@ async function deleteConvos(e) {
                     messages
                 };
 
-                if (window.progressAPI && window.ProgressUtils) {
-                    window.ProgressUtils.autoWireGlobalProgress();
-                } else if (window.progressAPI) {
+                if (window.progressAPI) {
                     window.progressAPI.onUpdateProgress((progress) => {
                         progressBar.style.width = `${progress}%`;
                     });

@@ -493,40 +493,177 @@ module.exports = {
 };
 
 // Fetch deleted conversations for a user with optional deleted_before/after and pagination
+// Enhancements:
+// - If a 504 Gateway Timeout occurs for a wide date range, automatically split the range
+//   into smaller segments (monthly first, then binary split) and retry until the entire
+//   range is covered or the window reaches a minimum size.
 async function getDeletedConversations(data) {
-    const { domain, token, user_id, deleted_before, deleted_after } = data;
+    const { domain, token, user_id } = data;
+    const deleted_before = data.deleted_before;
+    const deleted_after = data.deleted_after;
+    if (deleted_after || deleted_before) {
+        console.log(`[GDC] Request for user ${user_id} with bounds: after=${deleted_after || 'none'} before=${deleted_before || 'none'}`);
+    } else {
+        console.log(`[GDC] Request for user ${user_id} without date bounds`);
+    }
     const baseUrl = `https://${domain}/api/v1/conversations/deleted`;
-    const params = new URLSearchParams();
-    // Canvas allows user_id[]
-    params.append('user_id[]', user_id);
-    if (deleted_before) params.append('deleted_before', deleted_before);
-    if (deleted_after) params.append('deleted_after', deleted_after);
-    params.append('per_page', '100');
 
-    let url = `${baseUrl}?${params.toString()}`;
-    const results = [];
+    // Helper to build a URL for a specific sub-range
+    function buildUrl(rangeAfter, rangeBefore) {
+        const params = new URLSearchParams();
+        params.append('user_id[]', user_id);
+        if (rangeBefore) params.append('deleted_before', rangeBefore);
+        if (rangeAfter) params.append('deleted_after', rangeAfter);
+        params.append('per_page', '100');
+        return `${baseUrl}?${params.toString()}`;
+    }
 
-    while (url) {
-        try {
+    // Core fetch with pagination for a specific sub-range
+    async function fetchRange(rangeAfter, rangeBefore) {
+        let url = buildUrl(rangeAfter, rangeBefore);
+        const out = [];
+        while (url) {
             const response = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (Array.isArray(response.data)) {
-                results.push(...response.data);
-            }
+            if (Array.isArray(response.data)) out.push(...response.data);
             const next = response.headers && response.headers.link ? pagination.getNextPage(response.headers.link) : false;
             url = next || false;
-        } catch (error) {
-            // surface Canvas error message if available
-            if (error.response && error.response.data && error.response.data.errors) {
-                const msg = error.response.data.errors.map(e => e.message).join('; ');
-                throw new Error(msg);
+        }
+        return out;
+    }
+
+    const is504 = (err) => !!(err && err.response && err.response.status === 504);
+
+    // Recursively split the time window on 504s
+    async function fetchWithSplit(rangeAfter, rangeBefore, depth = 0) {
+        try {
+            return await fetchRange(rangeAfter, rangeBefore);
+        } catch (err) {
+            // Surface Canvas error message if available (non-504)
+            if (!is504(err)) {
+                if (err?.response?.data?.errors) {
+                    const msg = err.response.data.errors.map(e => e.message).join('; ');
+                    throw new Error(msg);
+                }
+                throw err;
             }
-            throw error;
+
+            // 504 handling only makes sense if we have both bounds
+            if (!rangeAfter || !rangeBefore) {
+                // Re-throw if we cannot split (missing bounds)
+                console.warn(`[GDC] 504 received but cannot split due to missing bounds. after=${rangeAfter || 'none'} before=${rangeBefore || 'none'}`);
+                throw err;
+            }
+
+            // Parse and compute midpoint
+            const start = new Date(rangeAfter);
+            const end = new Date(rangeBefore);
+            if (!(start instanceof Date && !isNaN(start)) || !(end instanceof Date && !isNaN(end))) {
+                throw err;
+            }
+            const spanMs = end.getTime() - start.getTime();
+            if (spanMs <= 0) {
+                // Degenerate window; nothing to fetch
+                return [];
+            }
+
+            // Minimum window size before giving up further splits
+            const MIN_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+            if (spanMs <= MIN_WINDOW_MS) {
+                // Last-ditch retry once after a short backoff
+                console.warn(`[GDC] Min window reached (<=1h) at depth ${depth}. Retrying once: ${start.toISOString()} -> ${end.toISOString()}`);
+                await new Promise(r => setTimeout(r, 1500));
+                return await fetchRange(rangeAfter, rangeBefore);
+            }
+
+            // Binary split
+            const mid = new Date(start.getTime() + Math.floor(spanMs / 2));
+            const leftAfter = rangeAfter;
+            const leftBefore = mid.toISOString();
+            const rightAfter = new Date(mid.getTime() + 1).toISOString();
+            const rightBefore = rangeBefore;
+
+            console.warn(`[GDC] 504 on range ${start.toISOString()} -> ${end.toISOString()} (span ${(spanMs / 86400000).toFixed(2)} days). Splitting at ${mid.toISOString()} (depth ${depth}).`);
+
+            const left = await fetchWithSplit(leftAfter, leftBefore, depth + 1);
+            const right = await fetchWithSplit(rightAfter, rightBefore, depth + 1);
+            return [...left, ...right];
         }
     }
 
-    return results;
+    // Generate monthly segments for large ranges to reduce 504 risk up-front
+    function monthSegments(rangeAfter, rangeBefore) {
+        const segments = [];
+        const start = new Date(rangeAfter);
+        const end = new Date(rangeBefore);
+        if (isNaN(start) || isNaN(end) || end <= start) return segments;
+
+        let cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate(), 0, 0, 0));
+        // Ensure cur >= start
+        if (cur < start) cur = new Date(start);
+        while (cur < end) {
+            const nextMonth = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1, 0, 0, 0));
+            const segStart = cur.toISOString();
+            const segEnd = (nextMonth < end ? new Date(nextMonth.getTime() - 1) : end).toISOString();
+            segments.push([segStart, segEnd]);
+            cur = nextMonth;
+        }
+        return segments;
+    }
+
+    // If no date filters are provided, just do the plain paginated fetch
+    if (!deleted_after && !deleted_before) {
+        return await fetchWithSplit(undefined, undefined);
+    }
+
+    // If only one bound is provided, attempt the plain fetch and bubble errors
+    if (!deleted_after || !deleted_before) {
+        try {
+            return await fetchWithSplit(deleted_after, deleted_before);
+        } catch (err) {
+            if (err?.response?.data?.errors) {
+                const msg = err.response.data.errors.map(e => e.message).join('; ');
+                throw new Error(msg);
+            }
+            throw err;
+        }
+    }
+
+    // Both bounds provided: split into months first, then recursively split on 504s
+    const start = new Date(deleted_after);
+    const end = new Date(deleted_before);
+    const spanDays = Math.ceil((end - start) / (24 * 60 * 60 * 1000));
+
+    let rawResults = [];
+    if (!isNaN(start) && !isNaN(end) && spanDays > 31) {
+        const segments = monthSegments(deleted_after, deleted_before);
+        console.log(`[GDC] Using monthly pre-split across ${segments.length} segment(s) for ${start.toISOString()} -> ${end.toISOString()}`);
+        let segIdx = 0;
+        for (const [segAfter, segBefore] of segments) {
+            segIdx++;
+            console.log(`[GDC] Segment ${segIdx}/${segments.length}: ${segAfter} -> ${segBefore}`);
+            const segResults = await fetchWithSplit(segAfter, segBefore);
+            rawResults.push(...segResults);
+        }
+    } else {
+        rawResults = await fetchWithSplit(deleted_after, deleted_before);
+    }
+
+    // Deduplicate by message id if present
+    const seen = new Set();
+    const deduped = [];
+    for (const item of rawResults) {
+        const key = item && (item.id || item.message_id) ? String(item.id || item.message_id) : JSON.stringify(item);
+        if (!seen.has(key)) {
+            seen.add(key);
+            deduped.push(item);
+        }
+    }
+    if (deleted_after || deleted_before) {
+        console.log(`[GDC] Completed fetch for user ${user_id}. Raw=${rawResults.length}, Deduped=${deduped.length}`);
+    }
+    return deduped;
 }
 
 // Restore a deleted conversation message for a user using the documented endpoint

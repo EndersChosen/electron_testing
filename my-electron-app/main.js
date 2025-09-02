@@ -543,6 +543,10 @@ app.whenReady().then(() => {
         }
     });
 
+    // Cancellation flags for comm-channel resets
+    const resetEmailsCancelFlags = new Map(); // key: senderId -> boolean
+    const resetPatternCancelFlags = new Map(); // key: senderId -> boolean
+
     ipcMain.handle('axios:deleteOldAssignments', async (event, data) => {
         console.log('main.js > axios:deleteOldAssignments');
 
@@ -1592,61 +1596,82 @@ app.whenReady().then(() => {
 
     ipcMain.handle('axios:resetEmails', async (event, data) => {
         const fileContents = await getFileContentsForEmails();
-        if (fileContents != 'cancelled') {
-            const emails = removeBlanks(fileContents.split(/\r?\n|\r|\,/))
-                .map((email) => { // remove spaces
-                    return email.trim();
-                });
+        if (fileContents === 'cancelled') throw new Error('Cancelled');
 
-            const totalRequests = emails.length;
-            let completedRequests = 0;
-            let successful = [];
-            let failed = [];
+        // Parse, normalize and dedupe emails
+        const emails = Array.from(new Set(
+            removeBlanks(fileContents.split(/\r?\n|\r|\,/))
+                .map((email) => String(email).trim().toLowerCase())
+                .filter((email) => email.includes('@'))
+        ));
 
-            const updateProgress = () => {
-                completedRequests++;
-                mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
-            };
+        const total = emails.length;
+        let processed = 0;
+        const results = { successful: [], failed: [] };
 
-            const request = async (requestData) => {
+        // Initial progress
+        mainWindow.webContents.send('update-progress', {
+            mode: 'determinate',
+            label: 'Resetting communication channels',
+            processed: 0,
+            total,
+            value: total > 0 ? 0 : 0
+        });
+
+        const { bounceReset, awsReset, bounceCheck } = require('./comm_channels');
+
+        // Set up per-sender cancellation
+        const senderId = event.sender.id;
+        resetEmailsCancelFlags.set(senderId, false);
+        const isCancelled = () => resetEmailsCancelFlags.get(senderId) === true;
+
+        // Small worker pool with jitter
+        const maxWorkers = Math.max(1, Math.min(12, Number(process.env.RESET_EMAILS_CONCURRENCY) || 10));
+        let index = 0;
+
+        const worker = async (id) => {
+            while (index < emails.length && !isCancelled()) {
+                const myIndex = index++;
+                const email = emails[myIndex];
+                // 100-200ms jitter to smooth bursts
+                await waitFunc(100 + Math.floor(Math.random() * 100));
                 try {
-                    const response = await resetEmail(requestData);
-                    successful.push({
-                        id: requestData.id,
-                        status: 'fulfilled',
-                        value: response
-                    });
-                    return response;
-                } catch (error) {
-                    failed.push({
-                        id: requestData.id,
-                        reason: error.message
-                    })
-                    throw error;
+                    // Direct resets (idempotent): bounce then suppression
+                    const bounceRes = await bounceReset({ domain: data.domain, token: data.token, email });
+                    // Give Canvas a moment if it scheduled a clear
+                    if (Number(bounceRes?.reset || 0) > 0) {
+                        await waitFunc(800);
+                        try { await bounceCheck(data.domain, data.token, email); } catch { }
+                    }
+                    const awsRes = await awsReset({ region: data.region, token: data.token, email });
+                    results.successful.push({ id: myIndex + 1, status: 'fulfilled', value: { bounce: bounceRes, suppression: awsRes } });
+                } catch (err) {
+                    results.failed.push({ id: myIndex + 1, reason: err?.message || String(err), email });
                 } finally {
-                    updateProgress();
+                    processed++;
+                    mainWindow.webContents.send('update-progress', {
+                        mode: 'determinate',
+                        label: 'Resetting communication channels',
+                        processed,
+                        total,
+                        value: total > 0 ? processed / total : 0
+                    });
                 }
-            };
-
-            const requests = [];
-            for (let i = 0; i < emails.length; i++) {
-                const requestData = {
-                    domain: data.domain,
-                    token: data.token,
-                    region: data.region,
-                    email: emails[i],
-                };
-                requests.push({ id: i + 1, request_response: await request(requestData) });
             }
+        };
 
+        const workers = [];
+        for (let w = 0; w < maxWorkers; w++) workers.push(worker(w));
+        await Promise.all(workers);
+        const cancelled = isCancelled();
+        resetEmailsCancelFlags.delete(senderId);
+        return { ...results, cancelled };
+    });
 
-
-            // const batchResponse = await batchHandler(requests);
-            console.log('Finished processing emails.');
-            return { successful, failed };
-        } else {
-            throw new Error('Cancelled');
-        }
+    ipcMain.handle('axios:cancelResetEmails', async (event) => {
+        const senderId = event.sender.id;
+        resetEmailsCancelFlags.set(senderId, true);
+        return { cancelled: true };
     });
 
     ipcMain.handle('axios:getClassicQuizzes', async (event, data) => {
@@ -2827,42 +2852,100 @@ function progressDone() {
 // Example: unknown total flow (fixes undefined completedRequests/totalRequests bug)
 ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
     console.log('inside axios:resetCommChannelsByPattern');
+    const senderId = event.sender.id;
+    resetPatternCancelFlags.set(senderId, false);
+    const isCancelled = () => resetPatternCancelFlags.get(senderId) === true;
 
-    let emailResetResponse = [];
-    let moreEmails = true;
-    let processed = 0;
+    // Normalize pattern once
+    const normalizedPattern = String(data.pattern || '').trim().toLowerCase();
+    const base = { ...data, pattern: normalizedPattern };
 
-    progressStartIndeterminate('Searching for bounced emails...');
+    try {
+        progressStartIndeterminate('Collecting emails to reset...');
 
-    while (moreEmails) {
-        try {
-            const response = await getBouncedData(data); // returns a chunk/page
-            if (response.length > 0) {
-                console.log(`Found ${response.length} emails, resetting...`);
-                for (const row of response) {
-                    const requestData = {
-                        domain: data.domain,
-                        token: data.token,
-                        email: row[4],
-                        region: data.region
-                    };
-                    emailResetResponse.push(await resetEmail(requestData));
-                    processed++;
-                    // tick in unknown mode; if you later know a total, call progressUpdateDeterminate(...)
-                    progressTickUnknown(processed, 'Resetting bounced emails...');
-                }
-            } else {
-                moreEmails = false;
-                console.log('No more emails found.');
-            }
-        } catch (error) {
+        // 1) Gather bounced emails (Canvas) and suppressed emails (AWS) for this pattern
+        const [bouncedRows, suppressedList] = await Promise.all([
+            getBouncedData(base), // array of row arrays; row[4] is the email
+            checkCommDomain(base) // array of email strings
+        ]);
+
+        if (isCancelled()) {
             progressDone();
-            throw error.message;
+            resetPatternCancelFlags.delete(senderId);
+            return [];
         }
-    }
 
-    progressDone();
-    return emailResetResponse;
+        // 2) Build a unique set of emails (lowercased)
+        const targets = new Set();
+        if (Array.isArray(bouncedRows)) {
+            for (const row of bouncedRows) {
+                const em = Array.isArray(row) ? row[4] : null;
+                if (em) targets.add(String(em).trim().toLowerCase());
+            }
+        }
+        if (Array.isArray(suppressedList)) {
+            for (const em of suppressedList) {
+                if (em) targets.add(String(em).trim().toLowerCase());
+            }
+        }
+
+        const emails = Array.from(targets);
+        const total = emails.length;
+        if (total === 0) {
+            progressDone();
+            resetPatternCancelFlags.delete(senderId);
+            return [];
+        }
+
+        // 3) Reset both bounce and suppression for each unique email with a small worker pool
+        const { bounceReset, awsReset, bounceCheck } = require('./comm_channels');
+        let processed = 0;
+        progressUpdateDeterminate(0, total);
+
+        const maxWorkers = Math.max(1, Math.min(10, Number(process.env.RESET_EMAILS_CONCURRENCY) || 8));
+        let idx = 0;
+        const results = [];
+
+        const worker = async () => {
+            while (idx < emails.length && !isCancelled()) {
+                const myIdx = idx++;
+                const email = emails[myIdx];
+                try {
+                    await waitFunc(100 + Math.floor(Math.random() * 100));
+                    const bounceRes = await bounceReset({ domain: data.domain, token: data.token, email });
+                    if (Number(bounceRes?.reset || 0) > 0) {
+                        await waitFunc(800);
+                        try { await bounceCheck(data.domain, data.token, email); } catch { }
+                    }
+                    const awsRes = await awsReset({ region: data.region, token: data.token, email });
+                    results.push({ bounce: bounceRes, suppression: awsRes, email });
+                } catch (e) {
+                    // Record failure as a result with error flags (optional)
+                    results.push({ bounce: { reset: 0, error: e?.message || String(e) }, suppression: { reset: 0, error: e?.message || String(e) }, email });
+                } finally {
+                    processed++;
+                    progressUpdateDeterminate(processed, total);
+                }
+            }
+        };
+
+        const workers = [];
+        for (let w = 0; w < maxWorkers; w++) workers.push(worker());
+        await Promise.all(workers);
+        progressDone();
+        resetPatternCancelFlags.delete(senderId);
+        return results;
+    } catch (err) {
+        progressDone();
+        resetPatternCancelFlags.delete(senderId);
+        throw err.message || err;
+    }
+});
+
+ipcMain.handle('axios:cancelResetCommChannelsByPattern', async (event) => {
+    const senderId = event.sender.id;
+    resetPatternCancelFlags.set(senderId, true);
+    return { cancelled: true };
 });
 
 async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {

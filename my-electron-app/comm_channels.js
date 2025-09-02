@@ -49,7 +49,7 @@ async function emailCheck(data) {
     const domain = data.domain;
     const token = data.token;
     const region = REGION[data.region];
-    const email = data.pattern;
+    const email = String(data.pattern || '').trim().toLowerCase();
 
     const emailStatus = {
         suppressed: false,
@@ -134,7 +134,7 @@ async function checkCommDomain(data) {
     console.log('checking domains...');
 
     let suppList = [];
-    let url = `${REGION[data.region]}domain/${encodeURIComponent(data.pattern)}`;
+    let url = `${REGION[data.region]}domain/${encodeURIComponent(String(data.pattern || '').trim().toLowerCase())}`;
     let next = url;
     let retryCounter = 1;
 
@@ -203,15 +203,41 @@ async function resetEmail(data) {
     };
 
     try {
-        resetStatus.bounce = await bounceReset(data);
+        // Normalize email to lowercase to avoid case-sensitivity differences across services
+        const normalized = { ...data, email: String(data.email || '').trim().toLowerCase() };
+        resetStatus.bounce = await bounceReset(normalized);
     } catch (error) {
         resetStatus.bounce = error;
     }
 
     try {
-        resetStatus.suppression = await awsReset(data);
+        const normalized = { ...data, email: String(data.email || '').trim().toLowerCase() };
+        resetStatus.suppression = await awsReset(normalized);
     } catch (error) {
         throw error;
+    }
+
+    // Verification: focus on bounce only (Canvas schedules clears); keep requests low
+    const verify = data?.verify !== false; // default true
+    if (verify) {
+        const email = String(data.email || '').trim().toLowerCase();
+        const domain = data.domain;
+        const token = data.token;
+
+        // Only verify when Canvas reported a scheduled reset attempt
+        if (Number(resetStatus?.bounce?.reset || 0) > 0) {
+            // Single verification pass with one optional retry
+            try {
+                await waitFunc(1500); // give the scheduler a moment
+                let stillBounced = await bounceCheck(domain, token, email);
+                if (stillBounced) {
+                    // One retry attempt then stop
+                    try { await bounceReset({ domain, token, email }); } catch { }
+                    await waitFunc(3000);
+                    await bounceCheck(domain, token, email); // final observation only
+                }
+            } catch { /* non-fatal for verification */ }
+        }
     }
 
     return resetStatus;
@@ -246,7 +272,7 @@ async function bounceReset(data) {
 async function awsReset(data) {
 
     const region = REGION[data.region];
-    const url = `${region}${encodeURIComponent(data.email)}`;
+    const url = `${region}${encodeURIComponent(String(data.email || '').trim().toLowerCase())}`;
     const axiosConfig = {
         method: 'delete',
         url: url,
@@ -336,5 +362,13 @@ async function confirmEmail(data) {
 }
 
 module.exports = {
-    emailCheck, getBouncedData, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail
+    emailCheck,
+    getBouncedData,
+    checkCommDomain,
+    checkUnconfirmedEmails,
+    confirmEmail,
+    resetEmail,
+    bounceReset,
+    awsReset,
+    bounceCheck
 }
