@@ -2596,3 +2596,207 @@ function deleteNoDueDateAssignments(e) {
         }
     });
 }
+
+// Create Assignments UI and handler
+function assignmentCreator(e) {
+    hideEndpoints(e);
+    console.log('renderer > assignmentCreator');
+
+    const eContent = document.querySelector('#endpoint-content');
+    let form = eContent.querySelector('#create-assignments-form');
+
+    if (!form) {
+        form = document.createElement('form');
+        form.id = 'create-assignments-form';
+        form.innerHTML = `
+            <div>
+                <h3>Create Assignments</h3>
+            </div>
+            <div class="row g-3 align-items-start">
+                <div class="col-12 col-sm-3">
+                    <label class="form-label" for="course-id">Course ID</label>
+                    <input id="course-id" type="text" class="form-control" aria-describedby="course-help" inputmode="numeric" />
+                    <div id="course-help" class="form-text">Numbers only</div>
+                    <div class="invalid-feedback">Please enter a valid numeric Course ID.</div>
+                </div>
+
+                <div class="col-6 col-sm-2">
+                    <label class="form-label" for="assignment-number">How many</label>
+                    <input id="assignment-number" type="number" class="form-control" min="1" value="1" />
+                </div>
+
+                <div class="col-12 col-sm-4">
+                    <label class="form-label" for="assignment-name">Name</label>
+                    <input id="assignment-name" type="text" class="form-control" placeholder="Assignment" value="Assignment" />
+                </div>
+
+                <div class="w-100"></div>
+
+                <div class="col-6 col-sm-2">
+                    <label class="form-label" for="points">Points</label>
+                    <input id="points" type="number" class="form-control" min="0" value="10" />
+                </div>
+
+                <div class="col-6 col-sm-3">
+                    <label class="form-label" for="grade-type">Grading type</label>
+                    <select id="grade-type" class="form-select">
+                        <option value="points" selected>Points</option>
+                        <option value="percent">Percent</option>
+                        <option value="pass_fail">Pass/Fail</option>
+                        <option value="letter_grade">Letter grade</option>
+                        <option value="gpa_scale">GPA scale</option>
+                    </select>
+                </div>
+
+                <div class="col-12 col-sm-7">
+                    <label class="form-label">Submission types</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="st-upload" data-st="online_upload" checked />
+                            <label class="form-check-label" for="st-upload">File upload</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="st-text" data-st="online_text_entry" />
+                            <label class="form-check-label" for="st-text">Text entry</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="st-url" data-st="online_url" />
+                            <label class="form-check-label" for="st-url">Website URL</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-100"></div>
+
+                <div class="col-auto form-check form-switch ms-1">
+                    <input id="publish" class="form-check-input" type="checkbox" />
+                    <label class="form-check-label" for="publish">Publish</label>
+                </div>
+                <div class="col-auto form-check form-switch">
+                    <input id="peer-reviews" class="form-check-input" type="checkbox" />
+                    <label class="form-check-label" for="peer-reviews">Peer reviews</label>
+                </div>
+                <div class="col-auto form-check form-switch">
+                    <input id="anonymous" class="form-check-input" type="checkbox" />
+                    <label class="form-check-label" for="anonymous">Anonymous grading</label>
+                </div>
+
+                <div class="w-100"></div>
+                <div class="col-auto">
+                    <button id="action-btn" class="btn btn-primary mt-2" type="button">Create</button>
+                </div>
+            </div>
+
+            <div hidden id="cac-progress-div" class="mt-3">
+                <p id="cac-progress-info" class="mb-1"></p>
+                <div class="progress" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="cac-response-container" class="mt-4"></div>
+        `;
+        eContent.append(form);
+
+        // Enhance progress bar with percent overlay
+        const progressBar = form.querySelector('.progress-bar');
+        if (progressBar && typeof enhanceProgressBarWithPercent === 'function') {
+            enhanceProgressBarWithPercent(progressBar);
+        }
+    }
+
+    form.hidden = false;
+
+    // Validation for course id
+    const cID = form.querySelector('#course-id');
+    cID.addEventListener('input', () => {
+        const val = cID.value.trim();
+        const valid = /^\d+$/.test(val);
+        cID.classList.toggle('is-invalid', !valid && val.length > 0);
+        form.querySelector('#action-btn').disabled = !valid;
+    });
+
+    const createBtn = form.querySelector('#action-btn');
+    createBtn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const domain = document.querySelector('#domain').value.trim();
+        const token = document.querySelector('#token').value.trim();
+        const course_id = cID.value.trim();
+        const number = Math.max(1, parseInt(form.querySelector('#assignment-number').value || '1', 10));
+        const name = (form.querySelector('#assignment-name').value || 'Assignment').trim();
+        const points = Math.max(0, parseFloat(form.querySelector('#points').value || '0'));
+        const grade_type = form.querySelector('#grade-type').value;
+        const publish = form.querySelector('#publish').checked ? 'published' : 'unpublished';
+        const peer_reviews = form.querySelector('#peer-reviews').checked;
+        const anonymous = form.querySelector('#anonymous').checked;
+
+        const submissionTypes = Array.from(form.querySelectorAll('[data-st]'))
+            .filter(cb => cb.checked)
+            .map(cb => cb.getAttribute('data-st'));
+        if (submissionTypes.length < 1) submissionTypes.push('online_upload');
+
+        const progressDiv = form.querySelector('#cac-progress-div');
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        const progressInfo = form.querySelector('#cac-progress-info');
+        const responseDiv = form.querySelector('#cac-response-container');
+
+        // Reset UI
+        responseDiv.innerHTML = '';
+        progressDiv.hidden = false;
+        progressBar.parentElement.hidden = false;
+        updateProgressWithPercent(progressBar, 0);
+        progressInfo.textContent = 'Creating assignments...';
+        createBtn.disabled = true;
+
+        // Subscribe to progress updates for this operation
+        const unsub = window.progressAPI?.onUpdateProgress?.((payload) => {
+            try {
+                if (typeof payload === 'number') {
+                    updateProgressWithPercent(progressBar, payload);
+                } else if (payload && typeof payload === 'object') {
+                    if (typeof payload.value === 'number') {
+                        updateProgressWithPercent(progressBar, Math.round(Math.max(0, Math.min(1, payload.value)) * 100));
+                    }
+                    if (payload.label) {
+                        const pct = payload.value != null ? ` (${Math.round((payload.value || 0) * 100)}%)` : '';
+                        progressInfo.textContent = `${payload.label}${pct}`;
+                    }
+                }
+            } catch { }
+        });
+
+        const data = {
+            domain,
+            token,
+            course_id,
+            number,
+            name,
+            points,
+            grade_type,
+            publish,
+            peer_reviews,
+            anonymous,
+            submissionTypes
+        };
+
+        try {
+            const result = await window.axios.createAssignments(data);
+            const ok = result?.successful?.length || 0;
+            const bad = result?.failed?.length || 0;
+            progressInfo.textContent = `Done`;
+            responseDiv.innerHTML = `
+                <div class="alert ${bad > 0 ? 'alert-warning' : 'alert-success'}" role="alert">
+                    Created ${ok} assignment(s)${bad ? `, ${bad} failed` : ''}.
+                </div>
+            `;
+        } catch (error) {
+            // Hide the striped bar and show error
+            progressBar.parentElement.hidden = true;
+            errorHandler(error, progressInfo);
+        } finally {
+            if (typeof unsub === 'function') try { unsub(); } catch { }
+            createBtn.disabled = false;
+        }
+    });
+}

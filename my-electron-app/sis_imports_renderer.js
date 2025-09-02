@@ -64,7 +64,7 @@ async function createSingleSISFile(e) {
                     <input type="number" id="row-count" class="form-control" min="1" max="10000" value="10" required>
                     <div class="form-text">How many data rows to generate (1-10,000)</div>
                 </div>
-                <div class="col-3">
+                <div class="col-3" id="email-domain-group">
                     <label for="email-domain" class="form-label">Email Domain</label>
                     <input type="text" id="email-domain" class="form-control" value="@school.edu" placeholder="@school.edu">
                     <div class="form-text">Domain for generated email addresses</div>
@@ -178,7 +178,10 @@ async function createSingleSISFile(e) {
         document.getElementById('add-to-list').addEventListener('click', () => {
             const fileType = document.getElementById('file-type').value;
             const rowCount = parseInt(document.getElementById('row-count').value);
-            const emailDomain = document.getElementById('email-domain').value.trim() || '@school.edu';
+            // Only use email domain for 'users'; default for others
+            const emailDomain = fileType === 'users'
+                ? (document.getElementById('email-domain').value.trim() || '@school.edu')
+                : '@school.edu';
             const authProviderId = ''; // Removed auth provider functionality
 
             if (!fileType) {
@@ -297,22 +300,37 @@ async function createSingleSISFile(e) {
         }
 
         function gatherAllOptions(fileType) {
-            // Use the selectedFields object to create options
+            // Build options with file-type-aware special mappings where generators expect different names
             const options = {};
 
-            // Special-case key mapping where generator expects different option names
-            // Only diverges for a few courses fields to match sis_imports.js
+            // Maps for special cases
             const specialCoursesMap = {
                 course_format: 'specificFormat',
                 blueprint_course_id: 'specificBlueprintId',
                 grade_passback_setting: 'specificGradePassback',
                 homeroom_course: 'specificHomeroom',
             };
+            const specialUsersMap = {
+                authentication_provider_id: 'specificAuthProviderId',
+            };
+            const specialLoginsMap = {
+                authentication_provider_id: 'specificAuthProviderId',
+                existing_canvas_user_id: 'specificCanvasUserId',
+            };
+            const specialXlistsMap = {
+                xlist_course_id: 'specificCourseId',
+            };
 
             Object.entries(selectedFields).forEach(([fieldKey, fieldValue]) => {
                 let optionKey;
                 if (fileType === 'courses' && specialCoursesMap[fieldKey]) {
                     optionKey = specialCoursesMap[fieldKey];
+                } else if (fileType === 'users' && specialUsersMap[fieldKey]) {
+                    optionKey = specialUsersMap[fieldKey];
+                } else if (fileType === 'logins' && specialLoginsMap[fieldKey]) {
+                    optionKey = specialLoginsMap[fieldKey];
+                } else if (fileType === 'xlists' && specialXlistsMap[fieldKey]) {
+                    optionKey = specialXlistsMap[fieldKey];
                 } else {
                     // Default conversion: snake_case -> specificCamelCase
                     optionKey = `specific${fieldKey
@@ -322,16 +340,40 @@ async function createSingleSISFile(e) {
                 options[optionKey] = fieldValue;
             });
 
+            // Special mapping for change_sis_id generator options
+            let changeSisIdOptions = {};
+            if (fileType === 'change_sis_id') {
+                if (selectedFields.old_id) changeSisIdOptions.specificOldId = selectedFields.old_id;
+                if (selectedFields.new_id) changeSisIdOptions.specificNewId = selectedFields.new_id;
+                if (selectedFields.type) changeSisIdOptions.specificType = selectedFields.type;
+            }
+
             return {
-                enrollmentOptions: fileType === 'enrollments' ? options : {},
+                // Core types
                 userOptions: fileType === 'users' ? options : {},
                 accountOptions: fileType === 'accounts' ? options : {},
                 termOptions: fileType === 'terms' ? options : {},
                 courseOptions: fileType === 'courses' ? options : {},
                 sectionOptions: fileType === 'sections' ? options : {},
+                enrollmentOptions: fileType === 'enrollments' ? options : {},
+                // Groups
                 groupCategoryOptions: fileType === 'group_categories' ? options : {},
                 groupOptions: fileType === 'groups' ? options : {},
                 groupMembershipOptions: fileType === 'group_memberships' ? options : {},
+                // Admins
+                adminOptions: fileType === 'admins' ? options : {},
+                // Logins
+                loginOptions: fileType === 'logins' ? options : {},
+                // Cross listings
+                crossListingOptions: fileType === 'xlists' ? options : {},
+                // Observers
+                userObserverOptions: fileType === 'user_observers' ? options : {},
+                // Differentiation tags
+                differentiationTagSetOptions: fileType === 'differentiation_tag_sets' ? options : {},
+                differentiationTagOptions: fileType === 'differentiation_tags' ? options : {},
+                differentiationTagMembershipOptions: fileType === 'differentiation_tag_membership' ? options : {},
+                // Change SIS ID
+                changeSisIdOptions
             };
         }
 
@@ -345,6 +387,10 @@ async function createSingleSISFile(e) {
             } else {
                 csvOptionsSection.style.display = 'none';
             }
+
+            // Show email domain only for 'users'
+            const emailGroup = document.getElementById('email-domain-group');
+            if (emailGroup) emailGroup.style.display = (e.target.value === 'users') ? 'block' : 'none';
         });
 
         // CSV Field Selection Handlers
@@ -584,7 +630,9 @@ async function createSingleSISFile(e) {
         document.getElementById('preview-data').addEventListener('click', async () => {
             const fileType = document.getElementById('file-type').value;
             const rowCount = Math.min(5, parseInt(document.getElementById('row-count').value) || 5);
-            const emailDomain = document.getElementById('email-domain').value.trim() || '@school.edu';
+            const emailDomain = fileType === 'users'
+                ? (document.getElementById('email-domain').value.trim() || '@school.edu')
+                : '@school.edu';
             const authProviderId = ''; // Removed auth provider functionality
 
             // Use the proper field mapping function
@@ -621,7 +669,9 @@ async function createSingleSISFile(e) {
             const fileType = document.getElementById('file-type').value;
             const rowCount = parseInt(document.getElementById('row-count').value);
             const outputPath = document.getElementById('output-path').value;
-            const emailDomain = document.getElementById('email-domain').value.trim() || '@school.edu';
+            const emailDomain = fileType === 'users'
+                ? (document.getElementById('email-domain').value.trim() || '@school.edu')
+                : '@school.edu';
             const authProviderId = ''; // Removed auth provider functionality
 
             // Use the proper field mapping function
@@ -648,6 +698,13 @@ async function createSingleSISFile(e) {
                 showResult(`Generation error: ${error.message}`, 'danger');
             }
         });
+
+        // Initialize email domain visibility based on current selection
+        (function initEmailDomainVisibility() {
+            const ft = document.getElementById('file-type');
+            const emailGroup = document.getElementById('email-domain-group');
+            if (emailGroup) emailGroup.style.display = (ft && ft.value === 'users') ? 'block' : 'none';
+        })();
 
         // Mark that event listeners have been added
         createSISForm.setAttribute('data-listeners-added', 'true');
