@@ -91,7 +91,7 @@ async function deleteImportedContent(e) {
         progressDiv.hidden = false;
         progressBar.parentElement.hidden = true;
         progressBar.style.width = '0%';
-    if (spinner) spinner.hidden = false;
+        if (spinner) spinner.hidden = false;
         progressInfo.innerHTML = '';
 
         const domain = document.querySelector('#domain').value.trim();
@@ -135,7 +135,7 @@ async function deleteImportedContent(e) {
         // Filter out root folders from the actionable list
         const nonRootFolders = (assets.folders || []).filter(id => !rootFolderIds.includes(String(id)));
 
-    const counts = {
+        const counts = {
             attachments: assets.attachments.length,
             folders: nonRootFolders.length,
             outcomes: assets.outcomes.length,
@@ -391,19 +391,19 @@ async function deleteImportedContent(e) {
                 }
 
                 // Folders
-        if (selections.folders) {
+                if (selections.folders) {
                     const payloadF = {
                         domain,
                         token,
                         course_id,
-            // Use non-root folders only
-            folders: nonRootFolders.map(id => ({ id }))
+                        // Use non-root folders only
+                        folders: nonRootFolders.map(id => ({ id }))
                     };
                     const responseF = await window.axios.deleteFolders(payloadF);
                     if (responseF) batchResults.push(responseF);
                 }
 
-                
+
 
                 // Discussions
                 if (selections.discussions) {
@@ -482,7 +482,7 @@ async function deleteImportedContent(e) {
         progressDiv.hidden = false;
         progressBar.parentElement.hidden = true;
         progressBar.style.width = '0%';
-    if (spinner) spinner.hidden = false;
+        if (spinner) spinner.hidden = false;
         progressInfo.innerHTML = 'Loading recent imports...';
 
         const domain = document.querySelector('#domain').value.trim();

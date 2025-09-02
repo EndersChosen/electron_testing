@@ -510,7 +510,7 @@ app.whenReady().then(() => {
             // Abort any previous fetch for this sender
             const senderId = event.sender.id;
             if (combinedFetchControllers.has(senderId)) {
-                try { combinedFetchControllers.get(senderId).abort('superseded'); } catch {}
+                try { combinedFetchControllers.get(senderId).abort('superseded'); } catch { }
             }
             const controller = new AbortController();
             combinedFetchControllers.set(senderId, controller);
@@ -523,7 +523,7 @@ app.whenReady().then(() => {
             try {
                 const senderId = event.sender.id;
                 if (combinedFetchControllers.get(senderId)?.signal?.aborted) combinedFetchControllers.delete(senderId);
-            } catch {}
+            } catch { }
             throw error.message || error;
         }
     });

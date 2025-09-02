@@ -136,8 +136,8 @@ function deleteAssignmentsCombined(e) {
         eContent.append(form);
 
         const courseID = form.querySelector('#course-id');
-    const checkBtn = form.querySelector('#combined-check-btn');
-    const cancelBtn = form.querySelector('#combined-cancel-btn');
+        const checkBtn = form.querySelector('#combined-check-btn');
+        const cancelBtn = form.querySelector('#combined-cancel-btn');
         const progressDiv = form.querySelector('#combined-progress-div');
         const progressBar = progressDiv.querySelector('.progress-bar');
         const spinner = progressDiv.querySelector('.spinner-border');
@@ -171,12 +171,12 @@ function deleteAssignmentsCombined(e) {
             checkBtn.disabled = !validCourse;
         });
 
-    function renderResults(finalAssignments) {
+        function renderResults(finalAssignments) {
             responseDiv.innerHTML = '';
             const details = document.createElement('div');
             details.id = 'combined-response-details';
             details.className = 'card';
-        const totalCount = Array.isArray(allAssignmentsCache) ? allAssignmentsCache.length : finalAssignments.length;
+            const totalCount = Array.isArray(allAssignmentsCache) ? allAssignmentsCache.length : finalAssignments.length;
             details.innerHTML = `
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span>Results</span>
@@ -271,13 +271,13 @@ function deleteAssignmentsCombined(e) {
             ev.stopPropagation();
             try {
                 await window.axios.cancelAllAssignmentsForCombined();
-            } catch {}
+            } catch { }
             cancelBtn.disabled = true;
             setFiltersDisabled(false);
             if (spinner) spinner.hidden = true;
             progressInfo.innerHTML = '<span class="text-warning">Cancelled.</span>';
         });
-        
+
         // Check button triggers the fetch and keeps filters disabled until completion
         checkBtn.addEventListener('click', async (ev) => {
             ev.preventDefault();
@@ -325,10 +325,10 @@ function deleteAssignmentsCombined(e) {
                 checkBtn.disabled = false;
             }
         });
-    // Listen for filter changes to update counts live
-    fNonModule?.addEventListener('change', updateCount);
-    fNoDue?.addEventListener('change', updateCount);
-    fUnpub?.addEventListener('change', updateCount);
+        // Listen for filter changes to update counts live
+        fNonModule?.addEventListener('change', updateCount);
+        fNoDue?.addEventListener('change', updateCount);
+        fUnpub?.addEventListener('change', updateCount);
 
         fNoSubs.addEventListener('change', () => {
             gradedWrap.hidden = !fNoSubs.checked;
@@ -350,9 +350,9 @@ function deleteAssignmentsCombined(e) {
         });
         fOlderCreatedDate.addEventListener('input', updateCount);
 
-    // Store fetched assignments in memory; re-fetched on each Check press
-    let allAssignmentsCache = null;
-    let cacheKey = null; // kept for potential future use
+        // Store fetched assignments in memory; re-fetched on each Check press
+        let allAssignmentsCache = null;
+        let cacheKey = null; // kept for potential future use
     }
     form.hidden = false;
 }
