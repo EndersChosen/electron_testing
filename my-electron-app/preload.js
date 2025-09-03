@@ -316,6 +316,22 @@ contextBridge.exposeInMainWorld('axios', {
 
         return await ipcRenderer.invoke('axios:relockModules', data);
     },
+    createDiscussions: async (data) => {
+        console.log('preload.js > createDiscussions');
+        return await ipcRenderer.invoke('axios:createDiscussions', data);
+    },
+    createAnnouncements: async (data) => {
+        console.log('preload.js > createAnnouncements');
+        return await ipcRenderer.invoke('axios:createAnnouncements', data);
+    },
+    createPages: async (data) => {
+        console.log('preload.js > createPages');
+        return await ipcRenderer.invoke('axios:createPages', data);
+    },
+    createSections: async (data) => {
+        console.log('preload.js > createSections');
+        return await ipcRenderer.invoke('axios:createSections', data);
+    },
     updateNotifications: async (data) => {
         console.log('preload.js > updateNotifications');
 

@@ -5,17 +5,25 @@ const { errorCheck } = require('./utilities');
 
 async function createDiscussion(data) {
     // POST /api/v1/courses/:course_id/discussion_topics
+    // Supports standard discussions and announcements (is_announcement)
+    const payload = {
+        title: data.title,
+        message: data.message ?? '',
+        published: data.published ?? true,
+    };
+    if (data.is_announcement === true) payload.is_announcement = true;
+    if (typeof data.threaded === 'boolean') {
+        payload.discussion_type = data.threaded ? 'threaded' : 'side_comment';
+    }
+    if (data.delayed_post_at) payload.delayed_post_at = data.delayed_post_at;
+
     const axiosConfig = {
         method: 'post',
         url: `https://${data.domain}/api/v1/courses/${data.course_id}/discussion_topics`,
         headers: {
             Authorization: `Bearer ${data.token}`,
         },
-        data: {
-            title: data.title,
-            message: data.message ?? '',
-            published: data.published ?? true,
-        },
+        data: payload,
     };
 
     try {

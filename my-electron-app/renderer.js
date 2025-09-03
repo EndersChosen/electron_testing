@@ -353,6 +353,18 @@ endpointSelect.addEventListener('click', (e) => {
         case 'imports-endpoints':
             importsTemplate(e);
             break;
+        case 'discussion-endpoints':
+            discussionTemplate(e);
+            break;
+        case 'announcement-endpoints':
+            announcementTemplate(e);
+            break;
+        case 'pages-endpoints':
+            pagesTemplate(e);
+            break;
+        case 'sections-endpoints':
+            sectionsTemplate(e);
+            break;
         default:
             break;
     }

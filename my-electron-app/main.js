@@ -442,6 +442,118 @@ app.whenReady().then(() => {
         return formattedResponses;
     });
 
+    // Create Discussions (REST) and Announcements (REST with is_announcement)
+    ipcMain.handle('axios:createDiscussions', async (_event, data) => {
+        console.log('inside axios:createDiscussions');
+        const items = Array.isArray(data.requests) ? data.requests : [];
+        let completed = 0;
+        const total = items.length || 1;
+        const update = () => {
+            completed++;
+            mainWindow?.webContents.send('update-progress', {
+                mode: 'determinate', label: 'Creating discussions', processed: completed, total, value: completed / total
+            });
+        };
+        const requests = items.map((it, idx) => ({
+            id: idx + 1,
+            request: async () => {
+                try {
+                    const payload = {
+                        domain: it.domain, token: it.token, course_id: it.course_id,
+                        title: it.title, message: it.message, published: !!it.published
+                    };
+                    const resp = await discussions.createDiscussion(payload);
+                    return resp;
+                } finally { update(); }
+            }
+        }));
+        const res = await batchHandler(requests);
+        return res;
+    });
+
+    ipcMain.handle('axios:createAnnouncements', async (_event, data) => {
+        console.log('inside axios:createAnnouncements');
+        const items = Array.isArray(data.requests) ? data.requests : [];
+        let completed = 0;
+        const total = items.length || 1;
+        const update = () => {
+            completed++;
+            mainWindow?.webContents.send('update-progress', {
+                mode: 'determinate', label: 'Creating announcements', processed: completed, total, value: completed / total
+            });
+        };
+        const requests = items.map((it, idx) => ({
+            id: idx + 1,
+            request: async () => {
+                try {
+                    // Announcements use the discussions endpoint with is_announcement
+                    const payload = {
+                        domain: it.domain, token: it.token, course_id: it.course_id,
+                        title: it.title, message: it.message, published: !!it.published
+                    };
+                    // Reuse discussions.createDiscussion but pass is_announcement via message prefix/body note if needed
+                    const resp = await discussions.createDiscussion({ ...payload, is_announcement: true });
+                    return resp;
+                } finally { update(); }
+            }
+        }));
+        const res = await batchHandler(requests);
+        return res;
+    });
+
+    ipcMain.handle('axios:createPages', async (_event, data) => {
+        console.log('inside axios:createPages');
+        const items = Array.isArray(data.requests) ? data.requests : [];
+        let completed = 0;
+        const total = items.length || 1;
+        const update = () => {
+            completed++;
+            mainWindow?.webContents.send('update-progress', {
+                mode: 'determinate', label: 'Creating pages', processed: completed, total, value: completed / total
+            });
+        };
+        const requests = items.map((it, idx) => ({
+            id: idx + 1,
+            request: async () => {
+                try {
+                    const resp = await pages.createPage({
+                        domain: it.domain, token: it.token, course_id: it.course_id,
+                        title: it.title, body: it.body, published: !!it.published
+                    });
+                    return resp;
+                } finally { update(); }
+            }
+        }));
+        const res = await batchHandler(requests);
+        return res;
+    });
+
+    ipcMain.handle('axios:createSections', async (_event, data) => {
+        console.log('inside axios:createSections');
+        const items = Array.isArray(data.requests) ? data.requests : [];
+        let completed = 0;
+        const total = items.length || 1;
+        const update = () => {
+            completed++;
+            mainWindow?.webContents.send('update-progress', {
+                mode: 'determinate', label: 'Creating sections', processed: completed, total, value: completed / total
+            });
+        };
+        const requests = items.map((it, idx) => ({
+            id: idx + 1,
+            request: async () => {
+                try {
+                    const resp = await sections.createSection({
+                        domain: it.domain, token: it.token, course_id: it.course_id, name: it.name
+                    });
+                    return resp;
+                } finally { update(); }
+            }
+        }));
+        const res = await batchHandler(requests);
+        return res;
+    });
+
     ipcMain.handle('axios:getNoSubmissionAssignments', async (event, data) => {
         console.log('main.js > axios:getNoSubmissionAssignments');
 
