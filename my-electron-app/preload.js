@@ -18,15 +18,25 @@ contextBridge.exposeInMainWorld('axios', {
 
         return result;
     },
+    cancelGetConvos: async () => {
+        return await ipcRenderer.invoke('axios:cancelGetConvos');
+    },
     getDeletedConversations: async (data) => {
         console.log('preload.js > getDeletedConversations');
         return await ipcRenderer.invoke('axios:getDeletedConversations', data);
+    },
+    cancelGetDeletedConversations: async () => {
+        console.log('preload.js > cancelGetDeletedConversations');
+        return await ipcRenderer.invoke('axios:cancelGetDeletedConversations');
     },
     deleteConvos: async (data) => {
         console.log('inside deleteConvos');
 
         return await ipcRenderer.invoke('axios:deleteConvos', data);
         // const result = await ipcRenderer.invoke('axios:deleteConvos', data, url);
+    },
+    cancelDeleteConvos: async () => {
+        return await ipcRenderer.invoke('axios:cancelDeleteConvos');
     },
     checkCommChannel: async (data) => {
         console.log('inside preload checkCommChannel');
@@ -171,6 +181,10 @@ contextBridge.exposeInMainWorld('axios', {
     restoreDeletedConversations: async (data) => {
         console.log('preload.js > restoreDeletedConversations');
         return await ipcRenderer.invoke('axios:restoreDeletedConversations', data);
+    },
+    cancelRestoreDeletedConversations: async () => {
+        console.log('preload.js > cancelRestoreDeletedConversations');
+        return await ipcRenderer.invoke('axios:cancelRestoreDeletedConversations');
     },
     restoreContent: async (data) => {
         console.log('preload.js > restoreContent');

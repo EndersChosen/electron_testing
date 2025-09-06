@@ -262,6 +262,7 @@ async function errorCheck(request) {
         return response;
     } catch (error) {
         console.log('there was an error');
+        console.log(error.message);
         if (error.response?.status) {
             console.error(error.response.status);
         }

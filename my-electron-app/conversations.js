@@ -68,6 +68,7 @@ async function getConversationsGraphQL(data) {
     const token = data.token;
     const subject = data.subject;
     const user = data.user_id;
+    const signal = data.signal;
 
     const query = `
             query getMessages($userID: ID!, $nextPage: String) {
@@ -104,6 +105,7 @@ async function getConversationsGraphQL(data) {
         headers: {
             'Authorization': `Bearer ${token}`
         },
+        signal,
         data: {
             query: query,
             variables: variables
@@ -488,9 +490,7 @@ async function bulkDeleteNew(messages, url, token) {
 // })();
 
 
-module.exports = {
-    getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll, getDeletedConversations, restoreConversation
-};
+
 
 // Fetch deleted conversations for a user with optional deleted_before/after and pagination
 // Enhancements:
@@ -498,7 +498,7 @@ module.exports = {
 //   into smaller segments (monthly first, then binary split) and retry until the entire
 //   range is covered or the window reaches a minimum size.
 async function getDeletedConversations(data) {
-    const { domain, token, user_id } = data;
+    const { domain, token, user_id, signal } = data;
     const deleted_before = data.deleted_before;
     const deleted_after = data.deleted_after;
     if (deleted_after || deleted_before) {
@@ -524,7 +524,8 @@ async function getDeletedConversations(data) {
         const out = [];
         while (url) {
             const response = await axios.get(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
+                signal
             });
             if (Array.isArray(response.data)) out.push(...response.data);
             const next = response.headers && response.headers.link ? pagination.getNextPage(response.headers.link) : false;
@@ -540,6 +541,12 @@ async function getDeletedConversations(data) {
         try {
             return await fetchRange(rangeAfter, rangeBefore);
         } catch (err) {
+            // Respect aborts
+            if (signal && signal.aborted) {
+                const e = new Error('Aborted');
+                e.name = 'AbortError';
+                throw e;
+            }
             // Surface Canvas error message if available (non-504)
             if (!is504(err)) {
                 if (err?.response?.data?.errors) {
@@ -696,3 +703,8 @@ async function restoreConversation({ domain, token, user_id, message_id, convers
         throw e;
     }
 }
+
+
+module.exports = {
+    getConversations, getConversationsGraphQL, bulkDelete, bulkDeleteNew, deleteForAll, getDeletedConversations, restoreConversation
+};

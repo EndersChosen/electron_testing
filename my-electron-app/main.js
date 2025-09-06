@@ -42,6 +42,10 @@ const groupCategories = require('./group_categories');
 let mainWindow;
 let suppressedEmails = [];
 
+// Cancellation flags for comm-channel resets (module-level to avoid scope issues)
+const resetEmailsCancelFlags = new Map(); // key: senderId -> boolean
+const resetPatternCancelFlags = new Map(); // key: senderId -> boolean
+
 const createWindow = () => {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -62,81 +66,96 @@ const createWindow = () => {
 
 app.whenReady().then(() => {
 
+    // Cancellable subject search (per renderer)
+    const getConvosControllers = new Map(); // senderId -> AbortController
     ipcMain.handle('axios:getConvos', async (event, data) => {
         console.log('Inside main:getConvos');
-        // console.log(searchData);
-
-        //const searchQuery = JSON.parse(searchData);
-        // const domain = searchData.domain;
-        // const userID = searchData.user_id;
-        // const apiToken = searchData.token;
-        // const subject = searchData.subject;
-
-        // const inboxMessages = [];
-        // const sentMessages = [];
-        // const totalMessages = [];
-
-        // console.log('The domain ', domain);
-        // console.log('The userID ', userID);
-        // console.log('The apiToken ', apiToken);
-
-        // getting messages in 'inbox'
-
-        // let url = `https://${domain}/api/v1/conversations?as_user_id=${userID}&per_page=100`;
-        // console.log(url);
-
-        //setting up graphql Query for messages
-
-
-        // let query = `query MyQuery {
-        //     legacyNode(type: User, _id: "26") {
-        //         ...on User {
-        //             email
-        //         }
-        //     }
-        // }`
-
-        let sentMessages;
+        const senderId = event.sender.id;
         try {
-            sentMessages = await convos.getConversationsGraphQL(data);
+            if (getConvosControllers.has(senderId)) {
+                try { getConvosControllers.get(senderId).abort('superseded'); } catch { }
+            }
+            const controller = new AbortController();
+            getConvosControllers.set(senderId, controller);
+            const sentMessages = await convos.getConversationsGraphQL({ ...data, signal: controller.signal });
+            if (getConvosControllers.get(senderId) === controller) getConvosControllers.delete(senderId);
             return sentMessages;
         } catch (error) {
-            throw error.message;
+            try {
+                const current = getConvosControllers.get(senderId);
+                if (!current || current.signal.aborted || current === undefined) {
+                    getConvosControllers.delete(senderId);
+                }
+            } catch { }
+            throw error.message || error;
         }
-
-        // const inboxMessages = await convos.getConversations(userID, url, 'inbox', apiToken);
-        // if (!inboxMessages) {
-        //     return false;
-        // }
-        // console.log('Total inbox messages: ', inboxMessages.length)
-
-        // getting messages in 'sent'
-        // const sentMessages = await convos.getConversations(userID, url, 'sent', apiToken);
-
-        // let url = `https://${domain}/api/graphql?as_user_id=${userID}`;
-        // const sentMessages = await convos.getConversationsGraphQL(url, query, variables, apiToken);
-        //console.log('Returned messages: ', sentMessages);
-
-        // console.log('Total sent messages', sentMessages.length);
-
-        // const totalMessages = [...sentMessages];
-        // console.log('Total messages ', totalMessages.length);
-
-
     });
+    ipcMain.handle('axios:cancelGetConvos', async (event) => {
+        try {
+            const senderId = event.sender.id;
+            const controller = getConvosControllers.get(senderId);
+            if (controller) {
+                controller.abort('user_cancelled');
+                getConvosControllers.delete(senderId);
+                return { cancelled: true };
+            }
+            return { cancelled: false };
+        } catch (e) { return { cancelled: false }; }
+    });
+
+    // Cancellable fetch for deleted conversations (per renderer)
+    const getDeletedConvosControllers = new Map(); // key: senderId -> AbortController
 
     ipcMain.handle('axios:getDeletedConversations', async (event, data) => {
         console.log('Inside main:getDeletedConversations');
+        const senderId = event.sender.id;
         try {
-            const results = await convos.getDeletedConversations(data);
+            // Abort any previous fetch for this sender
+            if (getDeletedConvosControllers.has(senderId)) {
+                try { getDeletedConvosControllers.get(senderId).abort('superseded'); } catch { }
+            }
+            const controller = new AbortController();
+            getDeletedConvosControllers.set(senderId, controller);
+            const results = await convos.getDeletedConversations({ ...data, signal: controller.signal });
+            // Clear controller if it still matches
+            if (getDeletedConvosControllers.get(senderId) === controller) getDeletedConvosControllers.delete(senderId);
             return results;
         } catch (error) {
+            // Clear controller if aborted or errored and matches
+            try {
+                const current = getDeletedConvosControllers.get(senderId);
+                if (!current || current.signal.aborted || current === undefined) {
+                    getDeletedConvosControllers.delete(senderId);
+                }
+            } catch { }
             throw error.message || error;
         }
     });
 
+    ipcMain.handle('axios:cancelGetDeletedConversations', async (event) => {
+        try {
+            const senderId = event.sender.id;
+            const controller = getDeletedConvosControllers.get(senderId);
+            if (controller) {
+                controller.abort('user_cancelled');
+                getDeletedConvosControllers.delete(senderId);
+                return { cancelled: true };
+            }
+            return { cancelled: false };
+        } catch (e) {
+            return { cancelled: false };
+        }
+    });
+
+    // Cancellation flags for restoring deleted conversations (per renderer)
+    const restoreConvosCancelFlags = new Map(); // key: senderId -> boolean
+
     ipcMain.handle('axios:restoreDeletedConversations', async (event, data) => {
         console.log('Inside main:restoreDeletedConversations');
+
+        const senderId = event.sender.id;
+        // Reset cancel flag for this invocation
+        restoreConvosCancelFlags.set(senderId, false);
 
         const rows = Array.isArray(data.rows) ? data.rows : [];
         const toInt = (v) => {
@@ -164,7 +183,13 @@ app.whenReady().then(() => {
             })
         }));
 
-        let response = await canvasRateLimitedHandler(requests, { maxConcurrent: 35, baseDelayMs: 100, jitterMs: 150, maxRetries: 3 });
+        let response = await canvasRateLimitedHandler(requests, {
+            maxConcurrent: 35,
+            baseDelayMs: 100,
+            jitterMs: 150,
+            maxRetries: 3,
+            isCancelled: () => restoreConvosCancelFlags.get(senderId) === true
+        });
         if ((response.successful?.length || 0) + (response.failed?.length || 0) === 0 && valid.length > 0) {
             // Fallback probe to surface a concrete error reason
             try {
@@ -182,59 +207,92 @@ app.whenReady().then(() => {
                 response.failed.push({ id: 0, status, reason });
             }
         }
-        return response;
+        // Clean up cancel flag and include cancelled state in response
+        const cancelled = restoreConvosCancelFlags.get(senderId) === true;
+        restoreConvosCancelFlags.delete(senderId);
+        return { ...response, cancelled };
     });
 
+    ipcMain.handle('axios:cancelRestoreDeletedConversations', async (event) => {
+        try {
+            const senderId = event.sender.id;
+            // Lazily create the map if not present in some edge scope
+            // but it's defined above; this is just defensive.
+            if (typeof restoreConvosCancelFlags.set === 'function') {
+                restoreConvosCancelFlags.set(senderId, true);
+                return { cancelled: true };
+            }
+            return { cancelled: false };
+        } catch (e) {
+            return { cancelled: false };
+        }
+    });
+
+    // Cancellable deletion of conversations (per renderer)
+    const deleteConvosCancelFlags = new Map(); // senderId -> boolean
     ipcMain.handle('axios:deleteConvos', async (event, data) => {
         console.log('inside axios:deleteConvos');
+        const senderId = event.sender.id;
+        deleteConvosCancelFlags.set(senderId, false);
 
         let completedRequests = 0;
         const totalRequests = data.messages.length;
-
         const updateProgress = () => {
             completedRequests++;
-            mainWindow.webContents.send('update-progress', {
-                mode: 'determinate',
-                label: 'Deleting conversations',
-                processed: completedRequests,
-                total: totalRequests,
-                value: completedRequests / totalRequests
-            });
-        };
-
-        const request = async (requestData) => {
             try {
-                const response = await convos.deleteForAll(requestData);
-                return response;
-            } catch (error) {
-                throw error;
-            } finally {
-                updateProgress();
-            }
+                mainWindow.webContents.send('update-progress', {
+                    mode: 'determinate',
+                    label: 'Deleting conversations',
+                    processed: completedRequests,
+                    total: totalRequests,
+                    value: totalRequests ? (completedRequests / totalRequests) : 0
+                });
+            } catch { }
         };
 
-        let requests = [];
-        for (let i = 0; i < data.messages.length; i++) {
-            const requestData = {
-                domain: data.domain,
-                token: data.token,
-                message: data.messages[i].id
+        const requests = data.messages.map((msg, i) => ({
+            id: i + 1,
+            requestData: { domain: data.domain, token: data.token, message: msg.id }
+        }));
+
+        const successful = [];
+        const failed = [];
+        const batchSize = 35;
+        const timeDelay = 2000;
+        for (let i = 0; i < requests.length; i += batchSize) {
+            // cancel check before starting a batch
+            if (deleteConvosCancelFlags.get(senderId)) break;
+            const batch = requests.slice(i, i + batchSize);
+            const results = await Promise.allSettled(batch.map(r =>
+                convos.deleteForAll(r.requestData)
+                    .then(res => ({ ok: true, res, id: r.id }))
+                    .catch(err => ({ ok: false, err, id: r.id }))
+                    .finally(() => updateProgress())
+            ));
+            for (const r of results) {
+                const val = r.value || r.reason;
+                if (r.status === 'fulfilled' && val?.ok) {
+                    successful.push({ id: val.id, value: val.res });
+                } else {
+                    const vv = r.status === 'fulfilled' ? r.value : r.reason;
+                    failed.push({ id: vv?.id, reason: (vv?.err?.message || vv?.err || 'Unknown error'), status: vv?.err?.status });
+                }
             }
-            requests.push({ id: i + 1, request: () => request(requestData) });
-        };
+            if (i + batchSize < requests.length && !deleteConvosCancelFlags.get(senderId)) {
+                await new Promise(r => setTimeout(r, timeDelay));
+            }
+        }
 
-        // data.messages.forEach((message) => {
-        //     const requestData = {
-        //         domain: data.domain,
-        //         token: data.token,
-        //         message: message.id
-        //     }
-        //     requests.push(() => request(requestData));
-        // })
-
-        const batchResponse = await batchHandler(requests);
-
-        return batchResponse;
+        const cancelled = deleteConvosCancelFlags.get(senderId) === true;
+        deleteConvosCancelFlags.delete(senderId);
+        return { successful, failed, cancelled };
+    });
+    ipcMain.handle('axios:cancelDeleteConvos', async (event) => {
+        try {
+            const senderId = event.sender.id;
+            deleteConvosCancelFlags.set(senderId, true);
+            return { cancelled: true };
+        } catch { return { cancelled: false }; }
     });
 
     ipcMain.handle('axios:checkCommChannel', async (event, data) => {
@@ -328,7 +386,7 @@ app.whenReady().then(() => {
             requests.push({ id: i + 1, request: () => request(requestData) });
         }
 
-        const batchResponse = await batchHandler(requests);
+        const batchResponse = await batchHandler(requests, { batchSize: 35, timeDelay: 2000, isCancelled });
         return batchResponse;
     });
 
@@ -655,9 +713,7 @@ app.whenReady().then(() => {
         }
     });
 
-    // Cancellation flags for comm-channel resets
-    const resetEmailsCancelFlags = new Map(); // key: senderId -> boolean
-    const resetPatternCancelFlags = new Map(); // key: senderId -> boolean
+    // Cancellation flags defined at module scope
 
     ipcMain.handle('axios:deleteOldAssignments', async (event, data) => {
         console.log('main.js > axios:deleteOldAssignments');
@@ -1737,47 +1793,76 @@ app.whenReady().then(() => {
         resetEmailsCancelFlags.set(senderId, false);
         const isCancelled = () => resetEmailsCancelFlags.get(senderId) === true;
 
-        // Small worker pool with jitter
-        const maxWorkers = Math.max(1, Math.min(12, Number(process.env.RESET_EMAILS_CONCURRENCY) || 10));
-        let index = 0;
+        // Use batchHandler to process resets with retry/backoff and progress updates
+        const updateProgress = () => {
+            processed++;
+            mainWindow.webContents.send('update-progress', {
+                mode: 'determinate',
+                label: 'Resetting communication channels',
+                processed,
+                total,
+                value: total > 0 ? processed / total : 0
+            });
+        };
 
-        const worker = async (id) => {
-            while (index < emails.length && !isCancelled()) {
-                const myIndex = index++;
-                const email = emails[myIndex];
-                // 100-200ms jitter to smooth bursts
-                await waitFunc(100 + Math.floor(Math.random() * 100));
-                try {
-                    // Direct resets (idempotent): bounce then suppression
-                    const bounceRes = await bounceReset({ domain: data.domain, token: data.token, email });
-                    // Give Canvas a moment if it scheduled a clear
-                    if (Number(bounceRes?.reset || 0) > 0) {
-                        await waitFunc(800);
-                        try { await bounceCheck(data.domain, data.token, email); } catch { }
-                    }
-                    const awsRes = await awsReset({ region: data.region, token: data.token, email });
-                    results.successful.push({ id: myIndex + 1, status: 'fulfilled', value: { bounce: bounceRes, suppression: awsRes } });
-                } catch (err) {
-                    results.failed.push({ id: myIndex + 1, reason: err?.message || String(err), email });
-                } finally {
-                    processed++;
-                    mainWindow.webContents.send('update-progress', {
-                        mode: 'determinate',
-                        label: 'Resetting communication channels',
-                        processed,
-                        total,
-                        value: total > 0 ? processed / total : 0
-                    });
+        const request = async (reqData) => {
+            try {
+                console.log('Resetting email:', reqData.email);
+                const bounceRes = await bounceReset({ domain: reqData.domain, token: reqData.token, email: reqData.email });
+                console.log('Bounce reset response:', bounceRes);
+                if (Number(bounceRes?.reset || 0) > 0) {
+                    await waitFunc(800);
+                    try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
                 }
+                console.log('Clearing from Suppression list', reqData.email);
+                const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
+                console.log('AWS reset response:', awsRes);
+                return { bounce: bounceRes, suppression: awsRes };
+            } catch (err) {
+                throw err;
+            } finally {
+                updateProgress();
             }
         };
 
-        const workers = [];
-        for (let w = 0; w < maxWorkers; w++) workers.push(worker(w));
-        await Promise.all(workers);
+        const requests = emails.map((email, idx) => ({
+            id: idx + 1,
+            request: () => request({ domain: data.domain, token: data.token, region: data.region, email })
+        }));
+
+        // Sequential processing (one at a time) — keep for reference
+        // for (let i = 0; i < emails.length; i++) {
+        //     if (isCancelled()) break;
+        //     const email = emails[i];
+        //     try {
+        //         // Direct resets (idempotent): bounce then suppression
+        //         const bounceRes = await bounceReset({ domain: data.domain, token: data.token, email });
+        //         // Give Canvas a moment if it scheduled a clear, then optionally recheck
+        //         if (Number(bounceRes?.reset || 0) > 0) {
+        //             await waitFunc(800);
+        //             try { await bounceCheck(data.domain, data.token, email); } catch { /* ignore */ }
+        //         }
+        //         const awsRes = await awsReset({ region: data.region, token: data.token, email });
+        //         results.successful.push({ id: i + 1, status: 'fulfilled', value: { bounce: bounceRes, suppression: awsRes } });
+        //     } catch (err) {
+        //         results.failed.push({ id: i + 1, reason: err?.message || String(err), email });
+        //     } finally {
+        //         processed++;
+        //         mainWindow.webContents.send('update-progress', {
+        //             mode: 'determinate',
+        //             label: 'Resetting communication channels',
+        //             processed,
+        //             total,
+        //             value: total > 0 ? processed / total : 0
+        //         });
+        //     }
+        // }
+
+        const batchResponse = await batchHandler(requests);
+
         const cancelled = isCancelled();
         resetEmailsCancelFlags.delete(senderId);
-        return { ...results, cancelled };
+        return { ...batchResponse, cancelled };
     });
 
     ipcMain.handle('axios:cancelResetEmails', async (event) => {
@@ -2288,7 +2373,7 @@ app.whenReady().then(() => {
         const result = await dialog.showOpenDialog(mainWindow, {
             properties: ['openFile'],
             filters: [
-                { name: 'CSV or ZIP', extensions: ['csv', 'zip'] },
+                { name: 'CSV/ZIP/JSON', extensions: ['csv', 'zip', 'json'] },
                 { name: 'All Files', extensions: ['*'] }
             ],
             modal: true
@@ -2503,9 +2588,10 @@ async function getFileContentsForEmails() {
     const options = {
         properties: ['openFile'],
         filters: [
+            { name: 'All Files', extensions: ['*'] },
             { name: 'Text Files', extensions: ['txt'] },
-            { name: 'CSV Files', extensions: ['csv'] },
-            { name: 'All Files', extensions: ['*'] }
+            { name: 'CSV Files', extensions: ['csv'] }
+
         ],
         modal: true
     };
@@ -3061,6 +3147,19 @@ ipcMain.handle('axios:cancelResetCommChannelsByPattern', async (event) => {
 });
 
 async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
+    // Support options overload: batchHandler(reqs, { batchSize, timeDelay, isCancelled })
+    let isCancelled = null;
+    if (typeof batchSize === 'object' && batchSize !== null) {
+        const opts = batchSize;
+        isCancelled = typeof opts.isCancelled === 'function' ? opts.isCancelled : null;
+        timeDelay = typeof opts.timeDelay === 'number' ? opts.timeDelay : 2000;
+        batchSize = typeof opts.batchSize === 'number' ? opts.batchSize : 35;
+    } else if (typeof timeDelay === 'object' && timeDelay !== null) {
+        const opts = timeDelay;
+        isCancelled = typeof opts.isCancelled === 'function' ? opts.isCancelled : null;
+        timeDelay = typeof opts.timeDelay === 'number' ? opts.timeDelay : 2000;
+    }
+
     let myRequests = requests
     let successful = [];
     let failed = [];
@@ -3073,12 +3172,14 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
         retryRequests = []; // zeroing out failed requests
         // const results = [];
         for (let i = 0; i < myRequests.length; i += batchSize) {
+            if (isCancelled && isCancelled()) break;
             const batch = myRequests.slice(i, i + batchSize);
             await Promise.allSettled(batch.map(request => request.request()
                 .then(response => successful.push(handleSuccess(response, request)))
                 .catch(error => failed.push(handleError(error, request)))));
             // results.push(...batchResults);
             if (i + batchSize < myRequests.length) {
+                if (isCancelled && isCancelled()) break;
                 await waitFunc(timeDelay);
             }
         }
@@ -3107,6 +3208,7 @@ async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
     ];
 
     do {
+        if (isCancelled && isCancelled()) break;
         if (retryRequests.length > 0) {
             myRequests = requests.filter(request => retryRequests.some(r => r.id === request.id)); // find the request data to process the failed requests
             counter++;
@@ -3129,7 +3231,8 @@ async function canvasRateLimitedHandler(requests, options = {}) {
         maxConcurrent = 35,
         baseDelayMs = 200,
         jitterMs = 200,
-        maxRetries = 3
+        maxRetries = 3,
+        isCancelled = () => false
     } = options;
 
     let successful = [];
@@ -3146,6 +3249,11 @@ async function canvasRateLimitedHandler(requests, options = {}) {
     return await new Promise((resolve) => {
         const startNext = () => {
             while (inflight < maxConcurrent && queue.length > 0) {
+                if (isCancelled && isCancelled()) {
+                    // Stop launching new tasks; resolve when inflight drains
+                    if (inflight === 0) return resolve({ successful, failed, cancelled: true });
+                    return; // let inflight complete, no more dequeues
+                }
                 const item = queue.shift();
                 inflight++;
 
@@ -3175,8 +3283,8 @@ async function canvasRateLimitedHandler(requests, options = {}) {
                         const pct = Math.round((completed / total) * 100);
                         try { mainWindow?.webContents?.send('update-progress', pct); } catch (_) { /* noop */ }
                         inflight--;
-                        if (queue.length > 0) startNext();
-                        else if (inflight === 0) resolve({ successful, failed });
+                        if (queue.length > 0 && !(isCancelled && isCancelled())) startNext();
+                        else if (inflight === 0) resolve({ successful, failed, cancelled: isCancelled && isCancelled() });
                     }
                 };
 

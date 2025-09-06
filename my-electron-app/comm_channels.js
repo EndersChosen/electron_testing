@@ -206,6 +206,7 @@ async function resetEmail(data) {
         // Normalize email to lowercase to avoid case-sensitivity differences across services
         const normalized = { ...data, email: String(data.email || '').trim().toLowerCase() };
         resetStatus.bounce = await bounceReset(normalized);
+        console.log(`Bounce reset response for email ${normalized.email}:`, resetStatus.bounce);
     } catch (error) {
         resetStatus.bounce = error;
     }
@@ -213,32 +214,33 @@ async function resetEmail(data) {
     try {
         const normalized = { ...data, email: String(data.email || '').trim().toLowerCase() };
         resetStatus.suppression = await awsReset(normalized);
+        console.log(`Suppression reset response for email ${normalized.email}:`, resetStatus.suppression);
     } catch (error) {
         throw error;
     }
 
     // Verification: focus on bounce only (Canvas schedules clears); keep requests low
-    const verify = data?.verify !== false; // default true
-    if (verify) {
-        const email = String(data.email || '').trim().toLowerCase();
-        const domain = data.domain;
-        const token = data.token;
+    // const verify = data?.verify !== false; // default true
+    // if (verify) {
+    //     const email = String(data.email || '').trim().toLowerCase();
+    //     const domain = data.domain;
+    //     const token = data.token;
 
-        // Only verify when Canvas reported a scheduled reset attempt
-        if (Number(resetStatus?.bounce?.reset || 0) > 0) {
-            // Single verification pass with one optional retry
-            try {
-                await waitFunc(1500); // give the scheduler a moment
-                let stillBounced = await bounceCheck(domain, token, email);
-                if (stillBounced) {
-                    // One retry attempt then stop
-                    try { await bounceReset({ domain, token, email }); } catch { }
-                    await waitFunc(3000);
-                    await bounceCheck(domain, token, email); // final observation only
-                }
-            } catch { /* non-fatal for verification */ }
-        }
-    }
+    //     // Only verify when Canvas reported a scheduled reset attempt
+    //     if (Number(resetStatus?.bounce?.reset || 0) > 0) {
+    //         // Single verification pass with one optional retry
+    //         try {
+    //             await waitFunc(1500); // give the scheduler a moment
+    //             let stillBounced = await bounceCheck(domain, token, email);
+    //             if (stillBounced) {
+    //                 // One retry attempt then stop
+    //                 try { await bounceReset({ domain, token, email }); } catch { }
+    //                 await waitFunc(3000);
+    //                 await bounceCheck(domain, token, email); // final observation only
+    //             }
+    //         } catch { /* non-fatal for verification */ }
+    //     }
+    // }
 
     return resetStatus;
 }
