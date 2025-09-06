@@ -3062,10 +3062,11 @@ ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
         progressStartIndeterminate('Collecting emails to reset...');
 
         // 1) Gather bounced emails (Canvas) and suppressed emails (AWS) for this pattern
-        const [bouncedRows, suppressedList] = await Promise.all([
-            getBouncedData(base), // array of row arrays; row[4] is the email
-            checkCommDomain(base) // array of email strings
-        ]);
+        // const [bouncedRows, suppressedList] = await Promise.all([
+        //     getBouncedData(base), // array of row arrays; row[4] is the email
+        //     checkCommDomain(base) // array of email strings
+        // ]);
+        const bouncedRows = await getBouncedData(base);
 
         if (isCancelled()) {
             progressDone();
@@ -3081,11 +3082,11 @@ ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
                 if (em) targets.add(String(em).trim().toLowerCase());
             }
         }
-        if (Array.isArray(suppressedList)) {
-            for (const em of suppressedList) {
-                if (em) targets.add(String(em).trim().toLowerCase());
-            }
-        }
+        // if (Array.isArray(suppressedList)) {
+        //     for (const em of suppressedList) {
+        //         if (em) targets.add(String(em).trim().toLowerCase());
+        //     }
+        // }
 
         const emails = Array.from(targets);
         const total = emails.length;
@@ -3096,7 +3097,7 @@ ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
         }
 
         // 3) Reset both bounce and suppression for each unique email with a small worker pool
-        const { bounceReset, awsReset, bounceCheck } = require('./comm_channels');
+        // const { bounceReset, awsReset, bounceCheck } = require('./comm_channels'); 
         let processed = 0;
         progressUpdateDeterminate(0, total);
 
