@@ -396,6 +396,7 @@ contextBridge.exposeInMainWorld('fileUpload', {
     resetCourse: async () => {
         return await ipcRenderer.invoke('fileUpload:resetCourses');
     },
+    // Step 1: pick and parse emails file, return { fileContents, filePath, ext }
     resetEmails: async (data) => {
         return await ipcRenderer.invoke('fileUpload:resetEmails', data);
     },

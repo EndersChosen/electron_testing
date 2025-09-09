@@ -301,6 +301,7 @@ async function patternBounceReset(data) {
 }
 
 async function awsReset(data) {
+    console.log('comm_channels.js > awsReset');
 
     const region = REGION[data.region];
     const url = `${region}${encodeURIComponent(String(data.email || '').trim().toLowerCase())}`;

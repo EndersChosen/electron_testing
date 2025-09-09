@@ -339,6 +339,18 @@ function resetComm(e) {
     const resetBtn = resetCommForm.querySelector('#reset-single-btn');
     const resetPatternBtn = resetCommForm.querySelector('#reset-pattern-btn');
     const uploadBtn = resetCommForm.querySelector('#reset-upload-btn');
+    // New: separate Reset button for file-upload flow
+    let uploadResetBtn = resetCommForm.querySelector('#reset-upload-run-btn');
+    if (!uploadResetBtn) {
+        const btns = resetCommForm.querySelector('#reset-btns');
+        uploadResetBtn = document.createElement('button');
+        uploadResetBtn.id = 'reset-upload-run-btn';
+        uploadResetBtn.className = 'btn btn-danger mt-3 ms-2';
+        uploadResetBtn.textContent = 'Reset';
+        uploadResetBtn.hidden = true;
+        uploadResetBtn.disabled = true;
+        btns.appendChild(uploadResetBtn);
+    }
     const cancelBtn = resetCommForm.querySelector('#reset-cancel-btn');
     const resetSingleInput = resetCommForm.querySelector('#reset-single-input');
     const resetPatternInput = resetCommForm.querySelector('#reset-pattern-input');
@@ -581,11 +593,77 @@ function resetComm(e) {
     });
 
     // listener for uploading emails
+    // State for two-step upload flow
+    let selectedEmailsFile = null; // { fileContents, filePath, ext }
+
+    // Helper: compute how many unique emails are present in the picked file
+    function computeParsedEmailsCount(picked) {
+        if (!picked) return 0;
+        const set = new Set();
+        const maybePush = (val) => {
+            if (!val) return;
+            const s = String(val).trim().toLowerCase();
+            if (s && s.includes('@')) set.add(s);
+        };
+        const fc = picked.fileContents;
+        if (typeof fc === 'string') {
+            // Split on common delimiters: newline or comma
+            fc.split(/[\r\n,]+/).forEach(maybePush);
+        } else if (Array.isArray(fc)) {
+            const keys = ['email', 'email_address', 'communication_channel_path', 'path'];
+            for (const item of fc) {
+                if (typeof item === 'string') {
+                    maybePush(item);
+                } else if (item && typeof item === 'object') {
+                    for (const k of keys) {
+                        if (k in item) {
+                            maybePush(item[k]);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return set.size;
+    }
+
+    // Step 1: Upload (pick a file only)
     uploadBtn.addEventListener('click', async (e) => {
+        console.log('Upload button clicked');
         e.preventDefault();
         e.stopPropagation();
 
         uploadBtn.disabled = true;
+        uploadContainer.innerHTML = '';
+        try {
+            const picked = await window.fileUpload.resetEmails();
+            if (!picked || picked === 'cancelled') {
+                uploadContainer.innerHTML = 'No file selected.';
+                selectedEmailsFile = null;
+                return;
+            }
+            selectedEmailsFile = picked; // { fileContents, filePath, ext }
+            const niceName = picked.filePath ? picked.filePath.split(/[/\\]/).pop() : 'selected file';
+            const parsedCount = computeParsedEmailsCount(picked);
+            uploadContainer.innerHTML = `Selected: <strong>${niceName}</strong> - Parsed <strong>${parsedCount}</strong> email(s). Click "Reset" to begin.`;
+            // Enable the Reset button
+            uploadResetBtn.hidden = false;
+            uploadResetBtn.disabled = false;
+        } catch (err) {
+            selectedEmailsFile = null;
+            errorHandler(err, uploadContainer);
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    });
+
+    // Step 2: Run reset using the selected file
+    uploadResetBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!selectedEmailsFile) return;
+
+        uploadResetBtn.disabled = true;
         cancelBtn.hidden = false;
         cancelBtn.disabled = false;
 
@@ -594,9 +672,11 @@ function resetComm(e) {
         const regionVal = resetCommForm.querySelector('#region').value;
 
         const requestData = {
-            domain: domain,
-            token: token,
-            region: regionVal
+            domain,
+            token,
+            region: regionVal,
+            fileContents: selectedEmailsFile.fileContents,
+            ext: selectedEmailsFile.ext
         };
 
         // Wire determinate progress from main: show percent and counts
@@ -626,30 +706,10 @@ function resetComm(e) {
             uploadContainer.innerHTML = "Working...";
             const response = await window.axios.resetEmails(requestData);
             progresDiv.hidden = true;
-            // const successful = response.successful.map((success) => {
-            //     const newSuccess = {
-            //         status: success.status,
-            //         value: { ...success.value }
-            //     };
-            //     return newSuccess;
-            // });
-            // const failed = response.failed.map((failed) => {
-            //     const newFailed = {
-            //         status: failed.status,
-            //         value: { ...failed.value }
-            //     };
-            //     return newFailed;
-            // });
-            // const successful = { ...response.successful };
-            // const failed = response.failed.map((failed) => failed.id);
-            // const failed = { ...response.failed };
+
             const totalProcessed = response.successful.length + response.failed.length;
             let totalBounceReset = 0;
             let totalAWSReset = 0;
-            // for (let success of successful) {
-            //     totalBounceReset += success.value.bounce.reset;
-            //     totalAWSReset += success.value.suppression.reset;
-            // };
             response.successful.forEach(success => {
                 totalBounceReset += success.value.bounce.reset;
                 totalAWSReset += success.value.suppression.reset;
@@ -657,31 +717,25 @@ function resetComm(e) {
 
             const errorBounce = response.successful.filter((email) => email.value.bounce.error != null);
             const errorSuppressed = response.successful.filter((email) => email.value.suppression.error != null);
-            // { bounce: { status: reset},suppression: {status, reset}}
             uploadContainer.innerHTML = `<p>Total Processed: ${totalProcessed}</p>`;
             uploadContainer.innerHTML += `<h5>Bounce</h5>`;
-            // handle any that errored
             errorBounce.forEach(element => {
                 errorHandler(element.value.bounce.error, uploadContainer);
             });
-
             if (totalBounceReset < 1) {
                 uploadContainer.innerHTML += `No Emails were cleared from the bounce list.`;
             } else {
                 uploadContainer.innerHTML += `Cleared ${totalBounceReset} email(s) from bounce list.`;
             }
-
             uploadContainer.innerHTML += '<h5 class="mt-3">Suppression</h5>'
             errorSuppressed.forEach(email => {
                 errorHandler(email.value.suppression.error, uploadContainer);
             })
-
             if (totalAWSReset < 1) {
                 uploadContainer.innerHTML += 'No Emails were found on suppression list.';
             } else {
                 uploadContainer.innerHTML += `Cleared ${totalAWSReset} emails from suppression list.`;
             }
-
         } catch (error) {
             if (String(error.message || error).toLowerCase().includes('cancelled')) {
                 progresDiv.hidden = true;
@@ -690,14 +744,14 @@ function resetComm(e) {
                 errorHandler(error, uploadContainer);
             }
         } finally {
-            uploadBtn.disabled = false;
+            uploadResetBtn.disabled = false;
             resetProgressBar();
             if (typeof unsubscribeProgress === 'function') {
                 unsubscribeProgress();
             }
             cancelBtn.hidden = true;
             cancelBtn.disabled = true;
-        };
+        }
     });
 
     // Cancel button handler for long-running resets

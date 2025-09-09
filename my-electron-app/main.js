@@ -772,7 +772,7 @@ function registerSisIpcHandlers() {
 
 app.whenReady().then(() => {
 
-    console.log('RESET_EMAILS', process.env.RESET_EMAILS_CONCURRENCY);
+    console.log('BATCH_CONCURRENCY (env):', process.env.BATCH_CONCURRENCY);
     // Cancellable subject search (per renderer)
     const getConvosControllers = new Map(); // senderId -> AbortController
 
@@ -2503,7 +2503,13 @@ app.whenReady().then(() => {
 
     // Reset email communication channels (bounce list and suppression list)
     ipcMain.handle('axios:resetEmails', async (event, data) => {
-        const fileContents = await getFileContentsForEmails();
+        console.log('main.js > axios:resetEmails');
+
+        // Allow renderer to pass in previously selected file contents (two-step flow)
+        let fileContents = data?.fileContents;
+        if (!fileContents) {
+            fileContents = await getFileContentsForEmails();
+        }
         if (fileContents === 'cancelled') throw new Error('Cancelled');
 
         // Parse, normalize and dedupe emails
@@ -2518,6 +2524,9 @@ app.whenReady().then(() => {
         const total = emails.length;
         let processed = 0;
         const results = { successful: [], failed: [] };
+        const idByEmail = new Map();
+        const aws422Emails = new Set();
+        const concurrency = Math.max(1, Number(process.env.BATCH_CONCURRENCY) || 35);
 
         // Initial progress
         mainWindow.webContents.send('update-progress', {
@@ -2559,6 +2568,8 @@ app.whenReady().then(() => {
                 console.log('Clearing from Suppression list', reqData.email);
                 const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
                 console.log('AWS reset response:', awsRes);
+                // Track throttled requests (422) for later retry
+                if (String(awsRes?.status) === '422') aws422Emails.add(reqData.email);
                 return { bounce: bounceRes, suppression: awsRes };
             } catch (err) {
                 throw err;
@@ -2569,8 +2580,10 @@ app.whenReady().then(() => {
 
         const requests = emails.map((email, idx) => ({
             id: idx + 1,
+            email,
             request: () => request({ domain: data.domain, token: data.token, region: data.region, email })
         }));
+        for (const r of requests) idByEmail.set(r.email, r.id);
 
         // Sequential processing (one at a time) — keep for reference
         // for (let i = 0; i < emails.length; i++) {
@@ -2600,18 +2613,65 @@ app.whenReady().then(() => {
         //     }
         // }
 
-        const batchResponse = await batchHandler(requests);
+        const batchResponse = await batchHandler(requests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
 
-        // after all requests have been processed check the very last email to see if it's on the bounce list
+        // Optional post-pass retry for AWS throttled (422) emails
+        let retryInfo = { attempted: 0, succeeded: 0, failed: 0 };
+        if (!isCancelled() && aws422Emails.size > 0) {
+            const toRetry = Array.from(aws422Emails);
+            retryInfo.attempted = toRetry.length;
+            try {
+                mainWindow.webContents.send('update-progress', { label: `Retrying throttled AWS resets (${toRetry.length})...` });
+            } catch { /* ignore */ }
+            await waitFunc(3000);
+
+            const retryRequests = toRetry.map((email) => ({
+                id: idByEmail.get(email) || email,
+                request: async () => {
+                    const awsRes = await awsReset({ region: data.region, token: data.token, email });
+                    return { email, awsRes };
+                }
+            }));
+            const retryRes = await batchHandler(retryRequests, { batchSize: concurrency, timeDelay: 2000, isCancelled });
+            // Merge successes back into the main successful array (update suppression value)
+            for (const s of retryRes.successful) {
+                try {
+                    const id = s.id;
+                    const awsRes = s.value.awsRes;
+                    const idx = batchResponse.successful.findIndex((x) => x.id === id);
+                    if (idx >= 0) {
+                        const old = batchResponse.successful[idx];
+                        batchResponse.successful[idx] = { ...old, value: { ...old.value, suppression: awsRes } };
+                    } else {
+                        // If the first pass failed, upgrade it by pushing a success-like record
+                        batchResponse.successful.push({ id, status: 'fulfilled', value: { bounce: { reset: 0, status: null, error: null }, suppression: awsRes } });
+                    }
+                    retryInfo.succeeded++;
+                } catch { /* ignore */ }
+            }
+            // Record failed retries
+            for (const f of retryRes.failed) {
+                batchResponse.failed.push({ id: f.id, reason: f.reason, status: f.status });
+                retryInfo.failed++;
+            }
+        }
+
+        // After all requests, check the very last email once
         const lastEmail = emails[emails.length - 1];
-        const isBounced = await bounceCheck(data.domain, data.token, lastEmail);
-        if (isBounced) {
-            console.log(`Email ${lastEmail} is still on the bounce list.`);
+        try {
+            const isBounced = await bounceCheck(data.domain, data.token, lastEmail);
+            if (isBounced) {
+                console.log(`Email ${lastEmail} is still on the bounce list.`);
+            } else {
+                console.log(`All emails cleared from the bounce list.`);
+            }
+        } catch (e) {
+            console.warn('bounceCheck final verification failed:', e?.message || String(e));
         }
 
         const cancelled = isCancelled();
         resetEmailsCancelFlags.delete(senderId);
-        return { ...batchResponse, cancelled };
+        return { ...batchResponse, cancelled, aws422Count: aws422Emails.size };
     });
 
     ipcMain.handle('axios:cancelResetEmails', async (event) => {
@@ -3019,9 +3079,27 @@ app.whenReady().then(() => {
     })
 
     ipcMain.handle('fileUpload:resetEmails', async (event, data) => {
-        const fileContent = await getFileContentsForEmails();
+        // Return the selected file details to the renderer without processing
+        const options = {
+            properties: ['openFile'],
+            filters: [
+                { name: 'All Files', extensions: ['*'] }
+            ],
+            modal: true
+        };
+        const result = await dialog.showOpenDialog(mainWindow, options);
+        if (result.canceled) return 'cancelled';
+        const filePath = result.filePaths[0];
+        const fileContents = await fs.promises.readFile(filePath, 'utf8');
+        const ext = path.extname(filePath).toLowerCase();
 
-        return true;
+        // Reuse parseEmailsFromCSV for csv; return normalized text emails
+        let normalized = fileContents;
+        if (ext === '.csv') {
+            try { normalized = parseEmailsFromCSV(fileContents); } catch (e) { throw new Error(`CSV parsing error: ${e.message}`); }
+        }
+
+        return { fileContents: normalized, filePath, ext };
     });
     ipcMain.handle('fileUpload:resetCourses', async (event) => {
         let courses = [];
@@ -3412,10 +3490,7 @@ async function getFileContentsForEmails() {
     const options = {
         properties: ['openFile'],
         filters: [
-            { name: 'All Files', extensions: ['*'] },
-            { name: 'Text Files', extensions: ['txt'] },
-            { name: 'CSV Files', extensions: ['csv'] }
-
+            { name: 'All Files', extensions: ['*'] }
         ],
         modal: true
     };
@@ -3709,7 +3784,7 @@ function progressDone() {
 //         let processed = 0;
 //         progressUpdateDeterminate(0, total);
 
-//         const maxWorkers = Math.max(1, Math.min(10, Number(process.env.RESET_EMAILS_CONCURRENCY) || 8));
+//         const maxWorkers = Math.max(1, Math.min(10, Number(process.env.BATCH_CONCURRENCY) || 8));
 //         let idx = 0;
 //         const results = [];
 
@@ -3753,18 +3828,27 @@ function progressDone() {
 //     }
 // });
 
-async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
+async function batchHandler(requests, batchSize = 35, timeDelay) {
     // Support options overload: batchHandler(reqs, { batchSize, timeDelay, isCancelled })
     let isCancelled = null;
+    const getEnvNumber = (name, fallback) => {
+        const n = Number(process.env[name]);
+        return Number.isFinite(n) && n >= 0 ? n : fallback;
+    };
+    const envTimeDelay = getEnvNumber('TIME_DELAY', 2000);
     if (typeof batchSize === 'object' && batchSize !== null) {
         const opts = batchSize;
         isCancelled = typeof opts.isCancelled === 'function' ? opts.isCancelled : null;
-        timeDelay = typeof opts.timeDelay === 'number' ? opts.timeDelay : 2000;
+        timeDelay = typeof opts.timeDelay === 'number' ? opts.timeDelay : envTimeDelay;
         batchSize = typeof opts.batchSize === 'number' ? opts.batchSize : 35;
     } else if (typeof timeDelay === 'object' && timeDelay !== null) {
         const opts = timeDelay;
         isCancelled = typeof opts.isCancelled === 'function' ? opts.isCancelled : null;
-        timeDelay = typeof opts.timeDelay === 'number' ? opts.timeDelay : 2000;
+        timeDelay = typeof opts.timeDelay === 'number' ? opts.timeDelay : envTimeDelay;
+    }
+
+    if (!Number.isFinite(timeDelay)) {
+        timeDelay = envTimeDelay;
     }
 
     let myRequests = requests
