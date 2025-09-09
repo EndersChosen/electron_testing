@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const path = require('path');
 const fs = require('fs');
 const {
@@ -17,7 +19,18 @@ const assignments = require('./assignments');
 const { getPageViews, createUsers, enrollUser, addUsers, getCommChannels, updateNotifications } = require('./users');
 const { send } = require('process');
 const { deleteRequester, waitFunc } = require('./utilities');
-const { emailCheck, getBouncedData, checkCommDomain, checkUnconfirmedEmails, confirmEmail, resetEmail } = require('./comm_channels');
+const {
+    emailCheck,
+    getBouncedData,
+    checkCommDomain,
+    checkUnconfirmedEmails,
+    confirmEmail,
+    resetEmail,
+    awsReset,
+    bounceReset,
+    bounceCheck,
+    patternBounceReset
+} = require('./comm_channels');
 const {
     restoreContent,
     resetCourse,
@@ -38,6 +51,219 @@ const sections = require('./sections');
 const sisImports = require('./sis_imports');
 const imports = require('./imports');
 const groupCategories = require('./group_categories');
+const { analyzeEmailPattern } = require('./email_pattern_analyzer');
+const os = require('os');
+
+let debugLoggingEnabled = false;
+let logStream = null;
+
+// Simple settings persistence (stored in userData/settings.json)
+const settingsFilePath = (() => {
+    try { return path.join(app.getPath('userData'), 'settings.json'); } catch { return null; }
+})();
+let appSettings = null;
+
+function loadSettings() {
+    if (!settingsFilePath) return {};
+    try {
+        const raw = fs.readFileSync(settingsFilePath, 'utf8');
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+}
+
+function saveSettings(settings) {
+    if (!settingsFilePath) return;
+    try {
+        fs.mkdirSync(path.dirname(settingsFilePath), { recursive: true });
+        fs.writeFileSync(settingsFilePath, JSON.stringify(settings, null, 2), 'utf8');
+    } catch { /* ignore */ }
+}
+
+function getSettings() {
+    if (!appSettings) appSettings = loadSettings();
+    return appSettings;
+}
+
+// DevTools docking behavior
+// - overrideMode: 'right' | 'bottom' | 'undocked' | null (null = remember last/Chromium default)
+// - initApplied: boolean, whether we've applied our initial default once
+function getDevToolsOverrideMode() {
+    const s = getSettings();
+    return s.devToolsOverrideMode ?? null;
+}
+
+function setDevToolsOverrideMode(modeOrNull) {
+    const allowed = new Set([null, 'right', 'bottom', 'undocked']);
+    if (!allowed.has(modeOrNull)) return;
+    const s = getSettings();
+    s.devToolsOverrideMode = modeOrNull;
+    saveSettings(s);
+}
+
+function getDevToolsInitApplied() {
+    const s = getSettings();
+    return !!s.devToolsInitApplied;
+}
+
+function setDevToolsInitApplied(applied) {
+    const s = getSettings();
+    s.devToolsInitApplied = !!applied;
+    saveSettings(s);
+}
+
+// Determine a conventional logs directory (prefer Electron paths, fallback to OS paths)
+function getLogDirectory() {
+    try {
+        if (typeof app.getPath === 'function') {
+            // Prefer Electron's logs dir when available, otherwise userData/logs
+            const logsBase = (() => {
+                try { return app.getPath('logs'); } catch { return null; }
+            })();
+            if (logsBase) return logsBase; // already a logs folder
+            const base = app.getPath('userData');
+            return path.join(base, 'logs');
+        }
+    } catch { /* ignore */ }
+
+    // Fallback by platform
+    const home = os.homedir();
+    switch (process.platform) {
+        case 'win32':
+            return path.join(home, 'AppData', 'Local', (app.getName?.() || 'App'), 'logs');
+        case 'darwin':
+            return path.join(home, 'Library', 'Logs', (app.getName?.() || 'App'));
+        default:
+            return path.join(home, '.local', 'share', (app.getName?.() || 'app'), 'logs');
+    }
+}
+
+function setDebugLogging(enabled) {
+    // Toggle debug file logging
+    if (enabled === debugLoggingEnabled) return; // no-op
+    debugLoggingEnabled = enabled;
+
+    if (enabled) {
+        const dir = getLogDirectory();
+        try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+        const now = new Date();
+        const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
+        const time = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-mm-ss
+        const appName = (app.getName?.() || 'app').replace(/\s+/g, '_');
+        const logFile = path.join(dir, `${appName}-debug-${date}_${time}.log`);
+        logStream = fs.createWriteStream(logFile, { flags: 'w' });
+        logDebug(`Debug logging enabled. Writing to: ${logFile}`);
+        // Mirror console to log when enabled
+        enableConsoleMirroring();
+        // Note IPC/Unhandled errors
+        installErrorHooksOnce();
+    } else {
+        logDebug('Debug logging disabled.');
+        try { logStream?.end(); } catch { /* ignore */ }
+        logStream = null;
+        disableConsoleMirroring();
+    }
+}
+
+function logDebug(message, data = undefined) {
+    if (!debugLoggingEnabled || !logStream) return;
+    const ts = new Date().toISOString();
+    const payload = (data !== undefined) ? ` | data=${safeStringify(data)}` : '';
+    logStream.write(`[${ts}] ${message}${payload}\n`);
+}
+
+function safeStringify(obj) {
+    try { return JSON.stringify(obj); } catch { return String(obj); }
+}
+
+// Console mirroring and IPC tracing
+let originalConsole = null;
+function enableConsoleMirroring() {
+    if (originalConsole) return; // already enabled
+    originalConsole = {
+        log: console.log.bind(console),
+        info: console.info.bind(console),
+        warn: console.warn.bind(console),
+        error: console.error.bind(console)
+    };
+    const forward = (level, args) => {
+        try { originalConsole[level](...args); } catch { /* ignore */ }
+        try { logDebug(`[console.${level}] ${args.map(a => typeof a === 'string' ? a : safeStringify(a)).join(' ')}`); } catch { /* ignore */ }
+    };
+    console.log = (...a) => forward('log', a);
+    console.info = (...a) => forward('info', a);
+    console.warn = (...a) => forward('warn', a);
+    console.error = (...a) => forward('error', a);
+}
+
+function disableConsoleMirroring() {
+    if (!originalConsole) return;
+    console.log = originalConsole.log;
+    console.info = originalConsole.info;
+    console.warn = originalConsole.warn;
+    console.error = originalConsole.error;
+    originalConsole = null;
+}
+
+let ipcPatched = false;
+function installErrorHooksOnce() {
+    if (!ipcPatched) {
+        try {
+            const origHandle = ipcMain.handle.bind(ipcMain);
+            ipcMain.handle = (channel, listener) => {
+                const wrapped = async (event, ...args) => {
+                    if (debugLoggingEnabled) logDebug(`[ipcMain.handle] ${channel} invoked`, { args: redactArgs(args) });
+                    try {
+                        const res = await listener(event, ...args);
+                        if (debugLoggingEnabled) logDebug(`[ipcMain.handle] ${channel} success`);
+                        return res;
+                    } catch (err) {
+                        logDebug(`[ipcMain.handle] ${channel} error`, { message: err?.message, stack: err?.stack });
+                        throw err;
+                    }
+                };
+                return origHandle(channel, wrapped);
+            };
+            const origOn = ipcMain.on.bind(ipcMain);
+            ipcMain.on = (channel, listener) => {
+                const wrapped = (event, ...args) => {
+                    if (debugLoggingEnabled) logDebug(`[ipcMain.on] ${channel} event`, { args: redactArgs(args) });
+                    try { return listener(event, ...args); } catch (err) { logDebug(`[ipcMain.on] ${channel} error`, { message: err?.message, stack: err?.stack }); throw err; }
+                };
+                return origOn(channel, wrapped);
+            };
+            ipcPatched = true;
+        } catch { /* ignore */ }
+    }
+    try { process.on('uncaughtException', (e) => logDebug('[uncaughtException]', { message: e?.message, stack: e?.stack })); } catch { }
+    try { process.on('unhandledRejection', (r) => logDebug('[unhandledRejection]', { reason: safeStringify(r) })); } catch { }
+}
+
+function redactArgs(args) {
+    const redact = (obj) => {
+        if (obj && typeof obj === 'object') {
+            const copy = Array.isArray(obj) ? [] : {};
+            for (const k in obj) {
+                const v = obj[k];
+                if (/token|authorization|auth|password/i.test(k)) copy[k] = '***';
+                else copy[k] = redact(v);
+            }
+            return copy;
+        }
+        return obj;
+    };
+    return redact(args);
+}
+
+// Install hooks early so subsequent ipcMain.handle/on registrations are wrapped
+installErrorHooksOnce();
+
+// Ensure log stream is closed on quit
+app.on('before-quit', () => {
+    try { logStream?.end(); } catch { /* ignore */ }
+    logStream = null;
+});
 
 let mainWindow;
 let suppressedEmails = [];
@@ -62,12 +288,495 @@ const createWindow = () => {
     // Hide DevTools on startup; uncomment to open automatically during development
     // mainWindow.webContents.openDevTools();
     mainWindow.loadFile('index.html');
+
+    // Mirror renderer console messages to log when enabled
+    mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+        if (!debugLoggingEnabled) return;
+        const levels = ['log', 'warn', 'error', 'info'];
+        const lvl = levels[level] || 'log';
+        logDebug(`[renderer.${lvl}] ${message}`, { line, sourceId });
+    });
+
+    // When DevTools closes, blur any currently focused element to avoid unwanted focus jumps
+    mainWindow.webContents.on('devtools-closed', () => {
+        try {
+            mainWindow.webContents.executeJavaScript(
+                'if (document && document.activeElement) { document.activeElement.blur(); }',
+                true
+            );
+        } catch { /* ignore */ }
+        try { mainWindow.webContents.focus(); } catch { /* ignore */ }
+    });
+}
+
+function toggleDevToolsForFocusedWindow() {
+    const win = BrowserWindow.getFocusedWindow() || mainWindow;
+    if (!win) return;
+    const wc = win.webContents;
+    try {
+        if (wc.isDevToolsOpened()) {
+            wc.closeDevTools();
+        } else {
+            const override = getDevToolsOverrideMode();
+            if (override) {
+                wc.openDevTools({ mode: override });
+            } else if (!getDevToolsInitApplied()) {
+                // Apply our one-time default of bottom on first programmatic open
+                wc.openDevTools({ mode: 'bottom' });
+                setDevToolsInitApplied(true);
+            } else {
+                // Let Chromium restore last dock position
+                wc.openDevTools();
+            }
+        }
+    } catch { /* ignore */ }
+}
+
+// Global menu creator
+function createMenu() {
+    const isMac = process.platform === 'darwin';
+
+    const template = [
+        // App menu (macOS only)
+        ...(isMac ? [{
+            label: app.getName(),
+            submenu: [
+                { role: 'about' },
+                { type: 'separator' },
+                { role: 'services' },
+                { type: 'separator' },
+                { role: 'hide' },
+                { role: 'hideOthers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit' }
+            ]
+        }] : []),
+
+        // File menu
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Enable Debug Logging',
+                    type: 'checkbox',
+                    checked: false,
+                    click: (menuItem) => {
+                        setDebugLogging(menuItem.checked);
+                    }
+                },
+                {
+                    label: 'Open Log Folder',
+                    click: () => {
+                        shell.openPath(getLogDirectory());
+                    }
+                },
+                { type: 'separator' },
+                ...(isMac ? [
+                    { role: 'close' }
+                ] : [
+                    { role: 'quit' }
+                ])
+            ]
+        },
+
+        // Edit menu
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                ...(isMac ? [
+                    { role: 'pasteAndMatchStyle' },
+                    { role: 'delete' },
+                    { role: 'selectAll' },
+                    { type: 'separator' },
+                    {
+                        label: 'Speech',
+                        submenu: [
+                            { role: 'startSpeaking' },
+                            { role: 'stopSpeaking' }
+                        ]
+                    }
+                ] : [
+                    { role: 'delete' },
+                    { type: 'separator' },
+                    { role: 'selectAll' }
+                ])
+            ]
+        },
+
+        // View menu
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' },
+                { role: 'forceReload' },
+                {
+                    label: 'Toggle DevTools',
+                    accelerator: process.platform === 'darwin' ? 'CmdOrCtrl+Alt+I' : 'Ctrl+Shift+I',
+                    click: () => toggleDevToolsForFocusedWindow()
+                },
+                {
+                    label: 'Toggle DevTools (F12)',
+                    accelerator: 'F12',
+                    visible: process.platform !== 'darwin',
+                    click: () => toggleDevToolsForFocusedWindow()
+                },
+                { type: 'separator' },
+                {
+                    label: 'DevTools Position',
+                    submenu: [
+                        {
+                            label: 'Remember Last',
+                            type: 'radio',
+                            checked: getDevToolsOverrideMode() === null,
+                            click: () => {
+                                setDevToolsOverrideMode(null);
+                                const win = BrowserWindow.getFocusedWindow() || mainWindow;
+                                if (win && win.webContents.isDevToolsOpened()) {
+                                    try { win.webContents.openDevTools(); } catch { /* ignore */ }
+                                }
+                            }
+                        },
+                        {
+                            label: 'Bottom',
+                            type: 'radio',
+                            checked: getDevToolsOverrideMode() === 'bottom',
+                            click: () => {
+                                setDevToolsOverrideMode('bottom');
+                                const win = BrowserWindow.getFocusedWindow() || mainWindow;
+                                if (win && win.webContents.isDevToolsOpened()) {
+                                    try { win.webContents.openDevTools({ mode: 'bottom' }); } catch { /* ignore */ }
+                                }
+                            }
+                        },
+                        {
+                            label: 'Right',
+                            type: 'radio',
+                            checked: getDevToolsOverrideMode() === 'right',
+                            click: () => {
+                                setDevToolsOverrideMode('right');
+                                const win = BrowserWindow.getFocusedWindow() || mainWindow;
+                                if (win && win.webContents.isDevToolsOpened()) {
+                                    try { win.webContents.openDevTools({ mode: 'right' }); } catch { /* ignore */ }
+                                }
+                            }
+                        },
+                        {
+                            label: 'Undocked',
+                            type: 'radio',
+                            checked: getDevToolsOverrideMode() === 'undocked',
+                            click: () => {
+                                setDevToolsOverrideMode('undocked');
+                                const win = BrowserWindow.getFocusedWindow() || mainWindow;
+                                if (win && win.webContents.isDevToolsOpened()) {
+                                    try { win.webContents.openDevTools({ mode: 'undocked' }); } catch { /* ignore */ }
+                                }
+                            }
+                        }
+                    ]
+                },
+                { type: 'separator' },
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' }
+            ]
+        },
+
+        // Window menu
+        {
+            label: 'Window',
+            submenu: [
+                { role: 'minimize' },
+                { role: 'close' },
+                ...(isMac ? [
+                    { type: 'separator' },
+                    { role: 'front' },
+                    { type: 'separator' },
+                    { role: 'window' }
+                ] : [])
+            ]
+        },
+
+        // Help menu
+        {
+            role: 'help',
+            submenu: [
+                {
+                    label: 'About',
+                    click: async () => {
+                        const { shell } = require('electron');
+                        await shell.openExternal('https://github.com/EndersChosen/CanvaTweaks');
+                    }
+                }
+            ]
+        }
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+}
+
+// Register SIS Import related IPC handlers (called from app.whenReady)
+function registerSisIpcHandlers() {
+    // Defensive de-dupe for dev/hot-reload
+    const sisChannels = [
+        'sis:selectFolder',
+        'sis:previewData',
+        'sis:fetchAuthProviders',
+        'sis:createFile',
+        'sis:createBulkFiles',
+        'sis:createMultiFiles'
+    ];
+    sisChannels.forEach(ch => { try { ipcMain.removeHandler(ch); } catch { } });
+
+    // SIS Import IPC Handlers
+    ipcMain.handle('sis:selectFolder', async () => {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ['openDirectory']
+        });
+        if (result.canceled) return null;
+        return result.filePaths[0];
+    });
+
+    ipcMain.handle('sis:previewData', async (event, fileType, rowCount, emailDomain = '@school.edu', authProviderId = '', allOptions = {}) => {
+        try {
+            let csvContent = '';
+
+            // Extract individual options from the consolidated object
+            const enrollmentOptions = allOptions.enrollmentOptions || {};
+            const userOptions = allOptions.userOptions || {};
+            const accountOptions = allOptions.accountOptions || {};
+            const termOptions = allOptions.termOptions || {};
+            const courseOptions = allOptions.courseOptions || {};
+            const sectionOptions = allOptions.sectionOptions || {};
+            const groupCategoryOptions = allOptions.groupCategoryOptions || {};
+            const groupOptions = allOptions.groupOptions || {};
+            const groupMembershipOptions = allOptions.groupMembershipOptions || {};
+            const adminOptions = allOptions.adminOptions || {};
+            const loginOptions = allOptions.loginOptions || {};
+            const crossListingOptions = allOptions.crossListingOptions || {};
+            const userObserverOptions = allOptions.userObserverOptions || {};
+            const changeSisIdOptions = allOptions.changeSisIdOptions || {};
+            const differentiationTagSetOptions = allOptions.differentiationTagSetOptions || {};
+            const differentiationTagOptions = allOptions.differentiationTagOptions || {};
+            const differentiationTagMembershipOptions = allOptions.differentiationTagMembershipOptions || {};
+
+            switch (fileType) {
+                case 'users':
+                    csvContent = sisImports.generateUsersCSV(rowCount, emailDomain, authProviderId, userOptions);
+                    break;
+                case 'accounts':
+                    csvContent = sisImports.generateAccountsCSV(rowCount, accountOptions);
+                    break;
+                case 'terms':
+                    csvContent = sisImports.generateTermsCSV(rowCount, termOptions);
+                    break;
+                case 'courses':
+                    csvContent = sisImports.generateCoursesCSV(rowCount, courseOptions);
+                    break;
+                case 'sections':
+                    csvContent = sisImports.generateSectionsCSV(rowCount, sectionOptions);
+                    break;
+                case 'enrollments':
+                    csvContent = sisImports.generateEnrollmentsCSV(rowCount, enrollmentOptions);
+                    break;
+                case 'group_categories':
+                    csvContent = sisImports.generateGroupCategoriesCSV(rowCount, groupCategoryOptions);
+                    break;
+                case 'groups':
+                    csvContent = sisImports.generateGroupsCSV(rowCount, groupOptions);
+                    break;
+                case 'group_memberships':
+                    csvContent = sisImports.generateGroupMembershipsCSV(rowCount, groupMembershipOptions);
+                    break;
+                case 'differentiation_tag_sets':
+                    csvContent = sisImports.generateDifferentiationTagSetsCSV(rowCount, differentiationTagSetOptions);
+                    break;
+                case 'differentiation_tags':
+                    csvContent = sisImports.generateDifferentiationTagsCSV(rowCount, differentiationTagOptions);
+                    break;
+                case 'differentiation_tag_membership':
+                    csvContent = sisImports.generateDifferentiationTagMembershipCSV(rowCount, differentiationTagMembershipOptions);
+                    break;
+                case 'xlists':
+                    csvContent = sisImports.generateXlistsCSV(rowCount, crossListingOptions);
+                    break;
+                case 'user_observers':
+                    csvContent = sisImports.generateUserObserversCSV(rowCount, userObserverOptions);
+                    break;
+                case 'logins':
+                    csvContent = sisImports.generateLoginsCSV(rowCount, emailDomain, authProviderId, loginOptions);
+                    break;
+                case 'change_sis_id':
+                    csvContent = sisImports.generateChangeSisIdCSV(rowCount, changeSisIdOptions);
+                    break;
+                case 'admins':
+                    csvContent = sisImports.generateAdminsCSV(rowCount, emailDomain, adminOptions);
+                    break;
+                default:
+                    throw new Error(`Unsupported file type: ${fileType}`);
+            }
+
+            return csvContent;
+        } catch (error) {
+            throw new Error(`Error generating preview: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('sis:fetchAuthProviders', async (event, domain, token, accountId = 1) => {
+        try {
+            const providers = await sisImports.fetchAuthenticationProviders(domain, token, accountId);
+            return providers;
+        } catch (error) {
+            throw new Error(`Error fetching authentication providers: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('sis:createFile', async (event, fileType, rowCount, outputPath, emailDomain = '@school.edu', authProviderId = '', allOptions = {}) => {
+        try {
+            const enrollmentOptions = allOptions.enrollmentOptions || {};
+            const userOptions = allOptions.userOptions || {};
+            const accountOptions = allOptions.accountOptions || {};
+            const termOptions = allOptions.termOptions || {};
+            const courseOptions = allOptions.courseOptions || {};
+            const sectionOptions = allOptions.sectionOptions || {};
+            const groupCategoryOptions = allOptions.groupCategoryOptions || {};
+            const groupOptions = allOptions.groupOptions || {};
+            const groupMembershipOptions = allOptions.groupMembershipOptions || {};
+            const adminOptions = allOptions.adminOptions || {};
+            const loginOptions = allOptions.loginOptions || {};
+            const crossListingOptions = allOptions.crossListingOptions || {};
+            const userObserverOptions = allOptions.userObserverOptions || {};
+            const changeSisIdOptions = allOptions.changeSisIdOptions || {};
+            const differentiationTagSetOptions = allOptions.differentiationTagSetOptions || {};
+            const differentiationTagOptions = allOptions.differentiationTagOptions || {};
+            const differentiationTagMembershipOptions = allOptions.differentiationTagMembershipOptions || {};
+
+            const filePath = await sisImports.createSISImportFile(
+                fileType,
+                rowCount,
+                outputPath,
+                emailDomain,
+                authProviderId,
+                enrollmentOptions,
+                userOptions,
+                accountOptions,
+                termOptions,
+                courseOptions,
+                sectionOptions,
+                groupCategoryOptions,
+                groupOptions,
+                groupMembershipOptions,
+                adminOptions,
+                loginOptions,
+                crossListingOptions,
+                userObserverOptions,
+                changeSisIdOptions,
+                differentiationTagSetOptions,
+                differentiationTagOptions,
+                differentiationTagMembershipOptions
+            );
+            const fileName = path.basename(filePath);
+
+            return { success: true, filePath, fileName };
+        } catch (error) {
+            throw new Error(`Error creating SIS file: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('sis:createBulkFiles', async (event, fileTypes, rowCounts, outputPath, createZip, emailDomain = '@school.edu', authProviderId = '', enrollmentOptions = {}) => {
+        try {
+            const createdFiles = await sisImports.createBulkSISImport(fileTypes, rowCounts, outputPath, emailDomain, authProviderId, enrollmentOptions);
+
+            let zipPath = null;
+            if (createZip && createdFiles.length > 0) {
+                const JSZip = require('jszip');
+                const zip = new JSZip();
+
+                for (const filePath of createdFiles) {
+                    const fileName = path.basename(filePath);
+                    const fileContent = fs.readFileSync(filePath, 'utf8');
+                    zip.file(fileName, fileContent);
+                }
+
+                const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+                zipPath = path.join(outputPath, 'sis_import_package.zip');
+                fs.writeFileSync(zipPath, zipContent);
+            }
+
+            return { success: true, files: createdFiles.map(f => path.basename(f)), zipPath };
+        } catch (error) {
+            throw new Error(`Error creating bulk SIS files: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('sis:createMultiFiles', async (event, fileConfigurations, outputPath) => {
+        try {
+            const createdFiles = [];
+
+            for (const config of fileConfigurations) {
+                const fileName = await sisImports.createSISImportFile(
+                    config.fileType,
+                    config.rowCount,
+                    outputPath,
+                    config.emailDomain,
+                    config.authProviderId,
+                    config.options.enrollmentOptions || {},
+                    config.options.userOptions || {},
+                    config.options.accountOptions || {},
+                    config.options.termOptions || {},
+                    config.options.courseOptions || {},
+                    config.options.sectionOptions || {},
+                    config.options.groupCategoryOptions || {},
+                    config.options.groupOptions || {},
+                    config.options.groupMembershipOptions || {},
+                    config.options.adminOptions || {},
+                    config.options.loginOptions || {},
+                    config.options.crossListingOptions || {},
+                    config.options.userObserverOptions || {},
+                    config.options.changeSisIdOptions || {},
+                    config.options.differentiationTagSetOptions || {},
+                    config.options.differentiationTagOptions || {},
+                    config.options.differentiationTagMembershipOptions || {}
+                );
+                createdFiles.push(fileName);
+            }
+
+            const JSZip = require('jszip');
+            const zip = new JSZip();
+
+            for (const filePath of createdFiles) {
+                const fileName = path.basename(filePath);
+                const fileContent = fs.readFileSync(filePath, 'utf8');
+                zip.file(fileName, fileContent);
+            }
+
+            const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+            const zipPath = path.join(outputPath, 'sis_multi_import_package.zip');
+            fs.writeFileSync(zipPath, zipContent);
+
+            return { success: true, files: createdFiles.map(f => path.basename(f)), zipPath };
+        } catch (error) {
+            throw new Error(`Error creating multi SIS files: ${error.message}`);
+        }
+    });
 }
 
 app.whenReady().then(() => {
 
+    console.log('RESET_EMAILS', process.env.RESET_EMAILS_CONCURRENCY);
     // Cancellable subject search (per renderer)
     const getConvosControllers = new Map(); // senderId -> AbortController
+
+    // Get conversations with GraphQL - cancellable operation with progress tracking
     ipcMain.handle('axios:getConvos', async (event, data) => {
         console.log('Inside main:getConvos');
         const senderId = event.sender.id;
@@ -90,6 +799,8 @@ app.whenReady().then(() => {
             throw error.message || error;
         }
     });
+
+    // Cancelling fetch for conversations (per renderer)
     ipcMain.handle('axios:cancelGetConvos', async (event) => {
         try {
             const senderId = event.sender.id;
@@ -106,8 +817,9 @@ app.whenReady().then(() => {
     // Cancellable fetch for deleted conversations (per renderer)
     const getDeletedConvosControllers = new Map(); // key: senderId -> AbortController
 
+    // Query for deleted conversations
     ipcMain.handle('axios:getDeletedConversations', async (event, data) => {
-        console.log('Inside main:getDeletedConversations');
+        console.log('Inside axios:getDeletedConversations');
         const senderId = event.sender.id;
         try {
             // Abort any previous fetch for this sender
@@ -132,6 +844,7 @@ app.whenReady().then(() => {
         }
     });
 
+    // Cancel getting deleted conversations operation
     ipcMain.handle('axios:cancelGetDeletedConversations', async (event) => {
         try {
             const senderId = event.sender.id;
@@ -150,8 +863,9 @@ app.whenReady().then(() => {
     // Cancellation flags for restoring deleted conversations (per renderer)
     const restoreConvosCancelFlags = new Map(); // key: senderId -> boolean
 
+    // Restore deleted conversations from CSV data with batch processing
     ipcMain.handle('axios:restoreDeletedConversations', async (event, data) => {
-        console.log('Inside main:restoreDeletedConversations');
+        console.log('Inside axios:restoreDeletedConversations');
 
         const senderId = event.sender.id;
         // Reset cancel flag for this invocation
@@ -213,7 +927,9 @@ app.whenReady().then(() => {
         return { ...response, cancelled };
     });
 
+    // Cancelling restoration of deleted conversations (per renderer)
     ipcMain.handle('axios:cancelRestoreDeletedConversations', async (event) => {
+        console.log('Inside axios:cancelRestoreDeletedConversations');
         try {
             const senderId = event.sender.id;
             // Lazily create the map if not present in some edge scope
@@ -230,6 +946,8 @@ app.whenReady().then(() => {
 
     // Cancellable deletion of conversations (per renderer)
     const deleteConvosCancelFlags = new Map(); // senderId -> boolean
+
+    // Deleting conversations (per renderer)
     ipcMain.handle('axios:deleteConvos', async (event, data) => {
         console.log('inside axios:deleteConvos');
         const senderId = event.sender.id;
@@ -287,6 +1005,8 @@ app.whenReady().then(() => {
         deleteConvosCancelFlags.delete(senderId);
         return { successful, failed, cancelled };
     });
+
+    // Cancelling deletion of conversations (per renderer)
     ipcMain.handle('axios:cancelDeleteConvos', async (event) => {
         try {
             const senderId = event.sender.id;
@@ -295,6 +1015,9 @@ app.whenReady().then(() => {
         } catch { return { cancelled: false }; }
     });
 
+    // === COMMUNICATION CHANNELS SECTION ===
+
+    // Checking communication channel (per renderer)
     ipcMain.handle('axios:checkCommChannel', async (event, data) => {
         console.log('inside axios:checkCommChannel');
 
@@ -307,6 +1030,7 @@ app.whenReady().then(() => {
 
     });
 
+    // Checking communication domain (per renderer)
     ipcMain.handle('axios:checkCommDomain', async (event, data) => {
         console.log('inside axios:checkCommDomain');
         suppressedEmails = [];
@@ -339,6 +1063,9 @@ app.whenReady().then(() => {
 
     // Removed duplicate handler for 'axios:resetCommChannelsByPattern' (see single definition near bottom)
 
+    // === ASSIGNMENTS SECTION ===
+
+    // Create assignments (per renderer)
     ipcMain.handle('axios:createAssignments', async (event, data) => {
         console.log('inside axios:createAssignments');
 
@@ -386,10 +1113,15 @@ app.whenReady().then(() => {
             requests.push({ id: i + 1, request: () => request(requestData) });
         }
 
+        // Support cancellation per-sender
+        const senderId = event.sender.id;
+        const createAssignmentsCancelFlags = new Map();
+        const isCancelled = () => createAssignmentsCancelFlags.get(senderId) === true;
         const batchResponse = await batchHandler(requests, { batchSize: 35, timeDelay: 2000, isCancelled });
         return batchResponse;
     });
 
+    // 
     ipcMain.handle('axios:deleteAssignments', async (event, data) => {
         console.log('inside axios:deleteAssignments');
 
@@ -499,6 +1231,8 @@ app.whenReady().then(() => {
         console.log('Finished Deleting Empty Assignment groups.');
         return formattedResponses;
     });
+
+    // === DISCUSSIONS & CONTENT CREATION SECTION ===
 
     // Create Discussions (REST) and Announcements (REST with is_announcement)
     ipcMain.handle('axios:createDiscussions', async (_event, data) => {
@@ -1121,6 +1855,9 @@ app.whenReady().then(() => {
         }
     });
 
+    // === COURSE MANAGEMENT SECTION ===
+
+    // Restore content in courses from deleted state
     ipcMain.handle('axios:restoreContent', async (event, data) => {
         console.log('main.js > axios:restoreContent');
 
@@ -1762,6 +2499,9 @@ app.whenReady().then(() => {
         return reMappedResponse;
     })
 
+    // === EMAIL COMMUNICATION RESET SECTION ===
+
+    // Reset email communication channels (bounce list and suppression list)
     ipcMain.handle('axios:resetEmails', async (event, data) => {
         const fileContents = await getFileContentsForEmails();
         if (fileContents === 'cancelled') throw new Error('Cancelled');
@@ -1772,6 +2512,8 @@ app.whenReady().then(() => {
                 .map((email) => String(email).trim().toLowerCase())
                 .filter((email) => email.includes('@'))
         ));
+        // get email pattern from file content
+        // const emailPattern = analyzeEmailPattern(fileContents);
 
         const total = emails.length;
         let processed = 0;
@@ -1786,7 +2528,7 @@ app.whenReady().then(() => {
             value: total > 0 ? 0 : 0
         });
 
-        const { bounceReset, awsReset, bounceCheck } = require('./comm_channels');
+        // const { bounceReset, awsReset, bounceCheck } = require('./comm_channels');
 
         // Set up per-sender cancellation
         const senderId = event.sender.id;
@@ -1810,10 +2552,10 @@ app.whenReady().then(() => {
                 console.log('Resetting email:', reqData.email);
                 const bounceRes = await bounceReset({ domain: reqData.domain, token: reqData.token, email: reqData.email });
                 console.log('Bounce reset response:', bounceRes);
-                if (Number(bounceRes?.reset || 0) > 0) {
-                    await waitFunc(800);
-                    try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
-                }
+                // if (Number(bounceRes?.reset || 0) > 0) {
+                //     await waitFunc(800);
+                //     try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
+                // }
                 console.log('Clearing from Suppression list', reqData.email);
                 const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
                 console.log('AWS reset response:', awsRes);
@@ -1859,6 +2601,13 @@ app.whenReady().then(() => {
         // }
 
         const batchResponse = await batchHandler(requests);
+
+        // after all requests have been processed check the very last email to see if it's on the bounce list
+        const lastEmail = emails[emails.length - 1];
+        const isBounced = await bounceCheck(data.domain, data.token, lastEmail);
+        if (isBounced) {
+            console.log(`Email ${lastEmail} is still on the bounce list.`);
+        }
 
         const cancelled = isCancelled();
         resetEmailsCancelFlags.delete(senderId);
@@ -2205,6 +2954,9 @@ app.whenReady().then(() => {
         }
     })
 
+    // === FILE UPLOAD & PROCESSING SECTION ===
+
+    // Confirm emails from uploaded file
     ipcMain.handle('fileUpload:confirmEmails', async (event, data) => {
 
         let emails = [];
@@ -2341,6 +3093,18 @@ app.whenReady().then(() => {
                     event.sender.send('context-menu-command', { command: 'paste', text: text })
                 }
             },
+            { type: 'separator' },
+            {
+                label: 'Inspect',
+                click: () => {
+                    // Open DevTools honoring override mode; otherwise let Chromium remember last
+                    const override = getDevToolsOverrideMode();
+                    try {
+                        if (override) event.sender.openDevTools({ mode: override });
+                        else event.sender.openDevTools();
+                    } catch { /* ignore */ }
+                }
+            }
         ]
         const menu = Menu.buildFromTemplate(template)
         menu.popup({ window: BrowserWindow.fromWebContents(event.sender) })
@@ -2409,8 +3173,68 @@ app.whenReady().then(() => {
             throw err;
         }
     });
-    //ipcMain.handle('')
+
+    // Analyze email patterns in CSV files
+    ipcMain.handle('analyzeEmailPattern', async (event, filePath, emailColumnIndex = 4) => {
+        try {
+            console.log('Analyzing email pattern for file:', filePath);
+            const result = analyzeEmailPattern(filePath, emailColumnIndex);
+            return result;
+        } catch (error) {
+            console.error('Error analyzing email pattern:', error);
+            return {
+                success: false,
+                error: error.message,
+                pattern: null,
+                details: null
+            };
+        }
+    });
+
+    // Reset communication channels by pattern - bulk reset bounce/suppression for emails matching a pattern
+    ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
+        console.log('inside axios:resetCommChannelsByPattern');
+
+        const senderId = event.sender.id;
+        resetPatternCancelFlags.set(senderId, false);
+        const isCancelled = () => resetPatternCancelFlags.get(senderId) === true;
+
+        // Normalize pattern once
+        const normalizedPattern = String(data.pattern || '').trim().toLowerCase();
+        const base = { ...data, pattern: normalizedPattern };
+
+        try {
+            progressStartIndeterminate('Collecting and resetting bounced emails...');
+
+            // Use pattern bounce reset function
+            const result = await patternBounceReset(base, isCancelled);
+
+            if (isCancelled()) {
+                progressDone();
+                resetPatternCancelFlags.delete(senderId);
+                return { cancelled: true };
+            }
+
+            progressDone();
+            resetPatternCancelFlags.delete(senderId);
+            return result;
+        } catch (err) {
+            progressDone();
+            resetPatternCancelFlags.delete(senderId);
+            throw err.message || err;
+        }
+    });
+
+    // Cancel reset of communication channels by pattern
+    ipcMain.handle('axios:cancelResetCommChannelsByPattern', async (event) => {
+        const senderId = event.sender.id;
+        resetPatternCancelFlags.set(senderId, true);
+        return { cancelled: true };
+    });
+
     createWindow();
+    createMenu();
+    registerSisIpcHandlers();
 
     // for mac os creates new window when activated
     app.on('activate', () => {
@@ -2791,239 +3615,21 @@ function convertToPageViewsCsv(data) {
     return csvRows;
 }
 
-// SIS Import IPC Handlers
-ipcMain.handle('sis:selectFolder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ['openDirectory']
-    });
-
-    if (result.canceled) {
-        return null;
-    }
-
-    return result.filePaths[0];
-});
-
-ipcMain.handle('sis:previewData', async (event, fileType, rowCount, emailDomain = '@school.edu', authProviderId = '', allOptions = {}) => {
-    try {
-        let csvContent = '';
-
-        // Extract individual options from the consolidated object
-        const enrollmentOptions = allOptions.enrollmentOptions || {};
-        const userOptions = allOptions.userOptions || {};
-        const accountOptions = allOptions.accountOptions || {};
-        const termOptions = allOptions.termOptions || {};
-        const courseOptions = allOptions.courseOptions || {};
-        const sectionOptions = allOptions.sectionOptions || {};
-        const groupCategoryOptions = allOptions.groupCategoryOptions || {};
-        const groupOptions = allOptions.groupOptions || {};
-        const groupMembershipOptions = allOptions.groupMembershipOptions || {};
-        const adminOptions = allOptions.adminOptions || {};
-        const loginOptions = allOptions.loginOptions || {};
-        const crossListingOptions = allOptions.crossListingOptions || {};
-        const userObserverOptions = allOptions.userObserverOptions || {};
-        const changeSisIdOptions = allOptions.changeSisIdOptions || {};
-        const differentiationTagSetOptions = allOptions.differentiationTagSetOptions || {};
-        const differentiationTagOptions = allOptions.differentiationTagOptions || {};
-        const differentiationTagMembershipOptions = allOptions.differentiationTagMembershipOptions || {};
-
-        switch (fileType) {
-            case 'users':
-                csvContent = sisImports.generateUsersCSV(rowCount, emailDomain, authProviderId, userOptions);
-                break;
-            case 'accounts':
-                csvContent = sisImports.generateAccountsCSV(rowCount, accountOptions);
-                break;
-            case 'terms':
-                csvContent = sisImports.generateTermsCSV(rowCount, termOptions);
-                break;
-            case 'courses':
-                csvContent = sisImports.generateCoursesCSV(rowCount, courseOptions);
-                break;
-            case 'sections':
-                csvContent = sisImports.generateSectionsCSV(rowCount, sectionOptions);
-                break;
-            case 'enrollments':
-                csvContent = sisImports.generateEnrollmentsCSV(rowCount, enrollmentOptions);
-                break;
-            case 'group_categories':
-                csvContent = sisImports.generateGroupCategoriesCSV(rowCount, groupCategoryOptions);
-                break;
-            case 'groups':
-                csvContent = sisImports.generateGroupsCSV(rowCount, groupOptions);
-                break;
-            case 'group_memberships':
-                csvContent = sisImports.generateGroupMembershipsCSV(rowCount, groupMembershipOptions);
-                break;
-            case 'differentiation_tag_sets':
-                csvContent = sisImports.generateDifferentiationTagSetsCSV(rowCount, differentiationTagSetOptions);
-                break;
-            case 'differentiation_tags':
-                csvContent = sisImports.generateDifferentiationTagsCSV(rowCount, differentiationTagOptions);
-                break;
-            case 'differentiation_tag_membership':
-                csvContent = sisImports.generateDifferentiationTagMembershipCSV(rowCount, differentiationTagMembershipOptions);
-                break;
-            case 'xlists':
-                csvContent = sisImports.generateXlistsCSV(rowCount, crossListingOptions);
-                break;
-            case 'user_observers':
-                csvContent = sisImports.generateUserObserversCSV(rowCount, userObserverOptions);
-                break;
-            case 'logins':
-                csvContent = sisImports.generateLoginsCSV(rowCount, emailDomain, authProviderId, loginOptions);
-                break;
-            case 'change_sis_id':
-                csvContent = sisImports.generateChangeSisIdCSV(rowCount, changeSisIdOptions);
-                break;
-            case 'admins':
-                csvContent = sisImports.generateAdminsCSV(rowCount, emailDomain, adminOptions);
-                break;
-            default:
-                throw new Error(`Unsupported file type: ${fileType}`);
-        }
-
-        return csvContent;
-    } catch (error) {
-        throw new Error(`Error generating preview: ${error.message}`);
-    }
-});
-
-ipcMain.handle('sis:fetchAuthProviders', async (event, domain, token, accountId = 1) => {
-    try {
-        const providers = await sisImports.fetchAuthenticationProviders(domain, token, accountId);
-        return providers;
-    } catch (error) {
-        throw new Error(`Error fetching authentication providers: ${error.message}`);
-    }
-});
-
-ipcMain.handle('sis:createFile', async (event, fileType, rowCount, outputPath, emailDomain = '@school.edu', authProviderId = '', allOptions = {}) => {
-    try {
-        // Extract individual options from the consolidated object
-        const enrollmentOptions = allOptions.enrollmentOptions || {};
-        const userOptions = allOptions.userOptions || {};
-        const accountOptions = allOptions.accountOptions || {};
-        const termOptions = allOptions.termOptions || {};
-        const courseOptions = allOptions.courseOptions || {};
-        const sectionOptions = allOptions.sectionOptions || {};
-        const groupCategoryOptions = allOptions.groupCategoryOptions || {};
-        const groupOptions = allOptions.groupOptions || {};
-        const groupMembershipOptions = allOptions.groupMembershipOptions || {};
-        const adminOptions = allOptions.adminOptions || {};
-        const loginOptions = allOptions.loginOptions || {};
-        const crossListingOptions = allOptions.crossListingOptions || {};
-        const userObserverOptions = allOptions.userObserverOptions || {};
-        const changeSisIdOptions = allOptions.changeSisIdOptions || {};
-        const differentiationTagSetOptions = allOptions.differentiationTagSetOptions || {};
-        const differentiationTagOptions = allOptions.differentiationTagOptions || {};
-        const differentiationTagMembershipOptions = allOptions.differentiationTagMembershipOptions || {};
-
-        const filePath = await sisImports.createSISImportFile(fileType, rowCount, outputPath, emailDomain, authProviderId, enrollmentOptions, userOptions, accountOptions, termOptions, courseOptions, sectionOptions, groupCategoryOptions, groupOptions, groupMembershipOptions, adminOptions, loginOptions, crossListingOptions, userObserverOptions, changeSisIdOptions, differentiationTagSetOptions, differentiationTagOptions, differentiationTagMembershipOptions);
-        const fileName = path.basename(filePath);
-
-        return {
-            success: true,
-            filePath: filePath,
-            fileName: fileName
-        };
-    } catch (error) {
-        throw new Error(`Error creating SIS file: ${error.message}`);
-    }
-});
-
-ipcMain.handle('sis:createBulkFiles', async (event, fileTypes, rowCounts, outputPath, createZip, emailDomain = '@school.edu', authProviderId = '', enrollmentOptions = {}) => {
-    try {
-        const createdFiles = await sisImports.createBulkSISImport(fileTypes, rowCounts, outputPath, emailDomain, authProviderId, enrollmentOptions);
-
-        let zipPath = null;
-        if (createZip && createdFiles.length > 0) {
-            // Create ZIP file using a simple approach
-            const JSZip = require('jszip');
-            const zip = new JSZip();
-
-            for (const filePath of createdFiles) {
-                const fileName = path.basename(filePath);
-                const fileContent = fs.readFileSync(filePath, 'utf8');
-                zip.file(fileName, fileContent);
-            }
-
-            const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
-            zipPath = path.join(outputPath, 'sis_import_package.zip');
-            fs.writeFileSync(zipPath, zipContent);
-        }
-
-        return {
-            success: true,
-            files: createdFiles.map(file => path.basename(file)),
-            zipPath: zipPath
-        };
-    } catch (error) {
-        throw new Error(`Error creating bulk SIS files: ${error.message}`);
-    }
-});
-
-ipcMain.handle('sis:createMultiFiles', async (event, fileConfigurations, outputPath) => {
-    try {
-        const createdFiles = [];
-
-        // Create each file based on its configuration
-        for (const config of fileConfigurations) {
-            const fileName = await sisImports.createSISImportFile(
-                config.fileType,
-                config.rowCount,
-                outputPath,
-                config.emailDomain,
-                config.authProviderId,
-                config.options.enrollmentOptions || {},
-                config.options.userOptions || {},
-                config.options.accountOptions || {},
-                config.options.termOptions || {},
-                config.options.courseOptions || {},
-                config.options.sectionOptions || {},
-                config.options.groupCategoryOptions || {},
-                config.options.groupOptions || {},
-                config.options.groupMembershipOptions || {},
-                config.options.adminOptions || {},
-                config.options.loginOptions || {},
-                config.options.crossListingOptions || {},
-                config.options.userObserverOptions || {},
-                config.options.changeSisIdOptions || {},
-                config.options.differentiationTagSetOptions || {},
-                config.options.differentiationTagOptions || {},
-                config.options.differentiationTagMembershipOptions || {}
-            );
-            createdFiles.push(fileName);
-        }
-
-        // Create ZIP file
-        const JSZip = require('jszip');
-        const zip = new JSZip();
-
-        for (const filePath of createdFiles) {
-            const fileName = path.basename(filePath);
-            const fileContent = fs.readFileSync(filePath, 'utf8');
-            zip.file(fileName, fileContent);
-        }
-
-        const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
-        const zipPath = path.join(outputPath, 'sis_multi_import_package.zip');
-        fs.writeFileSync(zipPath, zipContent);
-
-        return {
-            success: true,
-            files: createdFiles.map(file => path.basename(file)),
-            zipPath: zipPath
-        };
-    } catch (error) {
-        throw new Error(`Error creating multi SIS files: ${error.message}`);
-    }
-});
 
 // Progress helpers (main process)
+let _lastProgressKey = null;
+function _sendProgress(payload) {
+    try {
+        const key = JSON.stringify(payload);
+        if (key === _lastProgressKey) return; // de-dup consecutive identical messages
+        _lastProgressKey = key;
+        mainWindow.webContents.send('update-progress', payload);
+    } catch { /* ignore */ }
+}
+
 function progressStartIndeterminate(label = 'Working...') {
     if (!mainWindow) return;
-    mainWindow.webContents.send('update-progress', { mode: 'indeterminate', label });
+    _sendProgress({ mode: 'indeterminate', label });
     // Windows taskbar indeterminate
     try { mainWindow.setProgressBar(0.5, { mode: 'indeterminate' }); } catch { }
 }
@@ -3031,121 +3637,121 @@ function progressStartIndeterminate(label = 'Working...') {
 function progressUpdateDeterminate(processed, total) {
     if (!mainWindow) return;
     const value = total > 0 ? processed / total : 0;
-    mainWindow.webContents.send('update-progress', { mode: 'determinate', value, processed, total });
+    _sendProgress({ mode: 'determinate', value, processed, total });
     try { mainWindow.setProgressBar(value, { mode: 'normal' }); } catch { }
 }
 
 function progressTickUnknown(processed, label) {
     if (!mainWindow) return;
-    mainWindow.webContents.send('update-progress', { mode: 'indeterminate', processed, label });
+    _sendProgress({ mode: 'indeterminate', processed, label });
     try { mainWindow.setProgressBar(0.5, { mode: 'indeterminate' }); } catch { }
 }
 
 function progressDone() {
     if (!mainWindow) return;
-    mainWindow.webContents.send('update-progress', { mode: 'done' });
+    _sendProgress({ mode: 'done' });
     try { mainWindow.setProgressBar(-1, { mode: 'none' }); } catch { }
 }
 
 // Example: unknown total flow (fixes undefined completedRequests/totalRequests bug)
-ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
-    console.log('inside axios:resetCommChannelsByPattern');
-    const senderId = event.sender.id;
-    resetPatternCancelFlags.set(senderId, false);
-    const isCancelled = () => resetPatternCancelFlags.get(senderId) === true;
+// ipcMain.handle('axios:resetCommChannelsByPattern', async (event, data) => {
+//     console.log('inside axios:resetCommChannelsByPattern');
+//     const senderId = event.sender.id;
+//     resetPatternCancelFlags.set(senderId, false);
+//     const isCancelled = () => resetPatternCancelFlags.get(senderId) === true;
 
-    // Normalize pattern once
-    const normalizedPattern = String(data.pattern || '').trim().toLowerCase();
-    const base = { ...data, pattern: normalizedPattern };
+//     // Normalize pattern once
+//     const normalizedPattern = String(data.pattern || '').trim().toLowerCase();
+//     const base = { ...data, pattern: normalizedPattern };
 
-    try {
-        progressStartIndeterminate('Collecting emails to reset...');
+//     try {
+//         progressStartIndeterminate('Collecting emails to reset...');
 
-        // 1) Gather bounced emails (Canvas) and suppressed emails (AWS) for this pattern
-        // const [bouncedRows, suppressedList] = await Promise.all([
-        //     getBouncedData(base), // array of row arrays; row[4] is the email
-        //     checkCommDomain(base) // array of email strings
-        // ]);
-        const bouncedRows = await getBouncedData(base);
+//         // 1) Gather bounced emails (Canvas) and suppressed emails (AWS) for this pattern
+//         // const [bouncedRows, suppressedList] = await Promise.all([
+//         //     getBouncedData(base), // array of row arrays; row[4] is the email
+//         //     checkCommDomain(base) // array of email strings
+//         // ]);
 
-        if (isCancelled()) {
-            progressDone();
-            resetPatternCancelFlags.delete(senderId);
-            return [];
-        }
+//         // --- Getting initial bounced rows from pattern
+//         const bouncedRows = await getBouncedData(base);
 
-        // 2) Build a unique set of emails (lowercased)
-        const targets = new Set();
-        if (Array.isArray(bouncedRows)) {
-            for (const row of bouncedRows) {
-                const em = Array.isArray(row) ? row[4] : null;
-                if (em) targets.add(String(em).trim().toLowerCase());
-            }
-        }
-        // if (Array.isArray(suppressedList)) {
-        //     for (const em of suppressedList) {
-        //         if (em) targets.add(String(em).trim().toLowerCase());
-        //     }
-        // }
+//         if (isCancelled()) {
+//             progressDone();
+//             resetPatternCancelFlags.delete(senderId);
+//             return [];
+//         }
 
-        const emails = Array.from(targets);
-        const total = emails.length;
-        if (total === 0) {
-            progressDone();
-            resetPatternCancelFlags.delete(senderId);
-            return [];
-        }
+//         // 2) Build a unique set of emails for aws reset (lowercased)
+//         const targets = new Set();
+//         if (Array.isArray(bouncedRows)) {
+//             for (const row of bouncedRows) {
+//                 const em = Array.isArray(row) ? row[4] : null;
+//                 if (em) targets.add(String(em).trim().toLowerCase());
+//             }
+//         }
+//         if (Array.isArray(suppressedList)) {
+//             for (const em of suppressedList) {
+//                 if (em) targets.add(String(em).trim().toLowerCase());
+//             }
+//         }
 
-        // 3) Reset both bounce and suppression for each unique email with a small worker pool
-        // const { bounceReset, awsReset, bounceCheck } = require('./comm_channels'); 
-        let processed = 0;
-        progressUpdateDeterminate(0, total);
+//         const emails = Array.from(targets);
+//         const total = emails.length;
+//         if (total === 0) {
+//             progressDone();
+//             resetPatternCancelFlags.delete(senderId);
+//             return [];
+//         }
 
-        const maxWorkers = Math.max(1, Math.min(10, Number(process.env.RESET_EMAILS_CONCURRENCY) || 8));
-        let idx = 0;
-        const results = [];
+//         // 3) Reset both bounce and suppression for each unique email with a small worker pool
+//         // const { bounceReset, awsReset, bounceCheck } = require('./comm_channels');
+//         let processed = 0;
+//         progressUpdateDeterminate(0, total);
 
-        const worker = async () => {
-            while (idx < emails.length && !isCancelled()) {
-                const myIdx = idx++;
-                const email = emails[myIdx];
-                try {
-                    await waitFunc(100 + Math.floor(Math.random() * 100));
-                    const bounceRes = await bounceReset({ domain: data.domain, token: data.token, email });
-                    if (Number(bounceRes?.reset || 0) > 0) {
-                        await waitFunc(800);
-                        try { await bounceCheck(data.domain, data.token, email); } catch { }
-                    }
-                    const awsRes = await awsReset({ region: data.region, token: data.token, email });
-                    results.push({ bounce: bounceRes, suppression: awsRes, email });
-                } catch (e) {
-                    // Record failure as a result with error flags (optional)
-                    results.push({ bounce: { reset: 0, error: e?.message || String(e) }, suppression: { reset: 0, error: e?.message || String(e) }, email });
-                } finally {
-                    processed++;
-                    progressUpdateDeterminate(processed, total);
-                }
-            }
-        };
+//         const maxWorkers = Math.max(1, Math.min(10, Number(process.env.RESET_EMAILS_CONCURRENCY) || 8));
+//         let idx = 0;
+//         const results = [];
 
-        const workers = [];
-        for (let w = 0; w < maxWorkers; w++) workers.push(worker());
-        await Promise.all(workers);
-        progressDone();
-        resetPatternCancelFlags.delete(senderId);
-        return results;
-    } catch (err) {
-        progressDone();
-        resetPatternCancelFlags.delete(senderId);
-        throw err.message || err;
-    }
-});
+//         const worker = async () => {
+//             while (idx < emails.length && !isCancelled()) {
+//                 const myIdx = idx++;
+//                 const email = emails[myIdx];
+//                 try {
+//                     // --- Removing bounce reset logic to process by batter in bulk outside the loop
 
-ipcMain.handle('axios:cancelResetCommChannelsByPattern', async (event) => {
-    const senderId = event.sender.id;
-    resetPatternCancelFlags.set(senderId, true);
-    return { cancelled: true };
-});
+//                     // await waitFunc(100 + Math.floor(Math.random() * 100));
+//                     // const bounceRes = await bounceReset({ domain: data.domain, token: data.token, email });
+//                     // if (Number(bounceRes?.reset || 0) > 0) {
+//                     //     await waitFunc(800);
+//                     //     try { await bounceCheck(data.domain, data.token, email); } catch { }
+//                     // }
+//                     const awsRes = await awsReset({ region: data.region, token: data.token, email });
+//                     results.push({ suppression: awsRes, email });
+//                 } catch (e) {
+//                     // Record failure as a result with error flags (optional)
+//                     results.push({ suppression: { reset: 0, error: e?.message || String(e) }, email });
+//                 } finally {
+//                     processed++;
+//                     progressUpdateDeterminate(processed, total);
+//                 }
+//             }
+//         };
+
+//         const workers = [];
+//         for (let w = 0; w < maxWorkers; w++) workers.push(worker());
+//         await Promise.all(workers);
+//         // end of initial processing of pattern reset
+
+//         progressDone();
+//         resetPatternCancelFlags.delete(senderId);
+//         return results;
+//     } catch (err) {
+//         progressDone();
+//         resetPatternCancelFlags.delete(senderId);
+//         throw err.message || err;
+//     }
+// });
 
 async function batchHandler(requests, batchSize = 35, timeDelay = 2000) {
     // Support options overload: batchHandler(reqs, { batchSize, timeDelay, isCancelled })

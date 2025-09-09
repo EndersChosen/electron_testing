@@ -442,6 +442,7 @@ function resetComm(e) {
         resetPatternBtn.disabled = resetPatternInput.value.trim().length < 1;
     })
 
+    // listener for resetting a single email
     resetBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -467,6 +468,11 @@ function resetComm(e) {
             useProgressBarIndeterminate();
             progressInfo.textContent = 'Resetting communication channel...';
 
+            // makes attempt to schedule bounce reset and aws reset
+            // When resetting bounce count canvas creates a job to schedule it
+            // the bounce count isn't cleared until after the job is run
+
+            // makes call to clear aws and schedule bounce reset
             const response = await window.axios.resetCommChannel(requestData);
             // { bounce: { status: reset},suppression: {status, reset}}
             singleContainer.innerHTML = `<h5>Bounce</h5>`;
@@ -494,6 +500,7 @@ function resetComm(e) {
         resetBtn.disabled = false;
     });
 
+    // listener for resetting a pattern
     resetPatternBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -523,6 +530,9 @@ function resetComm(e) {
             window.ProgressUtils.attachGlobalProgressListener({ container: progresDiv });
         }
 
+        // makes attempt to schedule bounce reset and aws reset.
+        // When resetting bounce count canvas creates a job to schedule it
+        // the bounce count isn't cleared until after the job is run
         try {
             const response = await window.axios.resetCommChannelsByPattern(requestData);
             const totalProcessed = Array.isArray(response) ? response.length : 0;
@@ -570,6 +580,7 @@ function resetComm(e) {
         };
     });
 
+    // listener for uploading emails
     uploadBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();

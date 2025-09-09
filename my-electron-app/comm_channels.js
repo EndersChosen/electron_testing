@@ -109,6 +109,7 @@ async function bounceCheck(domain, token, email) {
         }
 
         const response = await errorCheck(request);
+        console.log('bounceCheck response:', response.data);
         return response.data.length > 1;
     } catch (error) {
         throw error;
@@ -271,6 +272,34 @@ async function bounceReset(data) {
     }
 }
 
+// reset bounce count in bulk by pattern
+async function patternBounceReset(data) {
+    const url = `https://${data.domain}/api/v1/accounts/self/bounced_communication_channels/reset?pattern=*${encodeURIComponent(data.pattern)}`;
+    console.log('patternBounceReset URL:', url);
+
+    const axiosConfig = {
+        method: 'post',
+        url: url,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return {
+            reset: response.data.scheduled_reset_approximate_count,
+            status: response.statusText,
+            error: null
+        };
+    } catch (error) {
+        return { reset: null, status: null, error: { status: error.status, message: error.message } };
+    }
+}
+
 async function awsReset(data) {
 
     const region = REGION[data.region];
@@ -372,5 +401,6 @@ module.exports = {
     resetEmail,
     bounceReset,
     awsReset,
-    bounceCheck
+    bounceCheck,
+    patternBounceReset
 }

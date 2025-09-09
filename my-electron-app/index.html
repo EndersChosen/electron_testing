@@ -33,21 +33,19 @@
 <body>
     <header class="fixed-top">
         <div class="container-fluid custom-border-bottom mb-3">
-            <div class="row justify-content-start">
-                <div class="col-auto d-flex align-items-center">
-                    <button id="sidebar-toggle" class="btn btn-outline-secondary mt-2 mb-3" type="button"
-                        aria-pressed="false" title="Hide menu" aria-label="Toggle menu">«</button>
-                </div>
-                <div class="col">
+            <div class="row justify-content-start g-2">
+                <div class="col-12 col-lg">
                     <div class="input-group flex-nowrap mt-2 mb-3">
+                        <button id="sidebar-toggle" class="btn btn-outline-secondary" type="button" aria-pressed="false"
+                            title="Hide menu" aria-label="Toggle menu">«</button>
                         <span class="input-group-text">https://</span>
-                        <div class="form-floating ">
+                        <div class="form-floating flex-grow-1">
                             <input type="text" class="form-control" placeholder="doman" id="domain" value="" />
                             <label for="domain">Canvas Domain</label>
                         </div>
                     </div>
                 </div>
-                <div class="col">
+                <div class="col-12 col-lg">
                     <div class="form-floating mt-2 mb-3">
                         <input type=" text" class="form-control" placeholder="Token" id="token" value="">
                         <label for="token">Token</label>
