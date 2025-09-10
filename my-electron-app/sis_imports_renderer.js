@@ -340,6 +340,13 @@ async function createSingleSISFile(e) {
                 options[optionKey] = fieldValue;
             });
 
+            // For courses: if account_id not explicitly provided, force blank instead of random generation
+            // (Random generation normally occurs when the generator sees the key absent. We send empty string to override.)
+            if (fileType === 'courses' && !('account_id' in selectedFields)) {
+                // Match the auto-mapped key name that would have been created for account_id
+                options.specificAccountId = '';
+            }
+
             // Special mapping for change_sis_id generator options
             let changeSisIdOptions = {};
             if (fileType === 'change_sis_id') {

@@ -156,8 +156,8 @@ function generateCoursesCSV(rowCount, courseOptions = {}) {
         const longName = courseOptions.specificLongName || `${subject} ${courseNumber}: Introduction to ${subject}`;
 
         // Use specific values or generate defaults
-        const accountId = courseOptions.specificAccountId || generateRandomId('A', 4);
-        const termId = courseOptions.specificTermId || generateRandomId('T', 4);
+        const accountId = courseOptions.specificAccountId || '';
+        const termId = courseOptions.specificTermId || ''
         const status = courseOptions.specificStatus || 'active';
         const integrationId = courseOptions.specificIntegrationId || '';
         const startDate = courseOptions.specificStartDate || '';

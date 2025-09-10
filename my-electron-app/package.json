@@ -1,6 +1,6 @@
 {
   "name": "canvascripter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Provides a UI for some common support Scripts.",
   "main": "main.js",
   "scripts": {
@@ -11,7 +11,10 @@
     "make": "electron-forge make",
     "build": "electron-builder",
     "audit": "npm audit --audit-level=moderate",
-    "audit:prod": "npm audit --omit=dev --audit-level=moderate"
+    "audit:prod": "npm audit --omit=dev --audit-level=moderate",
+    "update:manifest-version": "node scripts/update-manifest-version.js --manifests ../../CanvaTweaks/manifest.json",
+    "bump": "node scripts/update-manifest-version.js --bump --manifests ../../CanvaTweaks/manifest.json",
+    "watch:version": "node scripts/update-manifest-version.js --watch --manifests ../../CanvaTweaks/manifest.json"
   },
   "build": {
     "appId": "com.canvatools.canvascripter",
@@ -56,7 +59,8 @@
     "@electron-forge/maker-zip": "^6.4.2",
     "@electron-forge/plugin-auto-unpack-natives": "^6.4.2",
     "electron": "^35.2.1",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "chokidar": "^3.6.0"
   },
   "dependencies": {
     "axios": "^1.4.0",
