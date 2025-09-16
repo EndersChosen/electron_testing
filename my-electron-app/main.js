@@ -27,6 +27,7 @@ const {
     confirmEmail,
     resetEmail,
     awsReset,
+    bulkAWSReset,
     bounceReset,
     bounceCheck,
     patternBounceReset
@@ -56,6 +57,63 @@ const os = require('os');
 
 let debugLoggingEnabled = false;
 let logStream = null;
+
+// === Local helpers (CSV + text normalization) ===
+// NOTE: These were previously only in a test file (test_csv_parse.js). They are
+// required at runtime by the fileUpload:resetEmails handler.
+function parseCSVRow(row) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < row.length; i++) {
+        const char = row[i];
+        if (char === '"') {
+            if (inQuotes && row[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current);
+    return result;
+}
+
+function parseEmailsFromCSV(csvContent) {
+    const lines = csvContent.split(/\r?\n/);
+    if (lines.length === 0) return [];
+    const headers = parseCSVRow(lines[0]);
+    const emailColumnNames = ['path', 'email', 'email_address', 'communication_channel_path'];
+    let emailColumnIndex = -1;
+    for (let i = 0; i < headers.length; i++) {
+        const headerLower = headers[i].toLowerCase().trim();
+        if (emailColumnNames.includes(headerLower)) { emailColumnIndex = i; break; }
+    }
+    if (emailColumnIndex === -1) {
+        throw new Error('Could not find email column in CSV. Expected one of: path, email, email_address, communication_channel_path');
+    }
+    const emails = [];
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const row = parseCSVRow(line);
+        const value = row[emailColumnIndex];
+        if (value && value.includes('@')) emails.push(value.trim());
+    }
+    return emails;
+}
+
+function removeBlanks(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(v => (v == null ? '' : String(v).trim()))
+        .filter(v => v.length > 0);
+}
 
 // Simple settings persistence (stored in userData/settings.json)
 const settingsFilePath = (() => {
@@ -1936,6 +1994,61 @@ app.whenReady().then(() => {
         return batchResponse;
     });
 
+    // Helpers: create users and enroll them (placed before handler for visibility)
+    async function addUsersToCanvas(usersToEnroll) {
+        const domain = usersToEnroll.domain;
+        const token = usersToEnroll.token;
+        const students = Array.isArray(usersToEnroll.students) ? usersToEnroll.students : [];
+        const teachers = Array.isArray(usersToEnroll.teachers) ? usersToEnroll.teachers : [];
+
+        const requests = [];
+        let id = 1;
+
+        const request = async (payload) => {
+            try {
+                return await addUsers(payload); // returns created user id
+            } catch (error) {
+                throw error;
+            }
+        };
+
+        for (const u of students) {
+            const payload = { domain, token, user: u };
+            requests.push({ id: id++, request: () => request(payload) });
+        }
+        for (const u of teachers) {
+            const payload = { domain, token, user: u };
+            requests.push({ id: id++, request: () => request(payload) });
+        }
+
+        return await batchHandler(requests);
+    }
+
+    async function enrollUsers(usersToEnroll, userIDs) {
+        const domain = usersToEnroll.domain;
+        const token = usersToEnroll.token;
+        const course_id = usersToEnroll.course_id;
+        const studentCount = Array.isArray(usersToEnroll.students) ? usersToEnroll.students.length : 0;
+
+        const requests = [];
+        for (let i = 0; i < userIDs.length; i++) {
+            const user_id = userIDs[i];
+            const type = i < studentCount ? 'StudentEnrollment' : 'TeacherEnrollment';
+            const payload = { domain, token, course_id, user_id, type };
+            const id = i + 1;
+            const req = async () => {
+                try {
+                    return await enrollUser(payload);
+                } catch (error) {
+                    throw error;
+                }
+            };
+            requests.push({ id, request: req });
+        }
+
+        return await batchHandler(requests);
+    }
+
     ipcMain.handle('axios:createSupportCourse', async (event, data) => {
         console.log("Inside axios:createSupportCourse");
         // 1. Create the course
@@ -1950,6 +2063,9 @@ app.whenReady().then(() => {
             console.log('Finished creating course. Checking options....');
             // Update label after creation
             mainWindow.webContents.send('update-progress', { label: 'Course created. Processing options...' });
+            // Count base course creation as first completed unit toward overall progress
+            // (Do this after counts are built so baseCourse appears in total units.)
+            // We defer building counts until after course creation; adjust logic below if moved.
         } catch (error) {
             throw `${error.message}`;
         }
@@ -1967,12 +2083,28 @@ app.whenReady().then(() => {
             discussions: data.course.addDiscussions?.state ? toInt(data.course.addDiscussions.number) : 0,
             pages: data.course.addPages?.state ? toInt(data.course.addPages.number) : 0,
             modules: data.course.addModules?.state ? toInt(data.course.addModules.number) : 0,
-            sections: data.course.addSections?.state ? toInt(data.course.addSections.number) : 0
+            sections: data.course.addSections?.state ? toInt(data.course.addSections.number) : 0,
+            baseCourse: 1
         };
+        // If classic quizzes will include questions, account for each question as a distinct unit so 100% only shows after questions are created.
+        if (counts.classicQuizzes > 0 && data.course.addCQ?.addQuestions) {
+            // Currently we add 1 question per selected type per quiz.
+            const questionTypesCount = Array.isArray(data.course.addCQ?.questionTypes) ? data.course.addCQ.questionTypes.length : 0;
+            if (questionTypesCount > 0) {
+                counts.classicQuizQuestions = counts.classicQuizzes * questionTypesCount;
+            }
+        }
+        // New Quizzes question items (1 item per selected type per quiz)
+        if (counts.newQuizzes > 0 && data.course.newQuizQuestions?.addQuestions) {
+            const nqTypesCount = Array.isArray(data.course.newQuizQuestions?.questionTypes) ? data.course.newQuizQuestions.questionTypes.length : 0;
+            if (nqTypesCount > 0) {
+                counts.newQuizItems = counts.newQuizzes * nqTypesCount;
+            }
+        }
         const totalOverallUnits = Object.values(counts).reduce((a, b) => a + b, 0);
-        let processedOverallUnits = 0;
+        let processedOverallUnits = 0; // we'll increment after each completed unit including the base course
 
-        const sendOverall = (label, processedSection, totalSection) => {
+        function sendOverall(label, processedSection, totalSection) {
             const percent = totalOverallUnits > 0 ? (processedOverallUnits / totalOverallUnits) * 100 : 0;
             mainWindow.webContents.send('update-progress', {
                 mode: 'determinate',
@@ -1981,7 +2113,10 @@ app.whenReady().then(() => {
                 percent,
                 label: label ?? (totalSection > 0 ? `Processing (${processedSection}/${totalSection})...` : 'Processing...')
             });
-        };
+        }
+        // Immediately record the base course creation as done
+        processedOverallUnits++;
+        sendOverall('Course created. Processing options...');
 
         // check other options 
         try {
@@ -1989,62 +2124,68 @@ app.whenReady().then(() => {
                 console.log('Enabling blueprint...');
                 mainWindow.webContents.send('update-progress', { label: 'Enabling blueprint...' });
                 await enableBlueprint(data);
+                mainWindow.webContents.send('update-progress', { label: 'Enabling blueprint....done' });
+
                 const associatedCourses = data.course.blueprint.associated_courses;
 
-                // loop through and create basic courses to be associated to the blueprint
-                const requests = [];
-                for (let i = 0; i < associatedCourses; i++) {
-                    const courseData = {
-                        ...data,
-                        course: { ...data.course }
-                    };
-                    courseData.course.name = `${data.course.name} - AC ${1 + i}`;
+                if (associatedCourses > 0) {
+                    // loop through and create basic courses to be associated to the blueprint
+                    const requests = [];
+                    for (let i = 0; i < associatedCourses; i++) {
+                        const courseData = {
+                            ...data,
+                            course: { ...data.course }
+                        };
+                        courseData.course.name = `${data.course.name} - AC ${1 + i}`;
 
-                    const request = async (courseData) => {
+                        const request = async (courseData) => {
+                            try {
+                                return await createSupportCourse(courseData);
+                            } catch (error) {
+                                throw error;
+                            }
+                        };
+                        requests.push({ id: i + 1, request: () => request(courseData) });
+                    }
+
+                    // create the courses to be used to associate
+                    console.log('Creating any associated courses...');
+                    mainWindow.webContents.send('update-progress', { label: `Creating ${associatedCourses} associated courses...` });
+                    // Track progress while creating associated courses
+                    let completedRequestsAC = 0;
+                    const totalRequestsAC = associatedCourses;
+                    let processedAC = 0;
+                    const requestWithProgress = (fn) => async () => {
                         try {
-                            return await createSupportCourse(courseData);
-                        } catch (error) {
-                            throw error;
+                            return await fn();
+                        } finally {
+                            completedRequestsAC++;
+                            processedAC++;
+                            processedOverallUnits++;
+                            sendOverall(`Creating associated courses (${processedAC}/${totalRequestsAC})...`, processedAC, totalRequestsAC);
                         }
                     };
-                    requests.push({ id: i + 1, request: () => request(courseData) });
+                    const progressWrapped = requests.map((r) => ({ id: r.id, request: requestWithProgress(r.request) }));
+                    const newCourses = await batchHandler(progressWrapped);
+                    const newCourseIDS = newCourses.successful.map(course => course.value.id);
+                    console.log('Finished creating associated courses.')
+                    mainWindow.webContents.send('update-progress', { label: `Creating ${associatedCourses} associated courses....done` });
+
+                    const acCourseData = {
+                        domain: data.domain,
+                        token: data.token,
+                        bpCourseID: data.course_id,
+                        associated_course_ids: newCourseIDS
+                    };
+
+                    console.log('Linking associated courses to blueprint...')
+                    mainWindow.webContents.send('update-progress', { label: 'Associating courses to blueprint and syncing...' });
+                    const associateRequest = await associateCourses(acCourseData); // associate the courses to the BP
+                    // await waitFunc(2000);
+                    const migrationRequest = await syncBPCourses(acCourseData);
+                    console.log('Finished associating courses.');
+                    mainWindow.webContents.send('update-progress', { label: 'Associating courses to blueprint and syncing....done' });
                 }
-
-                // create the courses to be used to associate
-                console.log('Creating any associated courses...');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${associatedCourses} associated course(s)...` });
-                // Track progress while creating associated courses
-                let completedRequestsAC = 0;
-                const totalRequestsAC = associatedCourses;
-                let processedAC = 0;
-                const requestWithProgress = (fn) => async () => {
-                    try {
-                        return await fn();
-                    } finally {
-                        completedRequestsAC++;
-                        processedAC++;
-                        processedOverallUnits++;
-                        sendOverall(`Creating associated courses (${processedAC}/${totalRequestsAC})...`, processedAC, totalRequestsAC);
-                    }
-                };
-                const progressWrapped = requests.map((r) => ({ id: r.id, request: requestWithProgress(r.request) }));
-                const newCourses = await batchHandler(progressWrapped);
-                const newCourseIDS = newCourses.successful.map(course => course.value.id);
-                console.log('Finished creating associated courses.')
-
-                const acCourseData = {
-                    domain: data.domain,
-                    token: data.token,
-                    bpCourseID: data.course_id,
-                    associated_course_ids: newCourseIDS
-                };
-
-                console.log('Linking associated courses to blueprint...')
-                mainWindow.webContents.send('update-progress', { label: 'Associating courses to blueprint and syncing...' });
-                const associateRequest = await associateCourses(acCourseData); // associate the courses to the BP
-                // await waitFunc(2000);
-                const migrationRequest = await syncBPCourses(acCourseData);
-                console.log('Finished associating courses.');
             }
 
             if (data.course.addUsers.state) { // do we need to add users
@@ -2060,24 +2201,31 @@ app.whenReady().then(() => {
                 usersToEnroll.students = createUsers(data.course.addUsers.students, data.email);
                 usersToEnroll.teachers = createUsers(data.course.addUsers.teachers, data.email);
 
+                const totalStudents = data.course.addUsers.students || 0;
+                const totalTeachers = data.course.addUsers.teachers || 0;
+                const totalNewUsers = totalStudents + totalTeachers;
+
                 // add users to Canvas
                 console.log('Adding users to Canvas')
-                mainWindow.webContents.send('update-progress', { label: 'Creating users in Canvas...' });
+                mainWindow.webContents.send('update-progress', { label: `Creating ${totalNewUsers} users (${totalStudents} students, ${totalTeachers} teachers)...` });
                 const userResponse = await addUsersToCanvas(usersToEnroll);
                 const userIDs = userResponse.successful.map(user => user.value); // store the successfully created user IDs
                 console.log('Finished adding users to Canvas.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${totalNewUsers} users....done` });
 
                 // enroll users to course
                 console.log('Enrolling users to course.');
-                mainWindow.webContents.send('update-progress', { label: 'Enrolling users to course...' });
+                mainWindow.webContents.send('update-progress', { label: `Enrolling ${totalNewUsers} users...` });
                 const enrollResponse = await enrollUsers(usersToEnroll, userIDs);
                 totalUsers = enrollResponse.successful.length;
                 console.log('Finished enrolling users in the course.');
+                mainWindow.webContents.send('update-progress', { label: `Enrolling ${totalNewUsers} users....done` });
             }
 
             if (data.course.addAssignments.state) {     // do we need to add assignments
                 console.log('creating assignments....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addAssignments.number} assignment(s)...` });
+                const assignmentCount = data.course.addAssignments.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${assignmentCount} assignments...` });
 
                 const request = async (requestData) => {
                     try {
@@ -2116,12 +2264,14 @@ app.whenReady().then(() => {
 
                 const assignmentResponses = await batchHandler(requests);
                 console.log('finished creating assignments.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${assignmentCount} assignments....done` });
             }
 
             // Create Classic Quizzes if requested
             if (data.course.addCQ.state && data.course.addCQ.number > 0) {
                 console.log('creating classic quizzes....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addCQ.number} classic quiz(zes)...` });
+                const cqCount = data.course.addCQ.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${cqCount} classic quizzes...` });
                 try {
                     await createClassicQuizzes({
                         domain: data.domain,
@@ -2129,9 +2279,21 @@ app.whenReady().then(() => {
                         course_id: data.course_id,
                         quiz_type: 'assignment',
                         publish: !!data.course?.contentPublish?.classicQuizzes,
-                        num_quizzes: data.course.addCQ.number
+                        num_quizzes: data.course.addCQ.number,
+                        addQuestions: data.course.addCQ.addQuestions,
+                        questionTypes: data.course.addCQ.questionTypes || [],
+                        onQuizCreated: () => {
+                            processedOverallUnits++;
+                            sendOverall(`Creating classic quizzes (${processedOverallUnits}/${totalOverallUnits})...`);
+                        },
+                        onQuestionCreated: () => {
+                            // Each created question is another unit
+                            processedOverallUnits++;
+                            sendOverall('Adding quiz questions...');
+                        }
                     });
                     console.log('finished creating classic quizzes.');
+                    mainWindow.webContents.send('update-progress', { label: `Creating ${cqCount} classic quizzes....done` });
                 } catch (error) {
                     throw error;
                 }
@@ -2140,7 +2302,8 @@ app.whenReady().then(() => {
             // Create New Quizzes if requested
             if (data.course.addNQ.state && data.course.addNQ.number > 0) {
                 console.log('creating new quizzes....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addNQ.number} new quiz(zes)...` });
+                const nqCount = data.course.addNQ.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${nqCount} new quizzes...` });
                 const totalRequests = data.course.addNQ.number;
                 let processedNQ = 0;
                 const updateProgress = () => {
@@ -2172,14 +2335,49 @@ app.whenReady().then(() => {
                     requests.push({ id: i + 1, request: () => request(requestData) });
                 }
 
-                await batchHandler(requests);
+                const nqBatch = await batchHandler(requests);
                 console.log('finished creating new quizzes.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${nqCount} new quizzes....done` });
+
+                // Add question items if requested
+                if (data.course.newQuizQuestions?.addQuestions && Array.isArray(data.course.newQuizQuestions.questionTypes) && data.course.newQuizQuestions.questionTypes.length > 0) {
+                    const types = data.course.newQuizQuestions.questionTypes;
+                    // Single log entry at start
+                    mainWindow.webContents.send('update-progress', { label: 'Adding new quiz items...' });
+                    let sentInterim = false; // prevent multiple identical interim labels
+                    for (const quizRes of nqBatch.successful) {
+                        const quizId = quizRes.value?.id || quizRes.value?._id;
+                        if (!quizId) continue;
+                        try {
+                            await quizzes_nq.addItemsToNewQuiz({
+                                domain: data.domain,
+                                token: data.token,
+                                course_id: data.course_id,
+                                quiz_id: quizId,
+                                questionTypes: types,
+                                onQuestionCreated: () => {
+                                    processedOverallUnits++;
+                                    // Only update percent; avoid spamming label. Renderer uses percent for bar.
+                                    if (!sentInterim) {
+                                        sendOverall('Adding new quiz items...');
+                                        sentInterim = true; // first callback sets label; subsequent will only change percent via same label (dedup logic upstream)
+                                    } else {
+                                        sendOverall();
+                                    }
+                                }
+                            });
+                        } catch (e) { /* ignore per quiz */ }
+                    }
+                    // Final done log
+                    mainWindow.webContents.send('update-progress', { label: 'Adding new quiz items....done' });
+                }
             }
 
             // Create Discussions if requested
             if (data.course.addDiscussions.state && data.course.addDiscussions.number > 0) {
                 console.log('creating discussions....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addDiscussions.number} discussion(s)...` });
+                const discussionCount = data.course.addDiscussions.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${discussionCount} discussions...` });
                 const totalRequests = data.course.addDiscussions.number;
                 let processedDiscussions = 0;
                 const updateProgress = () => {
@@ -2210,12 +2408,14 @@ app.whenReady().then(() => {
                 }
                 await batchHandler(requests);
                 console.log('finished creating discussions.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${discussionCount} discussions....done` });
             }
 
             // Create Pages if requested
             if (data.course.addPages.state && data.course.addPages.number > 0) {
                 console.log('creating pages....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addPages.number} page(s)...` });
+                const pageCount = data.course.addPages.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${pageCount} pages...` });
                 const totalRequests = data.course.addPages.number;
                 let processedPages = 0;
                 const updateProgress = () => {
@@ -2246,12 +2446,14 @@ app.whenReady().then(() => {
                 }
                 await batchHandler(requests);
                 console.log('finished creating pages.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${pageCount} pages....done` });
             }
 
             // Create Modules if requested
             if (data.course.addModules.state && data.course.addModules.number > 0) {
                 console.log('creating modules....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addModules.number} module(s)...` });
+                const moduleCount = data.course.addModules.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${moduleCount} modules...` });
                 const totalRequests = data.course.addModules.number;
                 let processedMods = 0;
                 const updateProgress = () => {
@@ -2280,12 +2482,14 @@ app.whenReady().then(() => {
                 }
                 await batchHandler(requests);
                 console.log('finished creating modules.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${moduleCount} modules....done` });
             }
 
             // Create Sections if requested
             if (data.course.addSections.state && data.course.addSections.number > 0) {
                 console.log('creating sections....');
-                mainWindow.webContents.send('update-progress', { label: `Creating ${data.course.addSections.number} section(s)...` });
+                const sectionCount = data.course.addSections.number;
+                mainWindow.webContents.send('update-progress', { label: `Creating ${sectionCount} sections...` });
                 const totalRequests = data.course.addSections.number;
                 let processedSections = 0;
                 const updateProgress = () => {
@@ -2314,12 +2518,15 @@ app.whenReady().then(() => {
                 }
                 await batchHandler(requests);
                 console.log('finished creating sections.');
+                mainWindow.webContents.send('update-progress', { label: `Creating ${sectionCount} sections....done` });
             }
         } catch (error) {
             throw error.message;
         }
 
         progressDone();
+        // Send a final completion message
+        mainWindow.webContents.send('update-progress', { label: 'Course creation completed successfully....done' });
         return { course_id: data.course_id, status: 200, totalUsersEnrolled: totalUsers };
     });
 
@@ -2512,9 +2719,19 @@ app.whenReady().then(() => {
         }
         if (fileContents === 'cancelled') throw new Error('Cancelled');
 
+        // Normalize to array of raw email-ish strings first
+        let rawEmailItems;
+        if (Array.isArray(fileContents)) {
+            rawEmailItems = fileContents; // already extracted by parseEmailsFromCSV
+        } else if (typeof fileContents === 'string') {
+            rawEmailItems = fileContents.split(/\r?\n|\r|\,/);
+        } else {
+            throw new TypeError('Unsupported fileContents type for resetEmails');
+        }
+
         // Parse, normalize and dedupe emails
         const emails = Array.from(new Set(
-            removeBlanks(fileContents.split(/\r?\n|\r|\,/))
+            removeBlanks(rawEmailItems)
                 .map((email) => String(email).trim().toLowerCase())
                 .filter((email) => email.includes('@'))
         ));
@@ -2556,34 +2773,34 @@ app.whenReady().then(() => {
             });
         };
 
-        const request = async (reqData) => {
-            try {
-                console.log('Resetting email:', reqData.email);
-                const bounceRes = await bounceReset({ domain: reqData.domain, token: reqData.token, email: reqData.email });
-                console.log('Bounce reset response:', bounceRes);
-                // if (Number(bounceRes?.reset || 0) > 0) {
-                //     await waitFunc(800);
-                //     try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
-                // }
-                console.log('Clearing from Suppression list', reqData.email);
-                const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
-                console.log('AWS reset response:', awsRes);
-                // Track throttled requests (422) for later retry
-                if (String(awsRes?.status) === '422') aws422Emails.add(reqData.email);
-                return { bounce: bounceRes, suppression: awsRes };
-            } catch (err) {
-                throw err;
-            } finally {
-                updateProgress();
-            }
-        };
+        // const request = async (reqData) => {
+        //     try {
+        //         console.log('Resetting email:', reqData.email);
+        //         const bounceRes = await bounceReset({ domain: reqData.domain, token: reqData.token, email: reqData.email });
+        //         console.log('Bounce reset response:', bounceRes);
+        //         // if (Number(bounceRes?.reset || 0) > 0) {
+        //         //     await waitFunc(800);
+        //         //     try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
+        //         // }
+        //         // console.log('Clearing from Suppression list', reqData.email);
+        //         // const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
+        //         // console.log('AWS reset response:', awsRes);
+        //         // // Track throttled requests (422) for later retry
+        //         // if (String(awsRes?.status) === '422') aws422Emails.add(reqData.email);
+        //         return { bounce: bounceRes };
+        //     } catch (err) {
+        //         throw err;
+        //     } finally {
+        //         updateProgress();
+        //     }
+        // };
 
-        const requests = emails.map((email, idx) => ({
-            id: idx + 1,
-            email,
-            request: () => request({ domain: data.domain, token: data.token, region: data.region, email })
-        }));
-        for (const r of requests) idByEmail.set(r.email, r.id);
+        // const requests = emails.map((email, idx) => ({
+        //     id: idx + 1,
+        //     email,
+        //     request: () => request({ domain: data.domain, token: data.token, region: data.region, email })
+        // }));
+        // for (const r of requests) idByEmail.set(r.email, r.id);
 
         // Sequential processing (one at a time) — keep for reference
         // for (let i = 0; i < emails.length; i++) {
@@ -2595,7 +2812,7 @@ app.whenReady().then(() => {
         //         // Give Canvas a moment if it scheduled a clear, then optionally recheck
         //         if (Number(bounceRes?.reset || 0) > 0) {
         //             await waitFunc(800);
-        //             try { await bounceCheck(data.domain, data.token, email); } catch { /* ignore */ }
+        //             try { await bounceCheck(data.domain, data.token, email); } catch { }
         //         }
         //         const awsRes = await awsReset({ region: data.region, token: data.token, email });
         //         results.successful.push({ id: i + 1, status: 'fulfilled', value: { bounce: bounceRes, suppression: awsRes } });
@@ -2613,48 +2830,74 @@ app.whenReady().then(() => {
         //     }
         // }
 
-        const batchResponse = await batchHandler(requests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
+        // const batchResponse = await batchHandler(requests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
 
-        // Optional post-pass retry for AWS throttled (422) emails
-        let retryInfo = { attempted: 0, succeeded: 0, failed: 0 };
-        if (!isCancelled() && aws422Emails.size > 0) {
-            const toRetry = Array.from(aws422Emails);
-            retryInfo.attempted = toRetry.length;
-            try {
-                mainWindow.webContents.send('update-progress', { label: `Retrying throttled AWS resets (${toRetry.length})...` });
-            } catch { /* ignore */ }
-            await waitFunc(3000);
+        // bulk awsReset
+        const bulkEmailArray = [{ "value": [] }]; // copy
+        const chunksize = 200;
+        const awsResetResponse = { removed: 0, not_removed: 0, not_found: 0, errors: 0 };
+        for (let i = 0; i < emails.length; i += chunksize) {
+            const bulkArray = [{ value: emails.slice(i, i + chunksize) }];
+            let awsRes = [];
 
-            const retryRequests = toRetry.map((email) => ({
-                id: idByEmail.get(email) || email,
-                request: async () => {
-                    const awsRes = await awsReset({ region: data.region, token: data.token, email });
-                    return { email, awsRes };
-                }
-            }));
-            const retryRes = await batchHandler(retryRequests, { batchSize: concurrency, timeDelay: 2000, isCancelled });
-            // Merge successes back into the main successful array (update suppression value)
-            for (const s of retryRes.successful) {
-                try {
-                    const id = s.id;
-                    const awsRes = s.value.awsRes;
-                    const idx = batchResponse.successful.findIndex((x) => x.id === id);
-                    if (idx >= 0) {
-                        const old = batchResponse.successful[idx];
-                        batchResponse.successful[idx] = { ...old, value: { ...old.value, suppression: awsRes } };
-                    } else {
-                        // If the first pass failed, upgrade it by pushing a success-like record
-                        batchResponse.successful.push({ id, status: 'fulfilled', value: { bounce: { reset: 0, status: null, error: null }, suppression: awsRes } });
-                    }
-                    retryInfo.succeeded++;
-                } catch { /* ignore */ }
-            }
-            // Record failed retries
-            for (const f of retryRes.failed) {
-                batchResponse.failed.push({ id: f.id, reason: f.reason, status: f.status });
-                retryInfo.failed++;
+            if (isCancelled()) break;
+            await waitFunc(process.env.TIME_DELAY); // to avoid throttling
+            awsRes = await bulkAWSReset({ region: data.region, token: data.token, emails: bulkArray });
+            if (awsRes.status === '204') {
+                awsResetResponse.removed += bulkArray[0].value.length;
+
+            } else {
+                awsResetResponse.removed += awsRes.removed.length || 0;
+                awsResetResponse.not_removed += awsRes.not_removed.length || 0;
+                awsResetResponse.not_found += awsRes.not_found.length || 0;
+
             }
         }
+
+        // console.log('Bulk AWS reset response:', awsResetResponse);
+        // const awsResetResponse = await batchHandler(awsResetRequests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
+
+
+        // Optional post-pass retry for AWS throttled (422) emails
+        // let retryInfo = { attempted: 0, succeeded: 0, failed: 0 };
+        // if (!isCancelled() && aws422Emails.size > 0) {
+        //     const toRetry = Array.from(aws422Emails);
+        //     retryInfo.attempted = toRetry.length;
+        //     try {
+        //         mainWindow.webContents.send('update-progress', { label: `Retrying throttled AWS resets (${toRetry.length})...` });
+        //     } catch { /* ignore */ }
+        //     await waitFunc(3000);
+
+        //     const retryRequests = toRetry.map((email) => ({
+        //         id: idByEmail.get(email) || email,
+        //         request: async () => {
+        //             const awsRes = await awsReset({ region: data.region, token: data.token, email });
+        //             return { email, awsRes };
+        //         }
+        //     }));
+        //     const retryRes = await batchHandler(retryRequests, { batchSize: concurrency, timeDelay: 2000, isCancelled });
+        //     // Merge successes back into the main successful array (update suppression value)
+        //     for (const s of retryRes.successful) {
+        //         try {
+        //             const id = s.id;
+        //             const awsRes = s.value.awsRes;
+        //             const idx = batchResponse.successful.findIndex((x) => x.id === id);
+        //             if (idx >= 0) {
+        //                 const old = batchResponse.successful[idx];
+        //                 batchResponse.successful[idx] = { ...old, value: { ...old.value, suppression: awsRes } };
+        //             } else {
+        //                 // If the first pass failed, upgrade it by pushing a success-like record
+        //                 batchResponse.successful.push({ id, status: 'fulfilled', value: { bounce: { reset: 0, status: null, error: null }, suppression: awsRes } });
+        //             }
+        //             retryInfo.succeeded++;
+        //         } catch { /* ignore */ }
+        //     }
+        //     // Record failed retries
+        //     for (const f of retryRes.failed) {
+        //         batchResponse.failed.push({ id: f.id, reason: f.reason, status: f.status });
+        //         retryInfo.failed++;
+        //     }
+        // }
 
         // After all requests, check the very last email once
         const lastEmail = emails[emails.length - 1];
@@ -2671,7 +2914,7 @@ app.whenReady().then(() => {
 
         const cancelled = isCancelled();
         resetEmailsCancelFlags.delete(senderId);
-        return { ...batchResponse, cancelled, aws422Count: aws422Emails.size };
+        return { ...batchResponse, cancelled, awsResetResponse };
     });
 
     ipcMain.handle('axios:cancelResetEmails', async (event) => {
@@ -3097,6 +3340,8 @@ app.whenReady().then(() => {
         let normalized = fileContents;
         if (ext === '.csv') {
             try { normalized = parseEmailsFromCSV(fileContents); } catch (e) { throw new Error(`CSV parsing error: ${e.message}`); }
+        } else if (ext === '.txt') {
+            normalized = removeBlanks(fileContents.split(/\r?\n|\r|,/)).map(e => e.trim()).filter(e => e.length > 0);
         }
 
         return { fileContents: normalized, filePath, ext };
@@ -3341,23 +3586,28 @@ async function createClassicQuizzes(data) {
             label: 'Creating quizzes',
             processed: completedRequests,
             total: totalRequests,
-            value: completedRequests / totalRequests
+            value: completedRequests / totalRequests,
         });
     };
 
     const request = async (requestData) => {
         try {
-            return await quizzes_classic.createQuiz(requestData)
+            const res = await quizzes_classic.createQuiz(requestData);
+            // Notify per-quiz creation progress if provided
+            if (typeof data.onQuizCreated === 'function') {
+                try { data.onQuizCreated(res); } catch { }
+            }
+            return res;
         } catch (error) {
             throw error;
         } finally {
+            // keep internal section progress updates for label context only; renderer ignores these for bar width
             updateProgress();
         }
-
     };
 
     const requests = [];
-    const hasQuestions = Array.isArray(data.questionTypes) && data.questionTypes.some(q => q && q.enabled && Number(q.number) > 0);
+    const hasQuestions = data.addQuestions && Array.isArray(data.questionTypes) && data.questionTypes.length > 0;
     const publishAtCreate = data.publish && !hasQuestions;
     for (let i = 0; i < totalRequests; i++) {
         const requestData = {
@@ -3368,328 +3618,71 @@ async function createClassicQuizzes(data) {
             publish: !!publishAtCreate,
             num_quizzes: data.num_quizzes,
             quiz_title: (() => {
-                const base = (data.quiz_name && data.quiz_name.length > 0) ? data.quiz_name : 'Quiz';
+                const base = data.quiz_name && data.quiz_name.length > 0 ? data.quiz_name : 'Quiz';
                 // If creating multiple, suffix with index; otherwise use as-is
-                return (totalRequests > 1) ? `${base} ${i + 1}` : base;
-            })()
+                return totalRequests > 1 ? `${base} ${i + 1}` : base;
+            })(),
         };
-        requests.push({ id: i + 1, request: () => request(requestData) })
+        requests.push({ id: i + 1, request: () => request(requestData) });
     }
 
     const batchResponse = await batchHandler(requests);
-    return batchResponse;
-}
+    console.log('Classic quizzes created:', batchResponse.successful.map(s => s.value?.id));
+    console.log('Questions requested?', { addQuestions: data.addQuestions, questionTypes: data.questionTypes });
 
-async function addQuizQuestions(quizIDs, data) {
+    // If questions were requested, add them to each successfully created quiz
+    if (hasQuestions && batchResponse.successful && batchResponse.successful.length > 0) {
+        console.log('Adding questions to quizzes...');
+        mainWindow.webContents.send('update-progress', { label: 'Adding questions to quizzes...' });
 
-}
-
-async function enableBlueprint(data) {
-    try {
-        await editCourse(data);
-    } catch (error) {
-        throw error
-    } finally {
-        console.log('Finished enabling blueprint course');
-        return;
-    }
-}
-
-async function addUsersToCanvas(data) {
-
-    const request = async (requestData) => {
-        try {
-            return await addUsers(requestData);
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    const requests = [];
-
-    // add student users to the requests
-    for (let i = 0; i < data.students.length; i++) {
-        requests.push({ id: i + 1, request: () => request({ domain: data.domain, token: data.token, user: data.students[i] }) });
-    }
-
-    // add teachers users to the requests
-    for (let i = 0; i < data.teachers.length; i++) {
-        requests.push({ id: i + data.students.length, request: () => request({ domain: data.domain, token: data.token, user: data.teachers[i] }) });
-    }
-
-    const batchResponse = await batchHandler(requests);
-    return batchResponse;
-}
-
-async function enrollUsers(data, userIds) {
-
-    const totalUsers = userIds.length;
-    const totalStudents = data.students.length;
-    const totalTeachers = data.teachers.length;
-
-    const request = async (requestData) => {
-        try {
-            const response = await enrollUser(requestData);
-            return response;
-        } catch (error) {
-            throw error;
-        }
-    };
-
-    const requests = [];
-    // loop through the total users to be added
-    for (let i = 0; i < totalUsers; i++) {
-        let enrollType = i < totalStudents ? 'StudentEnrollment' : 'TeacherEnrollment';
-
-        const userData = {
-            domain: data.domain,
-            token: data.token,
-            type: enrollType,
-            course_id: data.course_id,
-            user_id: userIds[i]
-        }
-        requests.push({ id: i + 1, request: () => request(userData) });
-    }
-
-    // loop through all the teaches to be added
-    // for (let t = 0; t < totalTeachers; t++){
-    //     const teacherData = {
-    //         domain: data.domain,
-    //         token: data.token,
-    //         type: 'TeacherEnrollment',
-    //         user_id: userIds[counter]
-    //     }
-    //     requests.push({ id: counter, request: () => request(teacherData) });
-    // }
-
-    const batchResponse = await batchHandler(requests);
-    return batchResponse;
-}
-
-async function getFileContents(ext) {
-    const options = {
-        properties: ['openFile'],
-        filters: [{ name: '', extensions: [ext] }],
-        modal: true
-    };
-
-    const result = await dialog.showOpenDialog(mainWindow, options);
-
-    if (result.canceled) {
-        return 'cancelled';
-    } else {
-        console.log(result.filePaths);
-        const filePath = result.filePaths[0];
-        const fileContent = await fs.promises.readFile(filePath, 'utf8');
-        // const emails = removeBlanks(fileContent.split(/\r?\n|\r|,/));
-        return fileContent;
-    }
-}
-
-async function getFileContentsForEmails() {
-    const options = {
-        properties: ['openFile'],
-        filters: [
-            { name: 'All Files', extensions: ['*'] }
-        ],
-        modal: true
-    };
-
-    const result = await dialog.showOpenDialog(mainWindow, options);
-
-    if (result.canceled) {
-        return 'cancelled';
-    } else {
-        console.log(result.filePaths);
-        const filePath = result.filePaths[0];
-        const fileContent = await fs.promises.readFile(filePath, 'utf8');
-
-        // Determine file type based on extension
-        const fileExt = path.extname(filePath).toLowerCase();
-
-        if (fileExt === '.csv') {
-            try {
-                return parseEmailsFromCSV(fileContent);
-            } catch (error) {
-                throw new Error(`CSV parsing error: ${error.message}`);
+        // Convert frontend question types array to the format expected by createQuestions
+        const questionData = {};
+        (data.questionTypes || []).forEach((questionType) => {
+            if (typeof questionType === 'string' && questionType.length > 0) {
+                questionData[questionType] = {
+                    name: questionType,
+                    enabled: true,
+                    number: 1, // Add 1 question of each selected type
+                };
             }
-        } else {
-            // Handle as text file (original behavior)
-            return fileContent;
-        }
-    }
-}
-
-function parseEmailsFromCSV(csvContent) {
-    const lines = csvContent.split(/\r?\n/);
-    if (lines.length === 0) return '';
-
-    // Find the header row and locate the email column
-    const headerRow = lines[0];
-    const headers = parseCSVRow(headerRow);
-
-    // Look for email-related columns (case insensitive)
-    let emailColumnIndex = -1;
-    const emailColumnNames = ['path', 'email', 'email_address', 'communication_channel_path'];
-
-    for (let i = 0; i < headers.length; i++) {
-        const headerLower = headers[i].toLowerCase().trim();
-        if (emailColumnNames.includes(headerLower)) {
-            emailColumnIndex = i;
-            break;
-        }
-    }
-
-    if (emailColumnIndex === -1) {
-        const availableHeaders = headers.map(h => `"${h}"`).join(', ');
-        throw new Error(`Could not find email column in CSV. Expected column names: ${emailColumnNames.join(', ')}. Available columns: ${availableHeaders}`);
-    }
-
-    // Extract emails from the specified column
-    const emails = [];
-    let emailCount = 0;
-    for (let i = 1; i < lines.length; i++) { // Skip header row
-        const line = lines[i].trim();
-        if (line) {
-            const row = parseCSVRow(line);
-            if (row[emailColumnIndex] && row[emailColumnIndex].includes('@')) {
-                emails.push(row[emailColumnIndex].trim());
-                emailCount++;
-            }
-        }
-    }
-
-    console.log(`Parsed CSV: Found ${emailCount} emails from column "${headers[emailColumnIndex]}"`);
-
-    if (emailCount === 0) {
-        throw new Error(`No valid email addresses found in the "${headers[emailColumnIndex]}" column. Please ensure the column contains email addresses with @ symbols.`);
-    }
-
-    return emails.join('\n');
-}
-
-function parseCSVRow(row) {
-    const result = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < row.length; i++) {
-        const char = row[i];
-
-        if (char === '"') {
-            if (inQuotes && row[i + 1] === '"') {
-                // Escaped quote
-                current += '"';
-                i++; // Skip next quote
-            } else {
-                // Toggle quote state
-                inQuotes = !inQuotes;
-            }
-        } else if (char === ',' && !inQuotes) {
-            // End of field
-            result.push(current);
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-
-    // Add the last field
-    result.push(current);
-
-    return result;
-}
-
-function removeBlanks(arr) {
-    return arr.filter((element) => element.length > 0);
-}
-
-function sendToCSV(data) {
-    console.log('inside sendToCSV()');
-    //console.log(data);
-
-    const fileDetails = getFileLocation(data.fileName)
-    if (fileDetails) {
-        csvExporter.exportToCSV(data.data, fileDetails);
-    } else {
-        return false;
-    }
-}
-
-function sendToTxt(data) {
-    console.log('inside sendToTxt');
-
-    const fileDetails = getFileLocation('suppressed_emails.txt');
-    if (fileDetails) {
-        csvExporter.exportToTxt(data, fileDetails)
-    } else {
-        throw new Error('Failed to write file.');
-    }
-}
-
-function getFileLocation(fileName) {
-    const fileDetails = dialog.showSaveDialogSync({
-        defaultPath: fileName,
-        properties: [
-            'createDirectory',
-            'showOverwriteConfirmation',
-        ]
-    });
-    return fileDetails;
-}
-
-function convertToPageViewsCsv(data) {
-
-    const csvHeaders = [];
-    const csvRows = [];
-
-    // create the headers for the csv
-    for (const key in data[0]) {
-        // check if key is also an object
-        if (typeof (data[0][key]) === 'object' && data[0][key] !== null) {
-            for (const nkey in data[0][key]) {
-                csvHeaders.push(nkey);
-            }
-        } else {
-            csvHeaders.push(key);
-        }
-    }
-
-    // convert headers to comma separated string
-    csvRows.push(csvHeaders.map(header => `"${header}"`).join(','));
-
-    // loop through each object and push the values 
-    // onto the array as a comma separated string
-    for (const row of data) {
-        const values = csvHeaders.map((header) => {
-            let value;
-            switch (header) {
-                case 'user':
-                    value = row.links.user;
-                    break;
-                case 'context':
-                    value = row.links.context;
-                    break;
-                case 'asset':
-                    value = row.links.asset;
-                    break;
-                case 'real_user':
-                    value = row.links.real_user;
-                    break;
-                case 'account':
-                    value = row.links.account;
-                    break;
-                default:
-                    value = row[header];
-                    break;
-            }
-            return isNaN(value) ? `"${value.replace(/"/g, '""')}"` : value;
         });
-        csvRows.push(values.join(','));
-    }
-    return csvRows;
-}
 
+        let quizzesWithQuestions = 0;
+        for (const quizResult of batchResponse.successful) {
+            const quizId = quizResult.value?.id;
+            if (!quizId) continue;
+            try {
+                console.log(`Adding questions to quiz ${quizId}`);
+                await quizzes_classic.createQuestions({
+                    domain: data.domain,
+                    token: data.token,
+                    course_id: data.course_id,
+                    quiz_id: quizId,
+                    question_data: questionData,
+                    onQuestionCreated: typeof data.onQuestionCreated === 'function' ? data.onQuestionCreated : undefined
+                });
+                quizzesWithQuestions++;
+
+                if (data.publish) {
+                    console.log(`Publishing quiz ${quizId}`);
+                    await quizzes_classic.publishQuiz({
+                        domain: data.domain,
+                        token: data.token,
+                        course_id: data.course_id,
+                        quiz_id: quizId,
+                    });
+                }
+            } catch (error) {
+                console.error(`Failed to add questions to quiz ${quizId}:`, error);
+            }
+        }
+
+        console.log('Finished adding questions to quizzes. Count:', quizzesWithQuestions);
+        mainWindow.webContents.send('update-progress', { label: `Adding questions to ${quizzesWithQuestions} quiz(zes)....done` });
+    }
+
+    return batchResponse;
+}
 
 // Progress helpers (main process)
 let _lastProgressKey = null;
@@ -3715,6 +3708,8 @@ function progressUpdateDeterminate(processed, total) {
     _sendProgress({ mode: 'determinate', value, processed, total });
     try { mainWindow.setProgressBar(value, { mode: 'normal' }); } catch { }
 }
+
+// (moved addUsersToCanvas and enrollUsers above the handler)
 
 function progressTickUnknown(processed, label) {
     if (!mainWindow) return;

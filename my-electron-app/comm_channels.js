@@ -348,6 +348,49 @@ async function awsReset(data) {
     }
 }
 
+async function bulkAWSReset(data) {
+    console.log('comm_channels.js > bulkAWSReset');
+    // [
+    //     { "value": "email@example.com" },
+    //     {
+    //         "value": [
+    //             "test@example.com",
+    //             "secondaddress@example.com"
+    //         ]
+    //     }
+    // ]
+
+
+    const region = REGION[data.region];
+    const url = `${region}`;
+    const axiosConfig = {
+        method: 'patch',
+        url: url,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        },
+        data: data.emails
+
+    };
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return response;
+    } catch (error) {
+        if (error.status === 409) {
+            return {
+                status: error.status,
+                removed: response.data.removed.length,
+                not_found: response.data.not_found.length,
+                not_removed: response.data.not_removed.length
+            };
+        }
+        // return { status: null, reset: null, error: { status: error.status, message: error.message } };
+    }
+}
+
 async function checkUnconfirmedEmails(data) {
     const url = `https://${data.domain}/api/v1/accounts/self/unconfirmed_communication_channels.csv?pattern=*${data.pattern}*`;
 
@@ -402,6 +445,7 @@ module.exports = {
     resetEmail,
     bounceReset,
     awsReset,
+    bulkAWSReset,
     bounceCheck,
     patternBounceReset
 }

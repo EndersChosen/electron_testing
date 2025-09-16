@@ -209,7 +209,7 @@ async function createQuiz(data) {
 }
 
 async function createQuestions(data) {
-    console.log("Creating Questions");
+    console.log("Creating Questions for quiz", data.quiz_id, "types:", Object.keys(data.question_data || {}));
     const axiosConfig = {
         method: 'POST',
         url: `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes/${data.quiz_id}/questions`,
@@ -224,58 +224,72 @@ async function createQuestions(data) {
     for (let qData of Object.keys(data.question_data)) {
         if (data.question_data[qData].enabled) {
             const total = Number(data.question_data[qData].number) || 1;
+            console.log(`Adding ${total} question(s) of type ${data.question_data[qData].name} to quiz ${data.quiz_id}`);
             // loop through the number of question to add of the specific type
             for (let qNum = 0; qNum < total; qNum++) {
                 switch (data.question_data[qData].name) {
                     case "calculated_question":
                         await addCalculatedQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'calculated_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "essay_question":
                         await addEssayQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'essay_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "file_upload_question":
                         await addFileUploadQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'file_upload_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "fill_in_multiple_blanks_question":
                         await addFillInMultipleBlanksQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'fill_in_multiple_blanks_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "matching_question":
                         await addMatchingQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'matching_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "multiple_answers_question":
                         await addMultipleAnswerQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'multiple_answers_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "multiple_choice_question":
                         await addMultipleChoiceQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'multiple_choice_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "multiple_dropdowns_question":
                         await addMultipleDropdownsQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'multiple_dropdowns_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "numerical_question":
                         await addNumericalQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'numerical_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "short_answer_question":
                         await addShortAnswerQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'short_answer_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "text_only_question":
                         await addTextOnlyQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'text_only_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     case "true_false_question":
                         await addTrueFalseQuestion(axiosConfig);
+                        if (typeof data.onQuestionCreated === 'function') { try { data.onQuestionCreated({ type: 'true_false_question' }); } catch { } }
                         await saveQuiz(data.domain, data.token, data.course_id, data.quiz_id);
                         break;
                     default:
+                        console.warn('Unknown question type, skipping:', data.question_data[qData]);
                         break;
                 }
             }
@@ -752,11 +766,33 @@ async function addShortAnswerQuestion(requestConfig) {
         correct_comments_html: null,
         incorrect_comments_html: null,
         neutral_comments_html: null,
-        question_text: "<p>Short Answer</p>",
-        regrade_option: null,
+        question_text: "<p>roses are&nbsp;</p>",
+        regrade_option: false,
         position: 0,
         text_after_answers: null,
-        matching_answer_incorrect_matches: null
+        matching_answer_incorrect_matches: null,
+        answers: [
+            {
+                answer_exact: 0,
+                answer_error_margin: 0,
+                answer_range_start: 0,
+                answer_range_end: 0,
+                answer_approximate: 0,
+                answer_precision: 10,
+                answer_weight: 100,
+                numerical_answer_type: "exact_answer",
+                blank_id: null,
+                id: null,
+                match_id: null,
+                answer_text: "red",
+                answer_match_left: null,
+                answer_match_right: null,
+                answer_comment: null,
+                answer_html: null,
+                answer_match_left_html: null,
+                answer_comment_html: null
+            }
+        ]
     };
     return await sendQuestion(requestConfig, questionData);
 }
@@ -837,6 +873,31 @@ async function addTrueFalseQuestion(requestConfig) {
     return await sendQuestion(requestConfig, questionData);
 }
 
+async function publishQuiz(data) {
+    const axiosConfig = {
+        method: 'PUT',
+        url: `https://${data.domain}/api/v1/courses/${data.course_id}/quizzes/${data.quiz_id}`,
+        headers: {
+            'Authorization': `Bearer ${data.token}`
+        },
+        data: {
+            quiz: {
+                published: true
+            }
+        }
+    };
+
+    try {
+        const request = async () => {
+            return await axios(axiosConfig);
+        };
+        const response = await errorCheck(request);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
 module.exports = {
-    createQuiz, createQuestions, getClassicQuizzes, deleteClassicQuiz, updateClassicQuiz
+    createQuiz, createQuestions, getClassicQuizzes, deleteClassicQuiz, updateClassicQuiz, publishQuiz
 }

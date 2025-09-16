@@ -458,12 +458,193 @@ async function createSupportCourse(e) {
                             <label class="form-check-label visually-hidden" for="csc-content-status">Publish</label>
                         </div>
                     </div>
+                    <div class="col-1" id="csc-quiz-questions-toggle" hidden>
+                        <label class="form-label mb-1" for="csc-add-questions">Add Questions</label>
+                        <div class="form-check form-switch">
+                            <input id="csc-add-questions" type="checkbox" class="form-check-input" role="switch">
+                            <label class="form-check-label visually-hidden" for="csc-add-questions">Add Questions</label>
+                        </div>
+                    </div>
+                    <div class="col-1" id="csc-newq-questions-toggle" hidden>
+                        <label class="form-label mb-1" for="csc-add-newq-questions">Add Questions</label>
+                        <div class="form-check form-switch">
+                            <input id="csc-add-newq-questions" type="checkbox" class="form-check-input" role="switch">
+                            <label class="form-check-label visually-hidden" for="csc-add-newq-questions">Add Questions</label>
+                        </div>
+                    </div>
                     
                     <div class="col-auto d-flex align-items-end">
                         <button type="button" class="btn btn-secondary me-2" id="csc-content-add">Add/Update</button>
                         <button type="button" class="btn btn-link" id="csc-content-clear">Clear all</button>
                     </div>
                 </div>
+                
+                <!-- Quiz Questions Selection Panel -->
+                <div id="csc-quiz-questions-panel" class="mt-3" hidden>
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Question Types for Classic Quizzes</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-2">
+                                <div class="col-auto">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="select-all-questions">
+                                        <label class="form-check-label fw-bold" for="select-all-questions">
+                                            Select All
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="multiple_choice_question" id="q-multiple-choice">
+                                        <label class="form-check-label" for="q-multiple-choice">
+                                            Multiple Choice
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="true_false_question" id="q-true-false">
+                                        <label class="form-check-label" for="q-true-false">
+                                            True/False
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="fill_in_multiple_blanks_question" id="q-fill-blanks">
+                                        <label class="form-check-label" for="q-fill-blanks">
+                                            Fill in Multiple Blanks
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="short_answer_question" id="q-fill-blank">
+                                        <label class="form-check-label" for="q-fill-blank">
+                                            Fill in the Blank
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="multiple_answers_question" id="q-multiple-answers">
+                                        <label class="form-check-label" for="q-multiple-answers">
+                                            Multiple Answers
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="multiple_dropdowns_question" id="q-multiple-dropdowns">
+                                        <label class="form-check-label" for="q-multiple-dropdowns">
+                                            Multiple Dropdowns
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="matching_question" id="q-matching">
+                                        <label class="form-check-label" for="q-matching">
+                                            Matching
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="numerical_question" id="q-numerical">
+                                        <label class="form-check-label" for="q-numerical">
+                                            Numerical Answer
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="calculated_question" id="q-calculated">
+                                        <label class="form-check-label" for="q-calculated">
+                                            Formula Question
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input question-type-checkbox" type="checkbox" value="essay_question" id="q-essay">
+                                        <label class="form-check-label" for="q-essay">
+                                            Essay Question
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- New Quizzes Questions Selection Panel -->
+                <div id="csc-newq-questions-panel" class="mt-3" hidden>
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Question Types for New Quizzes</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-2">
+                                <div class="col-auto">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="select-all-newq-questions">
+                                        <label class="form-check-label fw-bold" for="select-all-newq-questions">Select All</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="multiple_choice" id="nq-multiple-choice">
+                                        <label class="form-check-label" for="nq-multiple-choice">Multiple Choice</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="multi_answer" id="nq-multi-answer">
+                                        <label class="form-check-label" for="nq-multi-answer">Multiple Answer</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="true_false" id="nq-true-false">
+                                        <label class="form-check-label" for="nq-true-false">True/False</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="essay" id="nq-essay">
+                                        <label class="form-check-label" for="nq-essay">Essay</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="numeric" id="nq-numeric">
+                                        <label class="form-check-label" for="nq-numeric">Numeric</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="fill_in_blank" id="nq-fill-blank">
+                                        <label class="form-check-label" for="nq-fill-blank">Fill in the Blank</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="matching" id="nq-matching">
+                                        <label class="form-check-label" for="nq-matching">Matching</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="categorization" id="nq-categorization">
+                                        <label class="form-check-label" for="nq-categorization">Categorization</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="ordering" id="nq-ordering">
+                                        <label class="form-check-label" for="nq-ordering">Ordering</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="file_upload" id="nq-file-upload">
+                                        <label class="form-check-label" for="nq-file-upload">File Upload</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input newq-question-type-checkbox" type="checkbox" value="formula" id="nq-formula">
+                                        <label class="form-check-label" for="nq-formula">Formula</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="csc-content-summary" class="form-text mt-1"></div>
 
                 <!-- Hidden fields to drive create logic (presets will populate) -->
@@ -554,6 +735,7 @@ async function createSupportCourse(e) {
             <button type="button" class="btn btn-primary mt-3" id="create-course-btn">Create</button>
             <div id="csc-progress-div" hidden>
                 <p id="csc-progress-info"></p>
+                <div id="csc-status-list" class="mb-3" style="max-height: 300px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 0.375rem; padding: 0.75rem; background-color: #f8f9fa;"></div>
                 <div class="progress mt-3" style="width: 75%" role="progressbar" aria-label="progress bar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                     <div class="progress-bar" style="width: 0%"></div>
                 </div>
@@ -641,6 +823,128 @@ async function createSupportCourse(e) {
         return !(key === 'modules' || key === 'sections');
     }
 
+    // Quiz Questions functionality - Define before use
+    const quizQuestionsToggle = createSupportCourseForm.querySelector('#csc-quiz-questions-toggle');
+    const addQuestionsSwitch = createSupportCourseForm.querySelector('#csc-add-questions');
+    const quizQuestionsPanel = createSupportCourseForm.querySelector('#csc-quiz-questions-panel');
+    const selectAllCheckbox = createSupportCourseForm.querySelector('#select-all-questions');
+    const questionTypeCheckboxes = createSupportCourseForm.querySelectorAll('.question-type-checkbox');
+    // New Quizzes counterparts
+    const newQQuestionsToggle = createSupportCourseForm.querySelector('#csc-newq-questions-toggle');
+    const addNewQQuestionsSwitch = createSupportCourseForm.querySelector('#csc-add-newq-questions');
+    const newQQuestionsPanel = createSupportCourseForm.querySelector('#csc-newq-questions-panel');
+    const selectAllNewQCheckbox = createSupportCourseForm.querySelector('#select-all-newq-questions');
+    const newQQuestionTypeCheckboxes = createSupportCourseForm.querySelectorAll('.newq-question-type-checkbox');
+
+    // Track selected question types
+    let selectedQuestionTypes = [];
+    let selectedNewQQuestionTypes = [];
+
+    function toggleQuizQuestionsVisibility(contentType) {
+        if (contentType === 'classicQuizzes') {
+            quizQuestionsToggle.hidden = false;
+            newQQuestionsToggle.hidden = true;
+            newQQuestionsPanel.hidden = true;
+            if (addNewQQuestionsSwitch) addNewQQuestionsSwitch.checked = false;
+        } else if (contentType === 'newQuizzes') {
+            newQQuestionsToggle.hidden = false;
+            quizQuestionsToggle.hidden = true;
+            quizQuestionsPanel.hidden = true;
+            if (addQuestionsSwitch) addQuestionsSwitch.checked = false;
+        } else {
+            quizQuestionsToggle.hidden = true;
+            quizQuestionsPanel.hidden = true;
+            if (addQuestionsSwitch) addQuestionsSwitch.checked = false;
+            newQQuestionsToggle.hidden = true;
+            newQQuestionsPanel.hidden = true;
+            if (addNewQQuestionsSwitch) addNewQQuestionsSwitch.checked = false;
+        }
+    }
+
+    function updateSelectedQuestionTypes() {
+        selectedQuestionTypes = Array.from(questionTypeCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+    }
+
+    function updateSelectedNewQQuestionTypes() {
+        selectedNewQQuestionTypes = Array.from(newQQuestionTypeCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+    }
+
+    if (addQuestionsSwitch) {
+        addQuestionsSwitch.addEventListener('change', () => {
+            if (addQuestionsSwitch.checked) {
+                quizQuestionsPanel.hidden = false;
+            } else {
+                quizQuestionsPanel.hidden = true;
+                // Clear all question type selections
+                questionTypeCheckboxes.forEach(cb => cb.checked = false);
+                selectAllCheckbox.checked = false;
+                selectedQuestionTypes = [];
+            }
+            if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+        });
+    }
+
+    if (addNewQQuestionsSwitch) {
+        addNewQQuestionsSwitch.addEventListener('change', () => {
+            if (addNewQQuestionsSwitch.checked) {
+                newQQuestionsPanel.hidden = false;
+            } else {
+                newQQuestionsPanel.hidden = true;
+                newQQuestionTypeCheckboxes.forEach(cb => cb.checked = false);
+                selectAllNewQCheckbox.checked = false;
+                selectedNewQQuestionTypes = [];
+            }
+            if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+        });
+    }
+
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', () => {
+            const isChecked = selectAllCheckbox.checked;
+            questionTypeCheckboxes.forEach(cb => {
+                cb.checked = isChecked;
+            });
+            updateSelectedQuestionTypes();
+            if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+        });
+    }
+
+    if (selectAllNewQCheckbox) {
+        selectAllNewQCheckbox.addEventListener('change', () => {
+            const isChecked = selectAllNewQCheckbox.checked;
+            newQQuestionTypeCheckboxes.forEach(cb => cb.checked = isChecked);
+            updateSelectedNewQQuestionTypes();
+            if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+        });
+    }
+
+    questionTypeCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            updateSelectedQuestionTypes();
+            // Update "Select All" checkbox state
+            const allChecked = Array.from(questionTypeCheckboxes).every(cb => cb.checked);
+            const noneChecked = Array.from(questionTypeCheckboxes).every(cb => !cb.checked);
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+            if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+        });
+    });
+
+    newQQuestionTypeCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            updateSelectedNewQQuestionTypes();
+            const allChecked = Array.from(newQQuestionTypeCheckboxes).every(cb => cb.checked);
+            const noneChecked = Array.from(newQQuestionTypeCheckboxes).every(cb => !cb.checked);
+            selectAllNewQCheckbox.checked = allChecked;
+            selectAllNewQCheckbox.indeterminate = !allChecked && !noneChecked;
+            if (typeof saveDefaultsDebounced === 'function') saveDefaultsDebounced();
+        });
+    });
+
     if (contentTypeSel && contentPublishSwitch) {
         const syncPublishSwitchState = (key) => {
             const applicable = publishApplicable(key);
@@ -653,10 +957,12 @@ async function createSupportCourse(e) {
         contentTypeSel.addEventListener('change', () => {
             const key = contentTypeSel.value;
             syncPublishSwitchState(key);
+            toggleQuizQuestionsVisibility(key);
         });
         // Initialize on load
         const initKey = contentTypeSel.value;
         syncPublishSwitchState(initKey);
+        toggleQuizQuestionsVisibility(initKey);
         // Keep the map updated if user toggles publish for the current type
         contentPublishSwitch.addEventListener('change', () => {
             const key = contentTypeSel.value;
@@ -869,7 +1175,15 @@ async function createSupportCourse(e) {
                 teachers: createSupportCourseForm.querySelector('#course-add-teachers')?.value?.trim() || '',
             },
             content: {},
-            publishByType: { ...publishByType }
+            publishByType: { ...publishByType },
+            quizQuestions: {
+                enabled: !!createSupportCourseForm.querySelector('#csc-add-questions')?.checked,
+                selectedTypes: [...selectedQuestionTypes]
+            },
+            newQuizQuestions: {
+                enabled: !!createSupportCourseForm.querySelector('#csc-add-newq-questions')?.checked,
+                selectedTypes: [...selectedNewQQuestionTypes]
+            }
         };
         for (const [key, toggleSel, , inputSel] of map) {
             const togg = createSupportCourseForm.querySelector(toggleSel);
@@ -920,6 +1234,54 @@ async function createSupportCourse(e) {
                 const qty = cfg.content?.[key];
                 if (qty !== undefined) setContent(key, qty);
             }
+
+            // quiz questions
+            if (cfg.quizQuestions) {
+                const addQuestionsSwitch = createSupportCourseForm.querySelector('#csc-add-questions');
+                const quizQuestionsPanel = createSupportCourseForm.querySelector('#csc-quiz-questions-panel');
+
+                if (addQuestionsSwitch && cfg.quizQuestions.enabled) {
+                    addQuestionsSwitch.checked = true;
+                    quizQuestionsPanel.hidden = false;
+
+                    // Restore selected question types
+                    if (Array.isArray(cfg.quizQuestions.selectedTypes)) {
+                        selectedQuestionTypes = [...cfg.quizQuestions.selectedTypes];
+                        questionTypeCheckboxes.forEach(cb => {
+                            cb.checked = selectedQuestionTypes.includes(cb.value);
+                        });
+
+                        // Update "Select All" checkbox state
+                        const allChecked = Array.from(questionTypeCheckboxes).every(cb => cb.checked);
+                        const noneChecked = Array.from(questionTypeCheckboxes).every(cb => !cb.checked);
+                        selectAllCheckbox.checked = allChecked;
+                        selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+                    }
+                }
+            }
+
+            // new quiz questions
+            if (cfg.newQuizQuestions) {
+                const addNQSwitch = createSupportCourseForm.querySelector('#csc-add-newq-questions');
+                const newQPanel = createSupportCourseForm.querySelector('#csc-newq-questions-panel');
+                if (addNQSwitch && cfg.newQuizQuestions.enabled) {
+                    addNQSwitch.checked = true;
+                    newQPanel.hidden = false;
+                    if (Array.isArray(cfg.newQuizQuestions.selectedTypes)) {
+                        selectedNewQQuestionTypes = [...cfg.newQuizQuestions.selectedTypes];
+                        const newQBoxes = createSupportCourseForm.querySelectorAll('.newq-question-type-checkbox');
+                        newQBoxes.forEach(cb => cb.checked = selectedNewQQuestionTypes.includes(cb.value));
+                        const allChecked = Array.from(newQBoxes).every(cb => cb.checked);
+                        const noneChecked = Array.from(newQBoxes).every(cb => !cb.checked);
+                        const selectAllNewQ = createSupportCourseForm.querySelector('#select-all-newq-questions');
+                        if (selectAllNewQ) {
+                            selectAllNewQ.checked = allChecked;
+                            selectAllNewQ.indeterminate = !allChecked && !noneChecked;
+                        }
+                    }
+                }
+            }
+
             renderSummary();
         } catch { /* no-op */ }
     }
@@ -968,9 +1330,11 @@ async function createSupportCourse(e) {
         const cscProgressDiv = createSupportCourseForm.querySelector('#csc-progress-div');
         const cscProgressBar = cscProgressDiv.querySelector('.progress-bar');
         const cscProgressInfo = createSupportCourseForm.querySelector('#csc-progress-info');
+        const cscStatusList = createSupportCourseForm.querySelector('#csc-status-list');
         cscProgressDiv.hidden = false;
         cscProgressBar.style.width = '0%';
         cscProgressInfo.textContent = 'Creating course...';
+        cscStatusList.innerHTML = ''; // Clear any previous status items
 
         // Attach a progress listener once (overall progress only)
         if (!window.__cscProgressListenerAttached && window.progressAPI?.onUpdateProgress) {
@@ -984,17 +1348,58 @@ async function createSupportCourse(e) {
                     }
                     if (payload && typeof payload === 'object') {
                         if (payload.label) {
-                            cscProgressInfo.textContent = payload.label;
+                            // Suppress duplicate generic 'Adding questions to quizzes...' style logs
+                            const isAddingQuestionsMsg = /Adding questions to .*quiz/i.test(payload.label) || /Adding quiz questions/i.test(payload.label);
+                            if (isAddingQuestionsMsg) {
+                                window.__cscLastAddingQuestionsLogged = window.__cscLastAddingQuestionsLogged || false;
+                                if (window.__cscLastAddingQuestionsLogged) {
+                                    // Already logged once; only update main info text and skip adding another entry
+                                    cscProgressInfo.textContent = payload.label;
+                                } else {
+                                    window.__cscLastAddingQuestionsLogged = true;
+                                }
+                            }
+                            // Check if this is a completion message (ends with "....done")
+                            if (payload.label.endsWith('....done')) {
+                                // Add this as a completed status item to the list
+                                const statusItem = document.createElement('div');
+                                statusItem.className = 'text-success mb-1';
+                                statusItem.style.fontFamily = 'monospace';
+                                statusItem.innerHTML = `✅ ${payload.label}`;
+                                cscStatusList.appendChild(statusItem);
+
+                                // Scroll to bottom to show latest status
+                                cscStatusList.scrollTop = cscStatusList.scrollHeight;
+
+                                // Keep the current progress info for ongoing operations
+                                if (payload.label.includes('Course creation completed successfully')) {
+                                    cscProgressInfo.textContent = 'All operations completed!';
+                                } else {
+                                    cscProgressInfo.textContent = 'Processing next operation...';
+                                }
+                            } else if (payload.label.endsWith('...') && !payload.label.includes('done') && !payload.label.includes('(') && !isAddingQuestionsMsg) {
+                                // This is a starting operation - add it to the list as in-progress
+                                // Exclude progress counter messages like "Creating assignments (1/5)..."
+                                const statusItem = document.createElement('div');
+                                statusItem.className = 'text-primary mb-1';
+                                statusItem.style.fontFamily = 'monospace';
+                                statusItem.innerHTML = `🔄 ${payload.label}`;
+                                statusItem.id = `status-${Date.now()}`; // Unique ID for potential updates
+                                cscStatusList.appendChild(statusItem);
+
+                                // Scroll to bottom to show latest status
+                                cscStatusList.scrollTop = cscStatusList.scrollHeight;
+
+                                // Also update the main progress info
+                                cscProgressInfo.textContent = payload.label;
+                            } else {
+                                // General progress update (like progress counters)
+                                cscProgressInfo.textContent = payload.label;
+                            }
                         }
+                        // Only treat explicit overall percent as authoritative for the bar width
                         if (typeof payload.percent === 'number') {
                             cscProgressBar.style.width = `${payload.percent}%`;
-                        } else if (
-                            payload.mode === 'determinate' &&
-                            typeof payload.processed === 'number' &&
-                            typeof payload.total === 'number' && payload.total > 0
-                        ) {
-                            const pct = Math.round((payload.processed / payload.total) * 100);
-                            cscProgressBar.style.width = `${pct}%`;
                         } else if (payload.mode === 'done') {
                             cscProgressBar.style.width = '100%';
                         }
@@ -1037,6 +1442,12 @@ async function createSupportCourse(e) {
         // add Classic quizzes stuff
         const courseAddCQChbx = createSupportCourseForm.querySelector('#course-add-cq').checked;
         const numOfClassicQuizzes = parseInt(createSupportCourseForm.querySelector('#course-add-cq-num')?.value || '0', 10) || 0;
+
+        // quiz questions data
+        const addQuestionsEnabled = createSupportCourseForm.querySelector('#csc-add-questions')?.checked || false;
+        const selectedQuestionTypesForAPI = addQuestionsEnabled ? [...selectedQuestionTypes] : [];
+        const addNewQQuestionsEnabled = createSupportCourseForm.querySelector('#csc-add-newq-questions')?.checked || false;
+        const selectedNewQQuestionTypesForAPI = addNewQQuestionsEnabled ? [...selectedNewQQuestionTypes] : [];
 
         // add New Quizzes stuff
         const courseAddNQChbx = createSupportCourseForm.querySelector('#course-add-nq').checked;
@@ -1085,11 +1496,17 @@ async function createSupportCourse(e) {
                 },
                 addCQ: {
                     state: courseAddCQChbx,
-                    number: numOfClassicQuizzes > 0 ? numOfClassicQuizzes : null
+                    number: numOfClassicQuizzes > 0 ? numOfClassicQuizzes : null,
+                    addQuestions: addQuestionsEnabled,
+                    questionTypes: selectedQuestionTypesForAPI
                 },
                 addNQ: {
                     state: courseAddNQChbx,
                     number: numOfNewQuizzes > 0 ? numOfNewQuizzes : null
+                },
+                newQuizQuestions: {
+                    addQuestions: addNewQQuestionsEnabled,
+                    questionTypes: selectedNewQQuestionTypesForAPI
                 },
                 addDiscussions: {
                     state: courseAddDiscussionsChbx,
@@ -1117,7 +1534,6 @@ async function createSupportCourse(e) {
         try {
             // persist current defaults at creation time
             if (typeof saveDefaults === 'function') saveDefaults();
-            createCourseResponseContainer.innerHTML = 'Creating course....';
             const response = await window.axios.createSupportCourse(data);
             createCourseResponseContainer.innerHTML += `Done.<p>Course ID: <a id="course-link" href="https://${domain}/courses/${response.course_id}" target="_blank">${response.course_id}`;
             const courseLink = createCourseResponseContainer.querySelector('#course-link');

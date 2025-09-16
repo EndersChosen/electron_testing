@@ -309,6 +309,16 @@ async function errorCheck(request) {
                         request: error.config.url
                     }
                     throw newError;
+                case '409':
+                    newError = {
+                        removed: error.response.data.removed[0] || 0,
+                        not_removed: error.response.data.errors.not_removed?.[0] || 0,
+                        not_found: error.response.data.errors.not_found?.[0] || 0,
+                        status: error.response.status,
+                        message: 'Some emails were not reset due to conflicts',
+                        request: error.config.url
+                    }
+                    throw newError;
                 default:
                     newError = {
                         status: error.response.status,
