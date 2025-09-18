@@ -244,13 +244,15 @@ async function errorCheck(request) {
     try {
         let newError = { status: null, message: null, request: null };
         const response = await request();
-        if (response.data.errors?.length > 0) {
+
+        // Check if response.data exists and has errors
+        if (response.data && response.data.errors && response.data.errors.length > 0) {
             newError = {
                 status: "Unknown",
                 message: response.data.errors[0].message.replace(':', '')
             }
             throw newError;
-        } else if (typeof response.data === 'string') {
+        } else if (response.data && typeof response.data === 'string') {
             if (response.data.match(/doctype/)) {
                 newError = {
                     status: "Unknown",
@@ -311,14 +313,14 @@ async function errorCheck(request) {
                     throw newError;
                 case '409':
                     newError = {
-                        removed: error.response.data.removed[0] || 0,
-                        not_removed: error.response.data.errors.not_removed?.[0] || 0,
-                        not_found: error.response.data.errors.not_found?.[0] || 0,
+                        removed: error.response.data.removed?.length || 0,
+                        not_removed: error.response.data.errors.not_removed?.length || 0,
+                        not_found: error.response.data.errors.not_found?.length || 0,
                         status: error.response.status,
                         message: 'Some emails were not reset due to conflicts',
                         request: error.config.url
                     }
-                    throw newError;
+                    return newError;
                 default:
                     newError = {
                         status: error.response.status,

@@ -46,6 +46,8 @@ async function getBouncedData(data) {
 }
 
 async function emailCheck(data) {
+    console.log('comm_channels.js > emailCheck');
+
     const domain = data.domain;
     const token = data.token;
     const region = REGION[data.region];
@@ -58,12 +60,13 @@ async function emailCheck(data) {
 
     emailStatus.suppressed = await awsCheck(region, token, email);
     emailStatus.bounced = await bounceCheck(domain, token, email);
+    console.log('emailStatus:', email, emailStatus);
 
     return emailStatus;
 }
 
 async function awsCheck(domain, token, email) {
-    console.log('awsCheck');
+    console.log('comm_channels.js > awsCheck');
 
     const axiosConfig = {
         method: 'get',
@@ -91,7 +94,7 @@ async function awsCheck(domain, token, email) {
 }
 
 async function bounceCheck(domain, token, email) {
-    console.log('bounceCheck');
+    console.log('comm_channels.js > bounceCheck');
 
     const url = `https://${domain}/api/v1/accounts/self/bounced_communication_channels?pattern=${email}`;
 
@@ -109,7 +112,7 @@ async function bounceCheck(domain, token, email) {
         }
 
         const response = await errorCheck(request);
-        console.log('bounceCheck response:', response.data);
+        // console.log('bounceCheck response:', response.data);
         return response.data.length > 1;
     } catch (error) {
         throw error;
@@ -447,5 +450,6 @@ module.exports = {
     awsReset,
     bulkAWSReset,
     bounceCheck,
+    awsCheck,
     patternBounceReset
 }

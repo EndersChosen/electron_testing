@@ -27,6 +27,7 @@
     <script src="./announcements_renderer.js" defer></script>
     <script src="./pages_renderer.js" defer></script>
     <script src="./sections_renderer.js" defer></script>
+    <script src="./integration-test.js" defer></script>
     <script src="./renderer.js" defer></script>
 </head>
 
@@ -34,7 +35,7 @@
     <header class="fixed-top">
         <div class="container-fluid custom-border-bottom mb-3">
             <div class="row justify-content-start g-2">
-                <div class="col-12 col-lg">
+                <div class="col-12 col-md-7 col-lg-8">
                     <div class="input-group flex-nowrap mt-2 mb-3">
                         <button id="sidebar-toggle" class="btn btn-outline-secondary" type="button" aria-pressed="false"
                             title="Hide menu" aria-label="Toggle menu">«</button>
@@ -45,7 +46,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-12 col-lg">
+                <div class="col-12 col-md-5 col-lg-4">
                     <div class="form-floating mt-2 mb-3">
                         <input type=" text" class="form-control" placeholder="Token" id="token" value="">
                         <label for="token">Token</label>
@@ -102,35 +103,42 @@
                                     </button>
                                     <button id="delete-assignments-combined"
                                         class="list-group-item list-group-item-action border-start-0 border-end-0">
-                                        Delete Assignments (combined filters)
+                                        Delete Assignments
                                     </button>
                                     <button id="delete-nosubmission-assignments"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete assignments without
                                         submissions
                                     </button>
                                     <button id="delete-no-due-date-assignments"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete assignments without a due date
                                     </button>
                                     <button id="delete-unpublished-assignments"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete Unpublished Assignments
                                     </button>
                                     <button id="delete-nonmodule-assignments"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete Assignments not in Modules
                                     </button>
                                     <button id="delete-assignments-from-import"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete Assignments Created From Import
                                     </button>
                                     <button id="delete-old-assignments"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete old (passed a certain due date) Assignments
                                     </button>
                                     <button id="keep-assignments-in-group"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Only Keep Assignments In Specific Assignment Group
                                     </button>
                                     <button id="move-assignments"
@@ -138,7 +146,8 @@
                                         Move assignments to a single group
                                     </button>
                                     <button id="delete-assignments-from-group"
-                                        class="list-group-item list-group-item-action border-start-0 border-end-0">
+                                        class="list-group-item list-group-item-action border-start-0 border-end-0"
+                                        hidden>
                                         Delete Assignments From a Single Group
                                     </button>
                                 </div>

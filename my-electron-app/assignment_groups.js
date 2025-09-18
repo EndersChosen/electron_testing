@@ -130,6 +130,7 @@ async function getEmptyAssignmentGroups(data) {
                                 nodes {
                                     state
                                     _id
+                                    name
                                     assignmentsConnection {
                                         nodes {
                                             _id
@@ -223,7 +224,8 @@ async function deleteEmptyAssignmentGroup(data) {
         };
 
         const response = await errorCheck(request);
-        return response.data.id;
+        // For DELETE requests, return a success indicator instead of trying to access data.id
+        return { success: true, status: response.status };
     } catch (error) {
         throw error;
     }

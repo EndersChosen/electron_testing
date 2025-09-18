@@ -9,9 +9,16 @@ body {
 }
 
 /* Increase top padding when header stacks to two lines */
-@media (max-width: 1200px) {
+@media (max-width: 991px) {
     body {
-        padding-top: 150px;
+        padding-top: 130px;
+    }
+}
+
+/* Further adjust for very small screens */
+@media (max-width: 575px) {
+    body {
+        padding-top: 140px;
     }
 }
 
@@ -38,11 +45,17 @@ header #sidebar-toggle {
     margin-right: 0.5rem;
 }
 
-/* Stack domain and token on narrower widths */
-@media (max-width: 1200px) {
-    header .row>.col {
-        flex: 0 0 100%;
-        max-width: 100%;
+/* Reduce margins on small screens to minimize header height */
+@media (max-width: 767px) {
+
+    header .input-group,
+    header .form-floating {
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    header .container-fluid {
+        margin-bottom: 0.5rem !important;
     }
 }
 

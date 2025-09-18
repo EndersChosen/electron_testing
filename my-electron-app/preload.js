@@ -8,6 +8,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 // });
 
 contextBridge.exposeInMainWorld('axios', {
+    awsCheck: async (data) => {
+        return await ipcRenderer.invoke('axios:awsCheck', data);
+    },
+    bounceCheck: async (domain, token, email) => {
+        return await ipcRenderer.invoke('axios:bounceCheck', { domain, token, email });
+    },
     getConvos: async (data) => {
         const result = await ipcRenderer.invoke('axios:getConvos', data);
         if (!result) {
@@ -402,6 +408,9 @@ contextBridge.exposeInMainWorld('fileUpload', {
     },
     writeErrorsFile: async (dirPath, baseName, failed) => {
         return await ipcRenderer.invoke('fileUpload:writeErrorsFile', { dirPath, baseName, failed });
+    },
+    checkEmails: async () => {
+        return await ipcRenderer.invoke('fileUpload:checkEmails');
     }
 });
 
@@ -468,6 +477,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     fetchAuthProviders: async (domain, token, accountId) => {
         return await ipcRenderer.invoke('sis:fetchAuthProviders', domain, token, accountId);
     }
+});
+
+// Expose ipcRenderer for direct IPC calls
+contextBridge.exposeInMainWorld('ipcRenderer', {
+    invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args)
 });
 
 // Small utilities (none exposed currently)

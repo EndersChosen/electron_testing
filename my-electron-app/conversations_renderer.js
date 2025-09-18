@@ -629,8 +629,10 @@ async function deleteConvos(e) {
     if (form.dataset.bound !== 'true') {
         searchBtn.addEventListener('click', async (evt) => {
             evt.preventDefault(); evt.stopPropagation();
+
             searchBtn.disabled = true; cancelSearchBtn.disabled = false; deleteBtn.disabled = true; resultDiv.innerHTML = '';
             searchProgressDiv.hidden = false; searchProgressInfo.textContent = 'Searching for conversations...';
+
             const domain = document.querySelector('#domain').value.trim();
             const token = document.querySelector('#token').value.trim();
             const user_id = userInput.value.trim();
@@ -638,6 +640,7 @@ async function deleteConvos(e) {
             let cancelled = false;
             const onCancel = async () => { cancelSearchBtn.disabled = true; try { await window.axios.cancelGetConvos(); } catch { } cancelled = true; searchProgressInfo.textContent = 'Cancelling search...'; };
             cancelSearchBtn.addEventListener('click', onCancel, { once: true });
+
             try {
                 foundMessages = await window.axios.getConvos({ domain, token, user_id, subject });
                 const count = Array.isArray(foundMessages) ? foundMessages.length : 0;
@@ -653,10 +656,13 @@ async function deleteConvos(e) {
 
         deleteBtn.addEventListener('click', async (evt) => {
             evt.preventDefault(); evt.stopPropagation(); if (!foundMessages || foundMessages.length === 0) return;
+
             const domain = document.querySelector('#domain').value.trim();
             const token = document.querySelector('#token').value.trim();
+
             deleteBtn.disabled = true; cancelDeleteBtn.disabled = false;
             deleteProgressDiv.hidden = false; deleteProgressBar.style.width = '0%'; deleteProgressInfo.textContent = `Deleting ${foundMessages.length} conversation(s)...`;
+
             // progress listener
             if (window.progressAPI) {
                 window.progressAPI.onUpdateProgress((progress) => {
@@ -667,9 +673,11 @@ async function deleteConvos(e) {
                     }
                 });
             }
+
             let cancelled = false;
             const onCancelDelete = async () => { cancelDeleteBtn.disabled = true; try { await window.axios.cancelDeleteConvos(); } catch { } cancelled = true; deleteProgressInfo.textContent = 'Cancelling deletion...'; };
             cancelDeleteBtn.addEventListener('click', onCancelDelete, { once: true });
+
             try {
                 const res = await window.axios.deleteConvos({ domain, token, messages: foundMessages });
                 const success = res?.successful?.length || 0;

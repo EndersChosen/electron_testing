@@ -9,17 +9,35 @@ window.addEventListener('contextmenu', (e) => {
 
 // formatting the domain 
 const domain = document.querySelector('#domain');
-domain.addEventListener('change', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+domain.addEventListener('input', (e) => {
+    const domainString = e.target.value.trim();
 
-    // console.log('The domain value: ', e.target.value);
-    const domainString = e.target.value;
+    // Only clean if it looks like a URL (has protocol or path), not during normal typing
+    if (domainString.includes('://') || (domainString.includes('/') && domainString.indexOf('/') > domainString.indexOf('.'))) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Remove protocol (http:// or https://) and extract only the domain part
+        let cleanDomain = domainString.replace(/^https?:\/\//, '');
+        // Remove any path components after the domain (everything after the first slash)
+        cleanDomain = cleanDomain.split('/')[0];
+        // Remove trailing dots
+        cleanDomain = cleanDomain.replace(/\.$/, '');
+        e.target.value = cleanDomain;
+    }
+});
+
+// Clean domain when user finishes typing (clicks away)
+domain.addEventListener('blur', (e) => {
+    const domainString = e.target.value.trim();
     if (domainString.length > 0) {
-        const httpsRemoved = domainString.match(/https:\/\/([^/\/\s]+)|([^/\/\s]+)/)[1];
-        if (httpsRemoved) {
-            e.target.value = httpsRemoved;
-        }
+        // Remove protocol (http:// or https://) and extract only the domain part
+        let cleanDomain = domainString.replace(/^https?:\/\//, '');
+        // Remove any path components after the domain (everything after the first slash)
+        cleanDomain = cleanDomain.split('/')[0];
+        // Remove trailing dots
+        cleanDomain = cleanDomain.replace(/\.$/, '');
+        e.target.value = cleanDomain;
     }
 });
 
@@ -520,32 +538,120 @@ function getInputs(eContent) {
     return data;
 }
 
-function errorHandler(error, progressInfo) {
-    console.error(error)
-    const lastIndex = error.message.lastIndexOf(':');
-    let errorInfo = 'If you need assistance message Caleb and tell him to fix it.';
+function errorHandler(error, progressInfo, container = null) {
+    console.error(error);
+
+    // Extract status code from error message
     const statusCode = error.message.match(/(?<=status code )[0-9]+/);
-    if (statusCode) {
-        switch (statusCode[0]) {
-            case '401':
-                errorInfo = 'Check your token';
+    const statusNum = statusCode ? parseInt(statusCode[0]) : null;
+
+    // Detect network errors
+    const isNetworkError = !statusNum && (
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('network error') ||
+        error.message.includes('getaddrinfo')
+    );
+
+    let errorTitle = 'Request Failed';
+    let errorInfo = '';
+
+    if (isNetworkError) {
+        errorTitle = 'Network Connection Error';
+        if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
+            errorInfo = 'Cannot reach the server. Check your Canvas domain - make sure it\'s spelled correctly and doesn\'t include "https://" (e.g., use "myschool.instructure.com" not "https://myschool.instructure.com").';
+        } else if (error.message.includes('ECONNREFUSED')) {
+            errorInfo = 'Connection refused by server. The Canvas domain may be incorrect or the server may be down.';
+        } else if (error.message.includes('ETIMEDOUT')) {
+            errorInfo = 'Connection timed out. Check your internet connection or try again later.';
+        } else {
+            errorInfo = 'Network error occurred. Check your internet connection and Canvas domain.';
+        }
+    } else if (statusNum) {
+        errorTitle = `HTTP Error ${statusNum}`;
+        switch (statusNum) {
+            case 400:
+                errorInfo = 'Bad request. Check that all required fields are filled out correctly.';
+                break;
+            case 401:
+                errorInfo = 'Authentication failed. Check your API token - it may be invalid or expired.';
                 if (document.querySelector('#user-id')) {
-                    errorInfo += ' and the User ID.';
+                    errorInfo += ' Also verify the User ID is correct.';
                 }
                 break;
-            case '403':
-                errorInfo = 'Check to make sure you have permissions for the request and try again.';
+            case 403:
+                errorInfo = 'Access forbidden. You may not have permission for this action, or you may be hitting rate limits. Wait a moment and try again.';
                 break;
-            case '404':
-                errorInfo = 'Check your inputs to make sure they\'re valid.';
+            case 404:
+                errorInfo = 'Resource not found. Check that the Course ID exists and you have access to it.';
+                break;
+            case 422:
+                errorInfo = 'Validation error. One or more fields contain invalid data. Check your input values.';
+                break;
+            case 429:
+                errorInfo = 'Too many requests. You\'re being rate limited. Wait a few minutes before trying again.';
+                break;
+            case 500:
+                errorInfo = 'Internal server error. This is a Canvas server issue - try again in a few minutes.';
+                break;
+            case 502:
+                errorInfo = 'Bad gateway. Canvas servers may be experiencing issues. Try again later.';
+                break;
+            case 503:
+                errorInfo = 'Service unavailable. Canvas may be down for maintenance. Check Canvas status and try again later.';
+                break;
+            case 504:
+                errorInfo = 'Gateway timeout. The request took too long. Try again or reduce the number of items being processed.';
                 break;
             default:
-                errorInfo = 'If you need assistance message Caleb and tell him to fix it.'
+                errorInfo = `Unexpected HTTP error (${statusNum}). If this persists, contact your Canvas administrator or technical support.`;
                 break;
         }
-
+    } else {
+        errorTitle = 'Unknown Error';
+        errorInfo = 'An unexpected error occurred. Check the console for more details, or contact technical support if this persists.';
     }
-    progressInfo.innerHTML += `<p>There was an error: <span class="error">${error.message.slice(lastIndex + 1)}</span></p><p>${errorInfo}</p>`;
+
+    // Extract the most relevant part of the error message
+    const lastIndex = error.message.lastIndexOf(':');
+    const errorMessage = lastIndex > 0 ? error.message.slice(lastIndex + 1).trim() : error.message;
+
+    // If a container is provided, create a professional error card
+    if (container) {
+        const errorCardId = `error-card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        const errorCard = document.createElement('div');
+        errorCard.className = 'card mt-3';
+        errorCard.innerHTML = `
+            <div class="card-header">
+                <h6 class="mb-0 text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${errorTitle}
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger mb-0" role="alert">
+                    <p class="mb-2"><strong>Error:</strong> <code>${errorMessage}</code></p>
+                    <p class="mb-0">${errorInfo}</p>
+                </div>
+            </div>
+        `;
+        
+        // Clear progress info and append to container
+        if (progressInfo) progressInfo.innerHTML = '';
+        container.appendChild(errorCard);
+    } else {
+        // Fallback to the original method for backward compatibility
+        progressInfo.innerHTML += `
+            <div class="alert alert-danger" role="alert">
+                <h6 class="alert-heading mb-2">${errorTitle}</h6>
+                <p class="mb-2"><strong>Error:</strong> <code>${errorMessage}</code></p>
+                <p class="mb-0">${errorInfo}</p>
+            </div>
+        `;
+    }
 }
 
 function hideEndpoints() {

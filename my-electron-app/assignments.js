@@ -927,6 +927,7 @@ async function getAllAssignmentsForCombined(data) {
                         createdAt
                         hasSubmittedSubmissions
                         gradedSubmissionsExist
+                        assignmentGroup { _id }
                         modules { _id id name }
                         quiz { modules { _id id name } }
                         discussion { modules { _id id name } }

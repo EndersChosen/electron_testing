@@ -6,7 +6,11 @@
   "scripts": {
     "myStart": "electron .",
     "start": "electron-forge start",
-    "test": "electron ./index_bs_example.html",
+    "test": "node test-runner.js",
+    "test:unit": "node tests/unit.test.js",
+    "test:integration": "echo 'Run window.runTests() in the developer console of the running app'",
+    "test:security": "npm audit --audit-level=moderate",
+    "test:all": "npm run test:unit && npm run test:security",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "build": "electron-builder",

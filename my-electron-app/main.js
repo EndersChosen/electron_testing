@@ -27,6 +27,7 @@ const {
     confirmEmail,
     resetEmail,
     awsReset,
+    awsCheck,
     bulkAWSReset,
     bounceReset,
     bounceCheck,
@@ -142,6 +143,30 @@ function saveSettings(settings) {
 function getSettings() {
     if (!appSettings) appSettings = loadSettings();
     return appSettings;
+}
+
+async function getFileContentsForEmails() {
+    const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [
+            { name: 'CSV Files', extensions: ['csv'] },
+            { name: 'Text Files', extensions: ['txt'] },
+            { name: 'All Files', extensions: ['*'] }
+        ]
+    });
+
+    if (result.canceled || !result.filePaths.length) {
+        return 'cancelled';
+    }
+
+    try {
+        const filePath = result.filePaths[0];
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        return fileContent;
+    } catch (error) {
+        console.error('Error reading file:', error);
+        throw error;
+    }
 }
 
 // DevTools docking behavior
@@ -418,7 +443,7 @@ function createMenu() {
                 {
                     label: 'Enable Debug Logging',
                     type: 'checkbox',
-                    checked: false,
+                    checked: true,
                     click: (menuItem) => {
                         setDebugLogging(menuItem.checked);
                     }
@@ -830,6 +855,7 @@ function registerSisIpcHandlers() {
 
 app.whenReady().then(() => {
 
+    setDebugLogging(true); // Enable debug logging by default; user can toggle via menu
     console.log('BATCH_CONCURRENCY (env):', process.env.BATCH_CONCURRENCY);
     // Cancellable subject search (per renderer)
     const getConvosControllers = new Map(); // senderId -> AbortController
@@ -1008,6 +1034,7 @@ app.whenReady().then(() => {
     // Deleting conversations (per renderer)
     ipcMain.handle('axios:deleteConvos', async (event, data) => {
         console.log('inside axios:deleteConvos');
+
         const senderId = event.sender.id;
         deleteConvosCancelFlags.set(senderId, false);
 
@@ -1074,6 +1101,26 @@ app.whenReady().then(() => {
     });
 
     // === COMMUNICATION CHANNELS SECTION ===
+
+    // AWS Suppression check (single email)
+    ipcMain.handle('axios:awsCheck', async (event, data) => {
+        try {
+            const result = await awsCheck({ ...data, email: data.email });
+            // awsReset returns { status, reset, error }, but for check we want true/false
+            return result.status !== '404';
+        } catch (error) {
+            throw error.message || error;
+        }
+    });
+
+    // Bounce check (single email)
+    ipcMain.handle('axios:bounceCheck', async (event, { domain, token, email }) => {
+        try {
+            return await bounceCheck(domain, token, email);
+        } catch (error) {
+            throw error.message || error;
+        }
+    });
 
     // Checking communication channel (per renderer)
     ipcMain.handle('axios:checkCommChannel', async (event, data) => {
@@ -1156,13 +1203,19 @@ app.whenReady().then(() => {
 
         let requests = [];
         for (let i = 0; i < data.number; i++) {
+            // When creating multiple assignments, append a counter to the name
+            let assignmentName = data.name;
+            if (data.number > 1) {
+                assignmentName = `${data.name} ${i + 1}`;
+            }
+
             const requestData = {
                 domain: data.domain,
                 token: data.token,
                 course_id: data.course_id,
                 anonymous: data.anonymous,
                 grade_type: data.grade_type,
-                name: data.name,
+                name: assignmentName,
                 peer_reviews: data.peer_reviews,
                 points: data.points,
                 publish: data.publish,
@@ -1176,6 +1229,7 @@ app.whenReady().then(() => {
         const createAssignmentsCancelFlags = new Map();
         const isCancelled = () => createAssignmentsCancelFlags.get(senderId) === true;
         const batchResponse = await batchHandler(requests, { batchSize: 35, timeDelay: 2000, isCancelled });
+
         return batchResponse;
     });
 
@@ -1236,58 +1290,66 @@ app.whenReady().then(() => {
     ipcMain.handle('axios:deleteEmptyAssignmentGroups', async (event, data) => {
         console.log('Inside axios:deleteEmptyAssignmentGroups')
 
-        let completedRequests = 0;
-        const totalRequests = data.content.length;
-        // let batchResponse = null;
-        // let failed = [];
-
-        const updateProgress = () => {
-            completedRequests++;
-            mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
-        }
-
-
-        const request = async (data) => {
-            try {
+        try {
+            // Handle single group deletion (called from assignments_renderer.js)
+            if (data.groupID && !data.content) {
                 const response = await assignmentGroups.deleteEmptyAssignmentGroup(data);
                 return response;
-            } catch (error) {
-                throw error;
-            } finally {
-                updateProgress();
             }
-        }
 
-        let requests = [];
-        let requestCounter = 1;
-        data.content.forEach((group) => {
-            const requestData = {
-                domain: data.url,
-                token: data.token,
-                groupID: group._id,
-                id: requestCounter
+            // Handle batch deletion (if called with content array)
+            if (data.content && Array.isArray(data.content)) {
+                let completedRequests = 0;
+                const totalRequests = data.content.length;
+
+                const updateProgress = () => {
+                    completedRequests++;
+                    mainWindow.webContents.send('update-progress', (completedRequests / totalRequests) * 100);
+                }
+
+                const request = async (requestData) => {
+                    try {
+                        const response = await assignmentGroups.deleteEmptyAssignmentGroup(requestData);
+                        return response;
+                    } catch (error) {
+                        throw error;
+                    } finally {
+                        updateProgress();
+                    }
+                }
+
+                let requests = [];
+                let requestCounter = 1;
+                data.content.forEach((group) => {
+                    const requestData = {
+                        domain: data.url,
+                        token: data.token,
+                        groupID: group._id,
+                        id: requestCounter
+                    }
+                    requests.push(() => request(requestData));
+                    requestCounter++;
+                });
+
+                // Execute batch requests (implementation would go here)
+                // For now, just execute them sequentially
+                const results = [];
+                for (const requestFn of requests) {
+                    try {
+                        const result = await requestFn();
+                        results.push(result);
+                    } catch (error) {
+                        results.push({ error: error.message });
+                    }
+                }
+                return results;
             }
-            requests.push(() => request(requestData));
-            requestCounter++;
-        });
 
-        // batchResponse = await batchHandler(requests);
-        // failed = batchResponse
-
-        const responses = [];
-        for (let request of requests) {
-            responses.push(await request());
+            throw new Error('Invalid data format: missing groupID or content array');
+        } catch (error) {
+            console.error('Error in deleteEmptyAssignmentGroups handler:', error);
+            throw error;
         }
-
-        const formattedResponses = {
-            successful: [], failed: []
-        };
-
-        formattedResponses.successful = responses.filter(response => !isNaN(response));
-        formattedResponses.failed = responses.filter(response => isNaN(response));
-
-        console.log('Finished Deleting Empty Assignment groups.');
-        return formattedResponses;
     });
 
     // === DISCUSSIONS & CONTENT CREATION SECTION ===
@@ -2762,45 +2824,45 @@ app.whenReady().then(() => {
         const isCancelled = () => resetEmailsCancelFlags.get(senderId) === true;
 
         // Use batchHandler to process resets with retry/backoff and progress updates
-        const updateProgress = () => {
+        const updateProgress = (customLabel) => {
             processed++;
             mainWindow.webContents.send('update-progress', {
                 mode: 'determinate',
-                label: 'Resetting communication channels',
+                label: customLabel || 'Resetting communication channels...',
                 processed,
                 total,
                 value: total > 0 ? processed / total : 0
             });
         };
 
-        // const request = async (reqData) => {
-        //     try {
-        //         console.log('Resetting email:', reqData.email);
-        //         const bounceRes = await bounceReset({ domain: reqData.domain, token: reqData.token, email: reqData.email });
-        //         console.log('Bounce reset response:', bounceRes);
-        //         // if (Number(bounceRes?.reset || 0) > 0) {
-        //         //     await waitFunc(800);
-        //         //     try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
-        //         // }
-        //         // console.log('Clearing from Suppression list', reqData.email);
-        //         // const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
-        //         // console.log('AWS reset response:', awsRes);
-        //         // // Track throttled requests (422) for later retry
-        //         // if (String(awsRes?.status) === '422') aws422Emails.add(reqData.email);
-        //         return { bounce: bounceRes };
-        //     } catch (err) {
-        //         throw err;
-        //     } finally {
-        //         updateProgress();
-        //     }
-        // };
+        const request = async (reqData) => {
+            try {
+                console.log('Resetting email:', reqData.email);
+                const bounceRes = await bounceReset({ domain: reqData.domain, token: reqData.token, email: reqData.email });
+                console.log('Bounce reset response:', bounceRes);
+                // if (Number(bounceRes?.reset || 0) > 0) {
+                //     await waitFunc(800);
+                //     try { await bounceCheck(reqData.domain, reqData.token, reqData.email); } catch { /* ignore */ }
+                // }
+                // console.log('Clearing from Suppression list', reqData.email);
+                // const awsRes = await awsReset({ region: reqData.region, token: reqData.token, email: reqData.email });
+                // console.log('AWS reset response:', awsRes);
+                // // Track throttled requests (422) for later retry
+                // if (String(awsRes?.status) === '422') aws422Emails.add(reqData.email);
+                return { bounce: bounceRes };
+            } catch (err) {
+                throw err;
+            } finally {
+                updateProgress('Resetting bounced emails...');
+            }
+        };
 
-        // const requests = emails.map((email, idx) => ({
-        //     id: idx + 1,
-        //     email,
-        //     request: () => request({ domain: data.domain, token: data.token, region: data.region, email })
-        // }));
-        // for (const r of requests) idByEmail.set(r.email, r.id);
+        const requests = emails.map((email, idx) => ({
+            id: idx + 1,
+            email,
+            request: () => request({ domain: data.domain, token: data.token, region: data.region, email })
+        }));
+        for (const r of requests) idByEmail.set(r.email, r.id);
 
         // Sequential processing (one at a time) — keep for reference
         // for (let i = 0; i < emails.length; i++) {
@@ -2830,26 +2892,35 @@ app.whenReady().then(() => {
         //     }
         // }
 
-        // const batchResponse = await batchHandler(requests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
+        const batchResponse = await batchHandler(requests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
 
         // bulk awsReset
         const bulkEmailArray = [{ "value": [] }]; // copy
         const chunksize = 200;
+        const progressPercent = 0;
         const awsResetResponse = { removed: 0, not_removed: 0, not_found: 0, errors: 0 };
         for (let i = 0; i < emails.length; i += chunksize) {
+            progressPercent = Math.min(1, (processed + (i / emails.length)) / total);
+            mainWindow.webContents.send('update-progress', {
+                mode: 'determinate',
+                label: 'Resetting emails (AWS suppression list)...',
+                processed: processed + i,
+                total,
+                value: progressPercent
+            });
             const bulkArray = [{ value: emails.slice(i, i + chunksize) }];
             let awsRes = [];
 
             if (isCancelled()) break;
             await waitFunc(process.env.TIME_DELAY); // to avoid throttling
             awsRes = await bulkAWSReset({ region: data.region, token: data.token, emails: bulkArray });
-            if (awsRes.status === '204') {
+            if (awsRes.status === 204) {
                 awsResetResponse.removed += bulkArray[0].value.length;
 
             } else {
-                awsResetResponse.removed += awsRes.removed.length || 0;
-                awsResetResponse.not_removed += awsRes.not_removed.length || 0;
-                awsResetResponse.not_found += awsRes.not_found.length || 0;
+                awsResetResponse.removed += awsRes.removed || 0;
+                awsResetResponse.not_removed += awsRes.not_removed || 0;
+                awsResetResponse.not_found += awsRes.not_found || 0;
 
             }
         }
@@ -2900,21 +2971,23 @@ app.whenReady().then(() => {
         // }
 
         // After all requests, check the very last email once
-        const lastEmail = emails[emails.length - 1];
-        try {
-            const isBounced = await bounceCheck(data.domain, data.token, lastEmail);
-            if (isBounced) {
-                console.log(`Email ${lastEmail} is still on the bounce list.`);
-            } else {
-                console.log(`All emails cleared from the bounce list.`);
-            }
-        } catch (e) {
-            console.warn('bounceCheck final verification failed:', e?.message || String(e));
-        }
+        // const lastEmail = emails[emails.length - 1];
+        // try {
+        //     const isBounced = await bounceCheck(data.domain, data.token, lastEmail);
+        //     if (isBounced) {
+        //         console.log(`Email ${lastEmail} is still on the bounce list.`);
+        //     } else {
+        //         console.log(`All emails cleared from the bounce list.`);
+        //     }
+        // } catch (e) {
+        //     console.warn('bounceCheck final verification failed:', e?.message || String(e));
+        // }
 
         const cancelled = isCancelled();
         resetEmailsCancelFlags.delete(senderId);
-        return { ...batchResponse, cancelled, awsResetResponse };
+        const combinedResults = combineResetResults(awsResetResponse, batchResponse);
+        return { combinedResults, cancelled };
+
     });
 
     ipcMain.handle('axios:cancelResetEmails', async (event) => {
@@ -3267,6 +3340,10 @@ app.whenReady().then(() => {
         try {
 
             const fileContent = await getFileContentsForEmails();
+            if (fileContent === 'cancelled') {
+                // User cancelled file picker
+                return { success: false, message: 'File selection cancelled' };
+            }
             emails = removeBlanks(fileContent.split(/\r?\n|\r|\,/))
                 .map((email) => { // remove spaces
                     return email.trim();
@@ -3494,6 +3571,65 @@ app.whenReady().then(() => {
         } catch (err) {
             console.error('writeErrorsFile error:', err);
             throw err;
+        }
+    });
+
+    // Handle email checking from CSV files (including bounced communication channels format)
+    ipcMain.handle('fileUpload:checkEmails', async (event, data) => {
+        try {
+            const { filePaths } = await dialog.showOpenDialog({
+                properties: ['openFile'],
+                filters: [
+                    { name: 'CSV Files', extensions: ['csv'] },
+                    { name: 'Text Files', extensions: ['txt'] },
+                    { name: 'All Files', extensions: ['*'] }
+                ]
+            });
+
+            if (!filePaths || filePaths.length === 0) {
+                return { cancelled: true };
+            }
+
+            const filePath = filePaths[0];
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            const emails = parseEmailsFromCSV(fileContent);
+
+            if (emails.length === 0) {
+                throw new Error('No valid email addresses found in the file. For bounced communication channels CSV, make sure the file has "Path" and "Type" columns with email addresses.');
+            }
+
+            return {
+                success: true,
+                emails,
+                fileName: path.basename(filePath),
+                count: emails.length,
+                message: `Found ${emails.length} email address(es) in ${path.basename(filePath)}`
+            };
+
+        } catch (error) {
+            console.error('Error in fileUpload:checkEmails:', error);
+            return {
+                success: false,
+                error: error.message || 'Failed to process file'
+            };
+        }
+    });
+
+    // Parse emails from CSV content (used by renderer for immediate parsing)
+    ipcMain.handle('parseEmailsFromCSV', async (event, csvContent) => {
+        try {
+            const emails = parseEmailsFromCSV(csvContent);
+            return {
+                success: true,
+                emails,
+                count: emails.length
+            };
+        } catch (error) {
+            console.error('Error parsing CSV content:', error);
+            return {
+                success: false,
+                error: error.message || 'Failed to parse CSV content'
+            };
         }
     });
 
@@ -3884,14 +4020,30 @@ async function batchHandler(requests, batchSize = 35, timeDelay) {
             return {
                 id: request.id,
                 reason: error.message,
-                status: error.status
+                status: error.status,
+                isNetworkError: !error.status && (
+                    error.message.includes('ENOTFOUND') ||
+                    error.message.includes('ECONNREFUSED') ||
+                    error.message.includes('ECONNRESET') ||
+                    error.message.includes('ETIMEDOUT') ||
+                    error.message.includes('network error') ||
+                    error.code === 'ENOTFOUND' ||
+                    error.code === 'ECONNREFUSED' ||
+                    error.code === 'ECONNRESET' ||
+                    error.code === 'ETIMEDOUT'
+                )
             };
         }
     }
 
-    const filterStatus = [
-        404, 401, 422
-    ];
+    // Only retry on 403 (throttling) - no other status codes indicate retryable errors
+    const shouldRetry = (request) => {
+        // Don't retry network errors
+        if (request.isNetworkError) return false;
+
+        // Only retry on 403 (throttling/rate limiting)
+        return request.status === 403;
+    };
 
     do {
         if (isCancelled && isCancelled()) break;
@@ -3900,13 +4052,13 @@ async function batchHandler(requests, batchSize = 35, timeDelay) {
             counter++;
             await waitFunc(timeDelay); // wait for the time delay before attempting a retry
             await processBatchRequests(myRequests);
-            retryRequests = failed.filter(request => !filterStatus.includes(request.status)); // don't retry for 401, 404 or 422 errors
+            retryRequests = failed.filter(request => shouldRetry(request)); // only retry requests that should be retried
         } else {
             await processBatchRequests(myRequests);
-            retryRequests = failed.filter(request => !filterStatus.includes(request.status)); // don't retry for 401, 404 or 422 errors
+            retryRequests = failed.filter(request => shouldRetry(request)); // only retry requests that should be retried
         }
     }
-    while (counter < 3 && retryRequests.length > 0) // loop through if there are failed requests until the counter is ove 3
+    while (counter < 3 && retryRequests.length > 0) // loop through if there are failed requests until the counter is over 3
 
     return { successful, failed };
 }
@@ -3981,4 +4133,26 @@ async function canvasRateLimitedHandler(requests, options = {}) {
         if (queue.length === 0) return resolve({ successful, failed });
         startNext();
     });
+}
+
+// Add this helper function to combine reset results
+function combineResetResults(awsResetResponse, batchResponse) {
+    const totalProcessed = batchResponse.successful.length + batchResponse.failed.length;
+    const bounceResets = batchResponse.successful.filter(s => s.value?.bounce?.reset > 0).length;
+
+    return {
+        summary: {
+            totalEmailsProcessed: totalProcessed,
+            bounceListResets: bounceResets,
+            bounceListFailed: batchResponse.failed.length,
+            suppressionListRemoved: awsResetResponse.removed,
+            suppressionListNotRemoved: awsResetResponse.not_removed,
+            suppressionListNotFound: awsResetResponse.not_found,
+            suppressionListErrors: awsResetResponse.errors
+        },
+        details: {
+            bounceResults: batchResponse,
+            suppressionResults: awsResetResponse
+        }
+    };
 }

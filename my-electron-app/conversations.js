@@ -63,6 +63,7 @@ async function getConversations(user, url, scope, token) {
 
 // gets all messages with the specific scope (inbox, sent, etc.) for a single user
 async function getConversationsGraphQL(data) {
+    console.log('conversations.js > getConversationsGraphQL');
 
     const domain = data.domain;
     const token = data.token;
@@ -86,6 +87,14 @@ async function getConversationsGraphQL(data) {
                                 conversation {
                                     subject
                                     _id
+                                    updatedAt
+                                    conversationParticipantsConnection {
+                                        edges {
+                                            node {
+                                                userId
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -124,7 +133,11 @@ async function getConversationsGraphQL(data) {
             const data = response.data.data.legacyNode.conversationsConnection;
 
             sentMessages.push(...data.nodes.map((conversation) => {
-                return { subject: conversation.conversation.subject, id: conversation.conversation._id };
+                return {
+                    subject: conversation.conversation.subject,
+                    id: conversation.conversation._id,
+                    users: conversation.conversation.conversationParticipantsConnection.edges.map(edge => edge.node.userId)
+                };
             }).filter((message) => {
                 return message.subject === subject;
             }));
@@ -225,6 +238,8 @@ async function getConversationsGraphQL(data) {
 }
 
 async function deleteForAll(data) {
+    console.log('conversations.js > deleteForAll');
+
     const domain = data.domain;
     const token = data.token;
     const messageID = data.message;
