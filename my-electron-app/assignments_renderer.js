@@ -7,11 +7,11 @@
 // Helper function to create consistent error display across all assignment operations
 function createErrorCard(failedItems, operationType = 'assignment') {
     if (!failedItems || failedItems.length === 0) return '';
-    
+
     const errorCount = failedItems.length;
     const errorText = errorCount === 1 ? 'error' : 'errors';
     const errorCardId = `error-details-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     let errorHTML = `
         <div class="card mt-3">
             <div class="card-header" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#${errorCardId}" aria-expanded="false">
@@ -26,11 +26,11 @@ function createErrorCard(failedItems, operationType = 'assignment') {
             <div class="collapse" id="${errorCardId}">
                 <div class="card-body">
     `;
-    
+
     failedItems.forEach((failedItem, index) => {
-        const errorTitle = failedItem.isNetworkError ? 'Network Error' : 
-                         failedItem.status ? `HTTP Error ${failedItem.status}` : 'Unknown Error';
-        
+        const errorTitle = failedItem.isNetworkError ? 'Network Error' :
+            failedItem.status ? `HTTP Error ${failedItem.status}` : 'Unknown Error';
+
         let errorDetail = '';
         if (failedItem.isNetworkError) {
             if (failedItem.reason.includes('ENOTFOUND') || failedItem.reason.includes('getaddrinfo')) {
@@ -59,7 +59,7 @@ function createErrorCard(failedItems, operationType = 'assignment') {
         } else {
             errorDetail = 'Unknown error occurred.';
         }
-        
+
         const itemLabel = errorCount === 1 ? '' : ` - ${operationType} ${failedItem.id}`;
         errorHTML += `
             <div class="border-start border-danger border-3 ps-3 mb-3">
@@ -69,20 +69,20 @@ function createErrorCard(failedItems, operationType = 'assignment') {
             </div>
         `;
     });
-    
+
     errorHTML += `
                 </div>
             </div>
         </div>
     `;
-    
+
     return errorHTML;
 }
 
 // Helper function to create result cards for operations with success/failure counts
 function createResultCard(title, message, failedItems = [], alertType = 'success') {
     const cardId = `result-card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     let cardHTML = `
         <div class="card mt-3">
             <div class="card-header">
@@ -93,17 +93,17 @@ function createResultCard(title, message, failedItems = [], alertType = 'success
                     ${message}
                 </div>
     `;
-    
+
     // Add error details if there are failed items
     if (failedItems && failedItems.length > 0) {
         cardHTML += createErrorCard(failedItems, 'assignment');
     }
-    
+
     cardHTML += `
             </div>
         </div>
     `;
-    
+
     // Create and return the DOM element
     const container = document.createElement('div');
     container.innerHTML = cardHTML;
@@ -393,22 +393,22 @@ function deleteAssignmentsCombined(e) {
                 window.progressAPI.onUpdateProgress((p) => updateProgressWithPercent(progressBar, p));
                 try {
                     const result = await window.axios.deleteAssignments(payload);
-                    
+
                     // Check for empty assignment groups after successful deletion
                     const groupResult = await checkAndDeleteEmptyAssignmentGroups(domain, cid, token, progressInfo, details);
 
                     const { successful, failed } = result;
-                    
+
                     // Create comprehensive result message including assignment group info
                     let message = `Successfully removed ${successful.length} assignments${failed.length > 0 ? `, failed to remove ${failed.length} assignments` : ''}`;
-                    
+
                     if (groupResult.deletedCount > 0) {
                         message += `. Also deleted ${groupResult.deletedCount} empty assignment group(s)`;
                     }
                     if (groupResult.failedCount > 0) {
                         message += `. Failed to delete ${groupResult.failedCount} assignment group(s)`;
                     }
-                    
+
                     progressInfo.innerHTML = '';
                     const resultCard = createResultCard(
                         'Delete Assignments Results',
@@ -1133,18 +1133,18 @@ function noSubmissionAssignments(e) {
                     const deleteNoSubmissionASsignments = await window.axios.deleteAssignments(messageData);
                     const successful = deleteNoSubmissionASsignments.successful.length;
                     const failed = deleteNoSubmissionASsignments.failed.length;
-                    
+
                     let resultHTML = `
                         <div class="alert ${failed > 0 ? 'alert-warning' : 'alert-success'}" role="alert">
                             Deleted ${successful} assignment(s)${failed ? `, ${failed} failed` : ''}.
                         </div>
                     `;
-                    
+
                     // Display detailed error information using the helper function
                     if (failed > 0 && deleteNoSubmissionASsignments.failed) {
                         resultHTML += createErrorCard(deleteNoSubmissionASsignments.failed, 'Assignment');
                     }
-                    
+
                     nsaProgressInfo.innerHTML = '';
                     nsaResponseContainer.innerHTML = resultHTML;
                 } catch (error) {
@@ -1362,18 +1362,18 @@ function unpublishedAssignments(e) {
                     const deleteUnpublishedAssignments = await window.axios.deleteAssignments(messageData);
                     const successful = deleteUnpublishedAssignments.successful.length;
                     const failed = deleteUnpublishedAssignments.failed.length;
-                    
+
                     let resultHTML = `
                         <div class="alert ${failed > 0 ? 'alert-warning' : 'alert-success'}" role="alert">
                             Deleted ${successful} assignment(s)${failed ? `, ${failed} failed` : ''}.
                         </div>
                     `;
-                    
+
                     // Display detailed error information using the helper function
                     if (failed > 0 && deleteUnpublishedAssignments.failed) {
                         resultHTML += createErrorCard(deleteUnpublishedAssignments.failed, 'Assignment');
                     }
-                    
+
                     duaProgressInfo.innerHTML = '';
                     duaResponseContainer.innerHTML = resultHTML;
                 } catch (error) {
@@ -1774,18 +1774,18 @@ function nonModuleAssignments(e) {
                     const deleteNonModuleAssignments = await window.axios.deleteAssignments(messageData);
                     const successful = deleteNonModuleAssignments.successful.length;
                     const failed = deleteNonModuleAssignments.failed.length;
-                    
+
                     let resultHTML = `
                         <div class="alert ${failed > 0 ? 'alert-warning' : 'alert-success'}" role="alert">
                             Deleted ${successful} assignment(s)${failed ? `, ${failed} failed` : ''}.
                         </div>
                     `;
-                    
+
                     // Display detailed error information using the helper function
                     if (failed > 0 && deleteNonModuleAssignments.failed) {
                         resultHTML += createErrorCard(deleteNonModuleAssignments.failed, 'Assignment');
                     }
-                    
+
                     danimProgressInfo.innerHTML = '';
                     danimResponseContainer.innerHTML = resultHTML;
                 } catch (error) {
@@ -2989,7 +2989,7 @@ function deleteAssignmentsInGroup(e) {
                 try {
                     const deletedAssignments = await window.axios.deleteAssignments(messageData);
                     const { successful, failed } = deletedAssignments;
-                    
+
                     daigProgressInfo.innerHTML = '';
                     const resultCard = createResultCard(
                         'Delete Assignments in Group Results',
@@ -3465,12 +3465,12 @@ function assignmentCreator(e) {
                         Created ${ok} assignment(s)${bad ? `, ${bad} failed` : ''}.
                     </div>
                 `;
-                
+
                 // Display detailed error information using the helper function
                 if (bad > 0 && result.failed) {
                     responseHTML += createErrorCard(result.failed, 'Assignment');
                 }
-                
+
                 responseDiv.innerHTML = responseHTML;                // Reset the assignment number field to 1 to prevent accidental multiple creations
                 form.querySelector('#assignment-number').value = '1';
                 updateAssignmentNumberVisual(); // Update visual state after reset

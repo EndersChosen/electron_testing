@@ -621,7 +621,7 @@ function errorHandler(error, progressInfo, container = null) {
     // If a container is provided, create a professional error card
     if (container) {
         const errorCardId = `error-card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
+
         const errorCard = document.createElement('div');
         errorCard.className = 'card mt-3';
         errorCard.innerHTML = `
@@ -638,7 +638,7 @@ function errorHandler(error, progressInfo, container = null) {
                 </div>
             </div>
         `;
-        
+
         // Clear progress info and append to container
         if (progressInfo) progressInfo.innerHTML = '';
         container.appendChild(errorCard);
