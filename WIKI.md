@@ -1,13 +1,486 @@
-# CanvaScripter - Complete Feature Guide
+# CanvaScripter - Features Wiki
+
+## Overview
+CanvaScripter is a powerful desktop application built with Electron that provides comprehensive Canvas LMS management tools. It offers automated workflows, bulk operations, and advanced features for Canvas administrators and educators.
 
 ## Table of Contents
-1. [Overview](#overview)
-2. [Getting Started](#getting-started)
-3. [Assignments](#assignments)
-4. [Assignment Groups](#assignment-groups)
-5. [Users](#users)
-6. [Conversations](#conversations)
-7. [Communication Channels](#communication-channels)
+- [Getting Started](#getting-started)
+- [User Management](#user-management)
+- [Assignment Management](#assignment-management)
+- [Assignment Groups](#assignment-groups)
+- [Conversations](#conversations)
+- [Communication Channels](#communication-channels)
+- [Course Management](#course-management)
+- [Quizzes](#quizzes)
+- [Modules](#modules)
+- [Discussions](#discussions)
+- [Announcements](#announcements)
+- [Pages](#pages)
+- [Sections](#sections)
+- [SIS File Generator](#sis-file-generator)
+- [Content Imports](#content-imports)
+- [UI Features](#ui-features)
+- [Technical Architecture](#technical-architecture)
+- [Best Practices](#best-practices)
+
+---
+
+## Getting Started
+
+### Initial Setup
+1. **Canvas Domain**: Enter your Canvas instance domain (e.g., `myschool.instructure.com`)
+2. **API Token**: Enter your Canvas API token for authentication
+3. **Navigation**: Use the collapsible sidebar to access different feature categories
+
+### Interface Layout
+- **Fixed Header**: Contains domain and API token configuration
+- **Collapsible Sidebar**: Organized feature categories with accordion navigation
+- **Main Content Area**: Dynamic content area that adapts based on selected feature
+- **Resizable Layout**: Drag the resize handle to adjust sidebar width
+
+---
+
+## User Management
+
+### Get User Page Views
+**Purpose**: Retrieve and export user page view data with comprehensive analytics
+
+**Features**:
+- **Multiple Input Methods**:
+  - Single User ID input
+  - Multi-user comma-separated input
+  - File upload (supports multiple formats)
+- **File Format Support**:
+  - Plain user IDs (one per line or comma-separated)
+  - Canvas user URLs (extracts IDs from `https://domain.com/accounts/1/users/12345`)
+  - Mixed format files
+- **Date Range Filtering**: Specify start and end dates for page view data
+- **Real-time Progress Tracking**: 
+  - Per-user progress display
+  - Current user ID being processed
+  - Progress counter (e.g., "Getting page views for user 12345 (3/10)")
+  - Accurate progress bar reflecting completion status
+- **Export Options**:
+  - Single CSV for individual users
+  - ZIP file for multiple users (separate CSV per user)
+  - Enhanced CSV with flattened nested objects
+- **Smart Validation**: Input validation that only shows errors after user interaction
+- **File Upload Feedback**: Shows count of parsed user IDs immediately after file selection
+
+### User Notifications
+**Purpose**: Manage user notification preferences and settings
+
+**Features**:
+- Bulk notification management
+- User-specific notification controls
+- Professional UI with card-based layout
+
+---
+
+## Assignment Management
+
+### Delete Assignments From a Single Group
+**Purpose**: Remove all assignments from a specific assignment group
+
+**Features**:
+- Assignment group selection
+- Bulk deletion with confirmation
+- Progress tracking for large operations
+- Error handling and reporting
+
+---
+
+## Assignment Groups
+
+### Create Assignment Groups
+**Purpose**: Bulk creation of assignment groups across courses
+
+**Features**:
+- Professional card-based interface
+- Batch creation with customizable settings
+- Real-time validation
+- Progress monitoring
+
+### Delete Empty Assignment Groups
+**Purpose**: Clean up courses by removing assignment groups with no assignments
+
+**Features**:
+- Automatic detection of empty groups
+- Bulk deletion across multiple courses
+- Safety confirmations
+- Detailed reporting
+
+---
+
+## Conversations
+
+### Delete Conversations with Specific Subject
+**Purpose**: Bulk deletion of conversations based on subject line criteria
+
+**Features**:
+- Subject line pattern matching
+- Bulk deletion capabilities
+- Progress tracking
+- Cancellation support
+
+### Get Deleted Conversations
+**Purpose**: Retrieve and export data about deleted conversations
+
+**Features**:
+- Comprehensive deleted conversation retrieval
+- CSV export functionality
+- Date range filtering
+- Detailed conversation metadata
+
+### Restore Deleted Conversations
+**Purpose**: Restore previously deleted conversations
+
+**Features**:
+- Selective restoration
+- Bulk restoration operations
+- Progress tracking
+- Confirmation dialogs
+
+---
+
+## Communication Channels
+
+### Check Bounce and Suppression List
+**Purpose**: Verify email addresses against bounce and suppression lists
+
+**Features**:
+- Email validation
+- Bounce list checking
+- Suppression list verification
+- Detailed reporting
+
+### Reset Communication Channels
+**Purpose**: Reset user communication channel settings
+
+**Features**:
+- Bulk channel resets
+- User selection options
+- Progress monitoring
+- Error handling
+
+### Unconfirmed Emails
+**Purpose**: Manage and identify unconfirmed email addresses
+
+**Features**:
+- Unconfirmed email detection
+- Bulk management operations
+- User notification options
+- Export capabilities
+
+---
+
+## Course Management
+
+### Reset Courses
+**Purpose**: Reset course content and settings to default state
+
+**Features**:
+- Selective content reset
+- Bulk course operations
+- Backup recommendations
+- Progress tracking
+
+### Create Support Courses
+**Purpose**: Generate standardized support courses
+
+**Features**:
+- Template-based course creation
+- Customizable course settings
+- Bulk creation capabilities
+- Progress monitoring
+
+### Create Associated Courses
+**Purpose**: Create courses with specific associations and relationships
+
+**Features**:
+- Course relationship management
+- Association configuration
+- Batch creation
+- Template support
+
+---
+
+## Quizzes
+
+### Create Classic Quiz
+**Purpose**: Generate traditional Canvas quizzes
+
+**Features**:
+- Classic quiz template support
+- Customizable quiz settings
+- Question import capabilities
+- Bulk creation options
+
+### Delete All Classic Quizzes
+**Purpose**: Remove all classic quizzes from specified courses
+
+**Features**:
+- Bulk quiz deletion
+- Course selection
+- Safety confirmations
+- Progress tracking
+
+### Create New Quiz
+**Purpose**: Generate New Quizzes (Canvas's modern quiz engine)
+
+**Features**:
+- New Quiz engine support
+- Advanced question types
+- Modern quiz features
+- Template configuration
+
+### Add Questions to New Quiz
+**Purpose**: Populate New Quizzes with questions
+
+**Features**:
+- Question bank integration
+- Bulk question addition
+- Question type support
+- Import/export capabilities
+
+---
+
+## Modules
+
+### Delete Module
+**Purpose**: Remove specific modules from courses
+
+**Features**:
+- Selective module deletion
+- Bulk operations
+- Progress tracking
+- Confirmation dialogs
+
+### Create Module
+**Purpose**: Generate course modules with content
+
+**Features**:
+- Module template support
+- Content organization
+- Bulk creation
+- Structure configuration
+
+### Re-lock Modules
+**Purpose**: Restore module lock settings and prerequisites
+
+**Features**:
+- Prerequisite management
+- Lock condition restoration
+- Bulk operations
+- Progress monitoring
+
+---
+
+## Discussions
+
+### Create Discussions
+**Purpose**: Generate discussion topics and forums
+
+**Features**:
+- Professional card-based UI
+- Discussion template support
+- Bulk creation capabilities
+- Smart validation system
+- Real-time input feedback
+- Customizable discussion settings
+
+---
+
+## Announcements
+
+### Create Announcements
+**Purpose**: Generate course announcements
+
+**Features**:
+- Professional interface with Bootstrap styling
+- Announcement template support
+- Bulk creation across courses
+- Smart validation with conditional error display
+- Date and time scheduling
+- Rich text content support
+
+---
+
+## Pages
+
+### Create Pages
+**Purpose**: Generate course pages with content
+
+**Features**:
+- Enhanced card-based interface
+- Page template support
+- Bulk page creation
+- Smart validation system
+- Rich content editor integration
+- Progress tracking with visual feedback
+- Professional styling with Font Awesome icons
+
+---
+
+## Sections
+
+### Create Sections
+**Purpose**: Generate course sections for organization
+
+**Features**:
+- **Professional UI**: Card-based layout with Bootstrap 5.3.0
+- **Smart Validation**: 
+  - Conditional error display (only shows after user interaction)
+  - Real-time input validation
+  - Prevents errors on blank inputs
+- **Enhanced UX**:
+  - Visual progress indicators
+  - Dynamic button text updates
+  - Professional styling with Font Awesome icons
+- **Bulk Operations**: Create multiple sections efficiently
+- **Input Flexibility**: Support for various section naming patterns
+
+---
+
+## SIS File Generator
+
+### Create Single SIS File
+**Purpose**: Generate individual SIS import files
+
+**Features**:
+- Multiple file type support
+- Custom row count configuration
+- Email domain customization
+- Authentication provider integration
+- Preview functionality
+- Export options
+
+### Create Bulk SIS Import Package
+**Purpose**: Generate comprehensive SIS import packages
+
+**Features**:
+- Multi-file generation
+- ZIP package creation
+- Bulk configuration options
+- Progress tracking
+- Validation and preview
+- Custom enrollment settings
+
+---
+
+## Content Imports
+
+### Delete Imported Content
+**Purpose**: Remove content that was previously imported
+
+**Features**:
+- Selective content deletion
+- Import history tracking
+- Bulk deletion operations
+- Progress monitoring
+- Safety confirmations
+
+---
+
+## UI Features
+
+### Professional Interface Design
+- **Bootstrap 5.3.0**: Modern, responsive design framework
+- **Font Awesome Icons**: Professional iconography throughout
+- **Card-based Layouts**: Organized content presentation
+- **Consistent Styling**: Unified design language across all features
+
+### Smart Validation System
+- **Conditional Error Display**: Errors only shown after user interaction or submission
+- **Real-time Feedback**: Immediate validation as users type
+- **Touched Field Tracking**: Intelligent error state management
+- **Professional Error Messaging**: Clear, helpful error descriptions
+
+### Enhanced Progress Tracking
+- **Real-time Updates**: Live progress information during operations
+- **Per-item Progress**: Individual item processing status
+- **Visual Indicators**: Progress bars with percentage completion
+- **Detailed Status**: Current operation and remaining items
+- **Cancellation Support**: Ability to stop long-running operations
+
+### File Handling
+- **Multiple Format Support**: CSV, TXT, and Canvas URL formats
+- **Drag & Drop**: Easy file uploading
+- **Immediate Feedback**: File parsing results shown instantly
+- **Error Recovery**: Graceful handling of file parsing errors
+- **Format Flexibility**: Mixed format support in single files
+
+### Data Export
+- **CSV Generation**: Professional CSV export with proper escaping
+- **ZIP File Creation**: Multi-file exports for bulk operations
+- **Object Flattening**: Nested objects properly serialized in CSV
+- **Save Dialog Integration**: Native file save dialogs
+- **Progress Tracking**: Export progress monitoring
+
+### Responsive Design
+- **Collapsible Sidebar**: Space-efficient navigation
+- **Resizable Layout**: Adjustable interface components
+- **Mobile-friendly**: Responsive design for various screen sizes
+- **Accessibility**: ARIA labels and keyboard navigation support
+
+---
+
+## Technical Architecture
+
+### Frontend Technologies
+- **Electron**: Cross-platform desktop application framework
+- **Bootstrap 5.3.0**: Modern CSS framework
+- **Font Awesome**: Professional icon library
+- **Native HTML5**: File API, drag & drop, progress tracking
+
+### Backend Integration
+- **Canvas API**: Full Canvas LMS API integration
+- **Axios**: HTTP client for API requests
+- **CSV Processing**: Advanced CSV generation with object flattening
+- **File System**: Native file operations and ZIP creation
+- **Progress Events**: Real-time IPC communication
+
+### Data Processing
+- **Bulk Operations**: Efficient handling of large datasets
+- **Error Recovery**: Graceful error handling and reporting
+- **Validation**: Comprehensive input validation
+- **Type Safety**: Proper data type handling and conversion
+
+---
+
+## Best Practices
+
+### Usage Recommendations
+1. **Always backup** before performing bulk operations
+2. **Test on small datasets** before running large operations
+3. **Monitor progress** during long-running operations
+4. **Verify results** after completion
+5. **Keep API tokens secure** and rotate regularly
+
+### Performance Tips
+- Use bulk operations for efficiency
+- Monitor progress for long-running tasks
+- Close application properly to free resources
+- Regular updates for latest features and fixes
+
+---
+
+## Support and Development
+
+### Current Version Features
+- Professional UI with modern design
+- Smart validation system
+- Enhanced progress tracking
+- Multi-format file support
+- Advanced CSV export
+- Real-time progress updates
+
+### Future Enhancements
+- Additional Canvas API integrations
+- Enhanced reporting capabilities
+- Advanced scheduling features
+- Extended file format support
+- Performance optimizations
 8. [Courses](#courses)
 9. [Quizzes](#quizzes)
 10. [Modules](#modules)

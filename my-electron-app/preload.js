@@ -476,6 +476,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     fetchAuthProviders: async (domain, token, accountId) => {
         return await ipcRenderer.invoke('sis:fetchAuthProviders', domain, token, accountId);
+    },
+    onPageViewsProgress: (callback) => {
+        ipcRenderer.on('page-views-progress', callback);
+    },
+    removePageViewsProgressListener: (callback) => {
+        ipcRenderer.removeListener('page-views-progress', callback);
     }
 });
 
@@ -484,4 +490,28 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args)
 });
 
-// Small utilities (none exposed currently)
+// Small utilities
+window.utilities = {
+    createDownloadLink: function (data, filename, linkText = 'Download') {
+        const csv = typeof data === 'string' ? data : data.map(row =>
+            Array.isArray(row) ? row.join(',') : String(row)
+        ).join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.textContent = linkText;
+        link.className = 'btn btn-sm btn-outline-primary me-2';
+        link.style.marginTop = '10px';
+
+        // Clean up the URL when the link is clicked
+        link.addEventListener('click', () => {
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+
+        return link;
+    }
+};

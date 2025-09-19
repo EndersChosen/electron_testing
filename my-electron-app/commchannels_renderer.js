@@ -518,13 +518,35 @@ function checkComm(e) {
 
                 // Only generate CSV if not cancelled
                 if (!isCancelled && results.length > 0) {
-                    // Generate CSV
-                    const csv = ['email,suppressed,bounced'].concat(
-                        results.map(r => `${r.email},${r.suppressed ? 'Yes' : 'No'},${r.bounced ? 'Yes' : 'No'}`)
-                    ).join('\r\n');
-                    const blob = new Blob([csv], { type: 'text/csv' });
-                    const url = URL.createObjectURL(blob);
-                    responseContainer.innerHTML = 'Done. <br> <a href="' + url + '" download="email_check_results.csv">Download Results CSV</a>';
+                    // Filter to only include emails that are suppressed or bounced
+                    const problematicEmails = results.filter(r => r.suppressed || r.bounced);
+
+                    if (problematicEmails.length > 0) {
+                        // Generate CSV with only suppressed or bounced emails
+                        const csv = ['email,suppressed,bounced'].concat(
+                            problematicEmails.map(r => `${r.email},${r.suppressed ? 'Yes' : 'No'},${r.bounced ? 'Yes' : 'No'}`)
+                        ).join('\r\n');
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+
+                        const totalChecked = results.length;
+                        const suppressedCount = problematicEmails.filter(r => r.suppressed).length;
+                        const bouncedCount = problematicEmails.filter(r => r.bounced).length;
+
+                        responseContainer.innerHTML = `
+                            <p><strong>Check Complete:</strong></p>
+                            <p>• Total emails checked: ${totalChecked}</p>
+                            <p>• Emails on suppression list: ${suppressedCount}</p>
+                            <p>• Emails on bounce list: ${bouncedCount}</p>
+                            <p>• Problematic emails found: ${problematicEmails.length}</p>
+                            <br>
+                            <a href="${url}" download="problematic_emails.csv" class="btn btn-primary">📥 Download Problematic Emails CSV</a>
+                        `;
+                    } else {
+                        responseContainer.innerHTML = `
+                            <p><strong>Great news!</strong> None of the ${results.length} checked emails are on the suppression or bounce lists.</p>
+                        `;
+                    }
                 } else if (!isCancelled) {
                     responseContainer.innerHTML = 'No results to export.';
                 }
@@ -912,19 +934,23 @@ function resetComm(e) {
             const set = new Set();
             const maybePush = (val) => {
                 if (!val) return;
-                const s = String(val).trim().toLowerCase();
-                if (s && s.includes('@')) set.add(s);
+                const s = String(val).trim();
+                // Preserve original case for deduplication, but validate with lowercase
+                if (s && s.toLowerCase().includes('@')) set.add(s);
             };
             const fc = picked.fileContents;
             if (typeof fc === 'string') {
                 // Split on common delimiters: newline or comma
                 fc.split(/[\r\n,]+/).forEach(maybePush);
             } else if (Array.isArray(fc)) {
-                const keys = ['email', 'email_address', 'communication_channel_path', 'path'];
+                // Handle array of emails (from parseEmailsFromCSV) or array of objects
                 for (const item of fc) {
                     if (typeof item === 'string') {
+                        // Direct email string from parseEmailsFromCSV
                         maybePush(item);
                     } else if (item && typeof item === 'object') {
+                        // Object with email properties
+                        const keys = ['email', 'email_address', 'communication_channel_path', 'path'];
                         for (const k of keys) {
                             if (k in item) {
                                 maybePush(item[k]);
@@ -1047,12 +1073,42 @@ function resetComm(e) {
                     uploadContainer.innerHTML += `<p>Cleared ${totalAWSReset} email(s) from suppression list.</p>`;
                 }
                 if (suppressionNotFound === totalProcessed) {
-                    uploadContainer.innerHTML += `<p>No email(s) were not found on the suppression list.</p>`;
+                    uploadContainer.innerHTML += `<p>No email(s) were found on the suppression list.</p>`;
                 } else if (suppressionNotFound > 0 && (totalAWSReset > 0 || suppressionNotRemoved > 0)) {
                     uploadContainer.innerHTML += `<p>${suppressionNotFound} email(s) were not found on the suppression list.</p>`;
+
+                    // Add download link for emails not found
+                    const notFoundEmails = response.combinedResults.details.suppressionResults.notFoundEmails || [];
+                    if (notFoundEmails.length > 0) {
+                        const notFoundCSV = ['Email Address'].concat(notFoundEmails);
+                        const notFoundLink = window.utilities.createDownloadLink(
+                            notFoundCSV,
+                            'emails_not_found.csv',
+                            '📥 Download Not Found Emails'
+                        );
+                        const notFoundContainer = document.createElement('div');
+                        notFoundContainer.style.marginTop = '10px';
+                        notFoundContainer.appendChild(notFoundLink);
+                        uploadContainer.appendChild(notFoundContainer);
+                    }
                 }
-                if (suppressionNotRemoved > 0 && totalAWSReset > 0) {
+                if (suppressionNotRemoved > 0) {
                     uploadContainer.innerHTML += `<p>${suppressionNotRemoved} email(s) could not be removed from the suppression list.</p>`;
+
+                    // Add download link for emails not removed
+                    const notRemovedEmails = response.combinedResults.details.suppressionResults.notRemovedEmails || [];
+                    if (notRemovedEmails.length > 0) {
+                        const notRemovedCSV = ['Email Address'].concat(notRemovedEmails);
+                        const notRemovedLink = window.utilities.createDownloadLink(
+                            notRemovedCSV,
+                            'emails_not_removed.csv',
+                            '📥 Download Not Removed Emails'
+                        );
+                        const notRemovedContainer = document.createElement('div');
+                        notRemovedContainer.style.marginTop = '10px';
+                        notRemovedContainer.appendChild(notRemovedLink);
+                        uploadContainer.appendChild(notRemovedContainer);
+                    }
                 }
             } catch (error) {
                 if (String(error.message || error).toLowerCase().includes('cancelled')) {

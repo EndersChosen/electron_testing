@@ -249,24 +249,52 @@ async function enrollUser(data) {
     }
 }
 
-async function getPageViews(data) {
+async function getPageViews(data, mainWindow = null) {
     const domain = data.domain;
     const token = data.token;
-    const user_id = data.user;
     const startDate = data.start;
     const endDate = data.end;
+    const isBulk = data.isBulk || false;
+
+    // Handle both single user and array of users
+    const userIds = Array.isArray(data.userIds) ? data.userIds :
+        data.userIds ? [data.userIds] :
+            data.user ? [data.user] : [];
+
+    if (userIds.length === 0) {
+        throw new Error('No user IDs provided');
+    }
+
+    // If single user, use original logic
+    if (userIds.length === 1 && !isBulk) {
+        return await getSingleUserPageViews(domain, token, userIds[0], startDate, endDate, mainWindow);
+    }
+
+    // For multiple users or bulk processing
+    return await getMultipleUsersPageViews(domain, token, userIds, startDate, endDate, mainWindow);
+}
+
+async function getSingleUserPageViews(domain, token, user_id, startDate, endDate, mainWindow = null) {
     const dupPage = [];
     let pageNum = 1;
     let pageViews = [];
-    // let myUrl = url;
     let nextPage = `https://${domain}/api/v1/users/${user_id}/page_views?start_time=${startDate}&end_time=${endDate}&per_page=100`;
     console.log(nextPage);
 
+    // Send starting progress update
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('page-views-progress', {
+            currentUser: 1,
+            totalUsers: 1,
+            userId: user_id,
+            percentage: 0,
+            starting: true
+        });
+    }
+
     while (nextPage) {
-        console.log(`Getting page ${pageNum}`);
-        // const response = await error_check.errorCheck(async () => {
-        //     return await axios.get(nextPage);
-        // });
+        console.log(`Getting page ${pageNum} for user ${user_id}`);
+
         try {
             const request = async () => {
                 return await axios.get(nextPage, {
@@ -277,7 +305,6 @@ async function getPageViews(data) {
             }
 
             const response = await errorCheck(request);
-
             pageViews.push(...response.data);
 
             if (response.headers.get('link')) {
@@ -299,15 +326,255 @@ async function getPageViews(data) {
         }
     }
 
-    //console.log(response.data);
+    // Send completion progress update
+    if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('page-views-progress', {
+            currentUser: 1,
+            totalUsers: 1,
+            userId: user_id,
+            percentage: 100,
+            completed: true
+        });
+    }
 
-    // for (let view of response.data) {
-    //     pageViews.push(view);
-    // }
-
-
-    // csvExporter.exportToCSV(pageViews, `${user_id}_pageViews`)
+    // For single user, return the page views for direct CSV export
     return pageViews;
+}
+
+async function getMultipleUsersPageViews(domain, token, userIds, startDate, endDate, mainWindow = null) {
+    const results = [];
+    const errors = [];
+    const totalUsers = userIds.length;
+
+    console.log(`Processing ${totalUsers} users for page views`);
+
+    for (let i = 0; i < userIds.length; i++) {
+        const userId = userIds[i];
+        const currentUser = i + 1;
+
+        console.log(`Processing user ${userId} (${currentUser}/${totalUsers})`);
+
+        // Send progress update to frontend - starting user (no percentage update yet)
+        if (mainWindow && mainWindow.webContents) {
+            mainWindow.webContents.send('page-views-progress', {
+                currentUser: currentUser,
+                totalUsers: totalUsers,
+                userId: userId,
+                percentage: Math.round((i / totalUsers) * 100), // Based on completed users
+                starting: true
+            });
+        }
+
+        try {
+            const pageViews = await getSingleUserPageViews(domain, token, userId, startDate, endDate, mainWindow);
+
+            results.push({
+                userId: userId,
+                pageViews: pageViews,
+                success: true,
+                count: pageViews.length
+            });
+
+            // Send progress update after completing user
+            if (mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.send('page-views-progress', {
+                    currentUser: currentUser,
+                    totalUsers: totalUsers,
+                    userId: userId,
+                    percentage: Math.round((currentUser / totalUsers) * 100), // Based on completed users
+                    completed: currentUser === totalUsers
+                });
+            }
+
+        } catch (error) {
+            console.error(`Error getting page views for user ${userId}:`, error.message);
+            errors.push({
+                userId: userId,
+                error: error.message,
+                success: false
+            });
+
+            // Send progress update even for failed users
+            if (mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.send('page-views-progress', {
+                    currentUser: currentUser,
+                    totalUsers: totalUsers,
+                    userId: userId,
+                    percentage: Math.round((currentUser / totalUsers) * 100),
+                    completed: currentUser === totalUsers,
+                    error: true
+                });
+            }
+        }
+    }
+
+    // Determine if we should create a ZIP file or single file
+    const successfulResults = results.filter(r => r.success && r.pageViews.length > 0);
+
+    if (successfulResults.length === 0) {
+        return {
+            success: false,
+            message: 'No page views found for any users',
+            errors: errors
+        };
+    }
+
+    // If only one user has results, create single CSV
+    if (successfulResults.length === 1) {
+        const singleResult = successfulResults[0];
+        return {
+            success: true,
+            data: singleResult.pageViews,
+            userId: singleResult.userId,
+            isZipped: false,
+            count: singleResult.count,
+            errors: errors.length > 0 ? errors : undefined
+        };
+    }
+
+    // For multiple users with results, create ZIP file
+    return await createZippedPageViews(successfulResults, errors);
+}
+
+async function createZippedPageViews(results, errors) {
+    const { dialog } = require('electron');
+    const fs = require('fs').promises;
+    const path = require('path');
+    const archiver = require('archiver');
+
+    try {
+        // Show save dialog for ZIP file
+        const saveResult = await dialog.showSaveDialog({
+            title: 'Save Page Views ZIP File',
+            defaultPath: `page_views_${new Date().toISOString().split('T')[0]}.zip`,
+            filters: [
+                { name: 'ZIP Files', extensions: ['zip'] }
+            ]
+        });
+
+        if (saveResult.canceled) {
+            return 'cancelled';
+        }
+
+        const zipPath = saveResult.filePath;
+        const output = require('fs').createWriteStream(zipPath);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        return new Promise((resolve, reject) => {
+            output.on('close', () => {
+                console.log(`ZIP file created: ${zipPath} (${archive.pointer()} total bytes)`);
+                resolve({
+                    success: true,
+                    isZipped: true,
+                    filePath: zipPath,
+                    fileCount: results.length,
+                    totalRecords: results.reduce((sum, r) => sum + r.count, 0),
+                    errors: errors.length > 0 ? errors : undefined
+                });
+            });
+
+            archive.on('error', (err) => {
+                console.error('Archive error:', err);
+                reject(err);
+            });
+
+            archive.pipe(output);
+
+            // Add each user's page views as a separate CSV file
+            results.forEach(result => {
+                if (result.pageViews && result.pageViews.length > 0) {
+                    const csvContent = convertToCSV(result.pageViews);
+                    archive.append(csvContent, { name: `user_${result.userId}_page_views.csv` });
+                }
+            });
+
+            // Add error report if there were any errors
+            if (errors.length > 0) {
+                const errorCsv = convertErrorsToCSV(errors);
+                archive.append(errorCsv, { name: 'processing_errors.csv' });
+            }
+
+            archive.finalize();
+        });
+
+    } catch (error) {
+        console.error('Error creating ZIP file:', error);
+        throw new Error(`Failed to create ZIP file: ${error.message}`);
+    }
+}
+
+function convertToCSV(data) {
+    if (!data || data.length === 0) return '';
+
+    // Flatten the data to handle nested objects
+    const flattenedData = data.map(item => flattenObject(item));
+
+    // Get all possible headers from all flattened objects
+    const allHeaders = new Set();
+    flattenedData.forEach(item => {
+        Object.keys(item).forEach(key => allHeaders.add(key));
+    });
+
+    const headers = Array.from(allHeaders).sort();
+    const csvRows = [headers.join(',')];
+
+    flattenedData.forEach(row => {
+        const values = headers.map(header => {
+            let value = row[header];
+
+            // Handle undefined/null values
+            if (value === undefined || value === null) {
+                return '';
+            }
+
+            // Convert to string
+            value = String(value);
+
+            // Escape quotes and wrap in quotes if contains comma, quote, or newline
+            if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+                return `"${value.replace(/"/g, '""')}"`;
+            }
+
+            return value;
+        });
+        csvRows.push(values.join(','));
+    });
+
+    return csvRows.join('\n');
+}
+
+function flattenObject(obj, prefix = '') {
+    const flattened = {};
+
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            const value = obj[key];
+            const newKey = prefix ? `${prefix}.${key}` : key;
+
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                // Recursively flatten nested objects
+                Object.assign(flattened, flattenObject(value, newKey));
+            } else if (Array.isArray(value)) {
+                // Convert arrays to JSON string
+                flattened[newKey] = JSON.stringify(value);
+            } else {
+                flattened[newKey] = value;
+            }
+        }
+    }
+
+    return flattened;
+}
+
+function convertErrorsToCSV(errors) {
+    if (!errors || errors.length === 0) return '';
+
+    const csvRows = ['User ID,Error Message'];
+    errors.forEach(error => {
+        csvRows.push(`${error.userId},"${error.error.replace(/"/g, '""')}"`);
+    });
+
+    return csvRows.join('\n');
 }
 
 // valid frequency values: 'daily', 'weekly', 'never', 'immediately'

@@ -76,38 +76,79 @@ function parseCSVRow(row) {
                 inQuotes = !inQuotes;
             }
         } else if (char === ',' && !inQuotes) {
-            result.push(current);
+            result.push(current.trim());
             current = '';
         } else {
             current += char;
         }
     }
-    result.push(current);
+    result.push(current.trim());
     return result;
 }
 
 function parseEmailsFromCSV(csvContent) {
     const lines = csvContent.split(/\r?\n/);
     if (lines.length === 0) return [];
-    const headers = parseCSVRow(lines[0]);
-    const emailColumnNames = ['path', 'email', 'email_address', 'communication_channel_path'];
-    let emailColumnIndex = -1;
-    for (let i = 0; i < headers.length; i++) {
-        const headerLower = headers[i].toLowerCase().trim();
-        if (emailColumnNames.includes(headerLower)) { emailColumnIndex = i; break; }
-    }
-    if (emailColumnIndex === -1) {
-        throw new Error('Could not find email column in CSV. Expected one of: path, email, email_address, communication_channel_path');
-    }
+
+    // Handle Canvas bounced communication channels format specifically
+    // Look for lines that start with numbers (User ID) and contain email addresses
     const emails = [];
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        const row = parseCSVRow(line);
-        const value = row[emailColumnIndex];
-        if (value && value.includes('@')) emails.push(value.trim());
+    const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+
+    // First try the standard CSV approach for properly formatted CSVs
+    try {
+        const headers = parseCSVRow(lines[0]);
+        const emailColumnNames = ['path', 'email', 'email_address', 'communication_channel_path'];
+        let emailColumnIndex = -1;
+
+        for (let i = 0; i < headers.length; i++) {
+            const headerLower = headers[i].toLowerCase().trim();
+            if (emailColumnNames.includes(headerLower)) {
+                emailColumnIndex = i;
+                break;
+            }
+        }
+
+        if (emailColumnIndex >= 0) {
+            // Standard CSV parsing
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const row = parseCSVRow(line);
+                const value = row[emailColumnIndex];
+                if (value && value.includes('@')) {
+                    emails.push(value.trim());
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Standard CSV parsing failed, falling back to pattern matching:', error.message);
     }
-    return emails;
+
+    // If standard parsing didn't work or didn't find emails, try pattern matching
+    // This handles malformed Canvas exports with line breaks in error messages
+    if (emails.length === 0) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            // Skip header line
+            if (line.toLowerCase().includes('user id') && line.toLowerCase().includes('path')) {
+                continue;
+            }
+
+            // Look for lines that start with a number (User ID) and contain email
+            if (/^\d+,/.test(line)) {
+                const emailMatch = line.match(emailRegex);
+                if (emailMatch) {
+                    emails.push(emailMatch[1].trim());
+                }
+            }
+        }
+    }
+
+    // Remove duplicates and return
+    return Array.from(new Set(emails));
 }
 
 function removeBlanks(arr) {
@@ -143,6 +184,24 @@ function saveSettings(settings) {
 function getSettings() {
     if (!appSettings) appSettings = loadSettings();
     return appSettings;
+}
+
+async function getFileLocation(defaultFilename) {
+    const result = await dialog.showSaveDialog({
+        title: 'Save File',
+        defaultPath: defaultFilename,
+        filters: [
+            { name: 'CSV Files', extensions: ['csv'] },
+            { name: 'Text Files', extensions: ['txt'] },
+            { name: 'All Files', extensions: ['*'] }
+        ]
+    });
+
+    if (result.canceled || !result.filePath) {
+        return null;
+    }
+
+    return result.filePath;
 }
 
 async function getFileContentsForEmails() {
@@ -1949,30 +2008,64 @@ app.whenReady().then(() => {
 
         let response;
         try {
-            response = await getPageViews(data);
+            // Pass mainWindow reference for progress updates
+            response = await getPageViews(data, mainWindow);
         } catch (error) {
-            throw error.message
+            throw error.message;
         }
 
-        // if (!response) {
-        //     return response;
-        // }
-        // console.log(response.length);
-        if (response.length > 0) {
-            //const filteredResults = convertToPageViewsCsv(result);
+        // Handle different response types from the enhanced getPageViews function
+        if (typeof response === 'string' && response === 'cancelled') {
+            return 'cancelled';
+        }
 
-            const filename = `${data.user}_page_views.csv`;
-            const fileDetails = getFileLocation(filename);
-            if (fileDetails) {
-                await csvExporter.exportToCSV(response, fileDetails);
+        // Handle single user response (legacy format)
+        if (Array.isArray(response)) {
+            if (response.length > 0) {
+                const userId = data.user || data.userIds[0];
+                const filename = `${userId}_page_views.csv`;
+                const fileDetails = await getFileLocation(filename);
+                if (fileDetails) {
+                    await csvExporter.exportToCSV(response, fileDetails);
+                    return { success: true, isZipped: false };
+                } else {
+                    return 'cancelled';
+                }
             } else {
-                return 'cancelled';
+                console.log('no page views');
+                return { success: false };
             }
-            return true;
-        } else {
-            console.log('no page views');
-            return false;
         }
+
+        // Handle enhanced response object (multiple users or single user with metadata)
+        if (response && typeof response === 'object') {
+            if (response.success === false) {
+                return response;
+            }
+
+            // If it's a single user response with data array
+            if (response.data && Array.isArray(response.data)) {
+                const filename = `user_${response.userId}_page_views.csv`;
+                const fileDetails = await getFileLocation(filename);
+                if (fileDetails) {
+                    await csvExporter.exportToCSV(response.data, fileDetails);
+                    return { success: true, isZipped: false };
+                } else {
+                    return 'cancelled';
+                }
+            }
+
+            // If it's a zipped response, the ZIP file has already been created
+            if (response.isZipped) {
+                return response;
+            }
+
+            return response;
+        }
+
+        // Fallback for unexpected response format
+        console.log('no page views or unexpected response format');
+        return { success: false };
     });
 
     // === COURSE MANAGEMENT SECTION ===
@@ -2794,7 +2887,7 @@ app.whenReady().then(() => {
         // Parse, normalize and dedupe emails
         const emails = Array.from(new Set(
             removeBlanks(rawEmailItems)
-                .map((email) => String(email).trim().toLowerCase())
+                .map((email) => String(email).trim())
                 .filter((email) => email.includes('@'))
         ));
         // get email pattern from file content
@@ -2895,10 +2988,17 @@ app.whenReady().then(() => {
         const batchResponse = await batchHandler(requests, { batchSize: concurrency, timeDelay: process.env.TIME_DELAY, isCancelled });
 
         // bulk awsReset
-        const bulkEmailArray = [{ "value": [] }]; // copy
+        // const bulkEmailArray = [{ "value": [] }]; // copy
         const chunksize = 200;
-        const progressPercent = 0;
-        const awsResetResponse = { removed: 0, not_removed: 0, not_found: 0, errors: 0 };
+        let progressPercent = 0;
+        const awsResetResponse = {
+            removed: 0,
+            not_removed: 0,
+            not_found: 0,
+            errors: 0,
+            notFoundEmails: [],
+            notRemovedEmails: []
+        };
         for (let i = 0; i < emails.length; i += chunksize) {
             progressPercent = Math.min(1, (processed + (i / emails.length)) / total);
             mainWindow.webContents.send('update-progress', {
@@ -2916,12 +3016,18 @@ app.whenReady().then(() => {
             awsRes = await bulkAWSReset({ region: data.region, token: data.token, emails: bulkArray });
             if (awsRes.status === 204) {
                 awsResetResponse.removed += bulkArray[0].value.length;
-
             } else {
                 awsResetResponse.removed += awsRes.removed || 0;
                 awsResetResponse.not_removed += awsRes.not_removed || 0;
                 awsResetResponse.not_found += awsRes.not_found || 0;
 
+                // Track specific emails that were not found or not removed
+                if (awsRes.data && awsRes.data.not_found) {
+                    awsResetResponse.notFoundEmails.push(...awsRes.data.not_found);
+                }
+                if (awsRes.data && awsRes.data.not_removed) {
+                    awsResetResponse.notRemovedEmails.push(...awsRes.data.not_removed);
+                }
             }
         }
 
@@ -4152,7 +4258,11 @@ function combineResetResults(awsResetResponse, batchResponse) {
         },
         details: {
             bounceResults: batchResponse,
-            suppressionResults: awsResetResponse
+            suppressionResults: {
+                ...awsResetResponse,
+                notFoundEmails: awsResetResponse.notFoundEmails || [],
+                notRemovedEmails: awsResetResponse.notRemovedEmails || []
+            }
         }
     };
 }

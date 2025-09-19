@@ -51,7 +51,7 @@ async function emailCheck(data) {
     const domain = data.domain;
     const token = data.token;
     const region = REGION[data.region];
-    const email = String(data.pattern || '').trim().toLowerCase();
+    const email = String(data.pattern || '').trim();
 
     const emailStatus = {
         suppressed: false,
@@ -138,7 +138,7 @@ async function checkCommDomain(data) {
     console.log('checking domains...');
 
     let suppList = [];
-    let url = `${REGION[data.region]}domain/${encodeURIComponent(String(data.pattern || '').trim().toLowerCase())}`;
+    let url = `${REGION[data.region]}domain/${encodeURIComponent(String(data.pattern || '').trim())}`;
     let next = url;
     let retryCounter = 1;
 
@@ -207,8 +207,8 @@ async function resetEmail(data) {
     };
 
     try {
-        // Normalize email to lowercase to avoid case-sensitivity differences across services
-        const normalized = { ...data, email: String(data.email || '').trim().toLowerCase() };
+        // Preserve original email case for proper matching with external systems
+        const normalized = { ...data, email: String(data.email || '').trim() };
         resetStatus.bounce = await bounceReset(normalized);
         console.log(`Bounce reset response for email ${normalized.email}:`, resetStatus.bounce);
     } catch (error) {
@@ -216,7 +216,7 @@ async function resetEmail(data) {
     }
 
     try {
-        const normalized = { ...data, email: String(data.email || '').trim().toLowerCase() };
+        const normalized = { ...data, email: String(data.email || '').trim() };
         resetStatus.suppression = await awsReset(normalized);
         console.log(`Suppression reset response for email ${normalized.email}:`, resetStatus.suppression);
     } catch (error) {
@@ -307,7 +307,7 @@ async function awsReset(data) {
     console.log('comm_channels.js > awsReset');
 
     const region = REGION[data.region];
-    const url = `${region}${encodeURIComponent(String(data.email || '').trim().toLowerCase())}`;
+    const url = `${region}${encodeURIComponent(String(data.email || '').trim())}`;
     const axiosConfig = {
         method: 'delete',
         url: url,
@@ -380,16 +380,37 @@ async function bulkAWSReset(data) {
             return await axios(axiosConfig);
         };
         const response = await errorCheck(request);
+
+        // Return the full response data including specific email arrays
+        if (response.data) {
+            return {
+                status: response.status,
+                removed: response.data.removed?.length || 0,
+                not_found: response.data.not_found?.length || 0,
+                not_removed: response.data.not_removed?.length || 0,
+                data: {
+                    removed: response.data.removed || [],
+                    not_found: response.data.not_found || [],
+                    not_removed: response.data.not_removed || []
+                }
+            };
+        }
         return response;
     } catch (error) {
         if (error.status === 409) {
             return {
                 status: error.status,
-                removed: response.data.removed.length,
-                not_found: response.data.not_found.length,
-                not_removed: response.data.not_removed.length
+                removed: error.response?.data?.removed?.length || 0,
+                not_found: error.response?.data?.not_found?.length || 0,
+                not_removed: error.response?.data?.not_removed?.length || 0,
+                data: {
+                    removed: error.response?.data?.removed || [],
+                    not_found: error.response?.data?.not_found || [],
+                    not_removed: error.response?.data?.not_removed || []
+                }
             };
         }
+        throw error;
         // return { status: null, reset: null, error: { status: error.status, message: error.message } };
     }
 }

@@ -392,6 +392,30 @@ function getUTCTime(date) {
     return `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}T${this.getTimeZoneOffset()}:00:00.00Z`;
 }
 
+// Create a download link for CSV data
+function createDownloadLink(data, filename, linkText = 'Download') {
+    const csv = typeof data === 'string' ? data : data.map(row =>
+        Array.isArray(row) ? row.join(',') : String(row)
+    ).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.textContent = linkText;
+    link.className = 'btn btn-sm btn-outline-primary me-2';
+    link.style.marginTop = '10px';
+
+    // Clean up the URL when the link is clicked
+    link.addEventListener('click', () => {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    return link;
+}
+
 module.exports = {
-    createRequester, deleteRequester, waitFunc, getRegion, errorCheck, getAPIData, getUTCTime
+    createRequester, deleteRequester, waitFunc, getRegion, errorCheck, getAPIData, getUTCTime, createDownloadLink
 };
