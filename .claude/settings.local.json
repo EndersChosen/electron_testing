@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e:*)",
+      "Bash(node clean_unicode.js:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(dir /x \"e:\\Programming\\electron_testing\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
