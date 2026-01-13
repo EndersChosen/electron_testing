@@ -5,7 +5,21 @@
       "Bash(node clean_unicode.js:*)",
       "Bash(node:*)",
       "Bash(npm install:*)",
-      "Bash(dir /x \"e:\\Programming\\electron_testing\")"
+      "Bash(dir /x \"e:\\Programming\\electron_testing\")",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(npm start)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(git stash:*)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 3\")",
+      "Bash(where:*)",
+      "Bash(node_modules.binelectron --version)",
+      "Bash(.node_modules.binelectron.cmd --version)",
+      "Bash(npx electron --version)"
     ],
     "deny": [],
     "ask": []
